@@ -1,0 +1,19 @@
+# Reference papers — third-party copyrighted material, kept local only.
+# See docs/SOURCES.md for the citation list.
+docs/*.pdf
+docs/*.docx
+docs/*.epub
+
+# OS / editor cruft
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+*~
+.vscode/
+.idea/
+
+# OneDrive / Office lock files
+~$*
+*.tmp
