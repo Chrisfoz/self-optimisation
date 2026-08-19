@@ -14,26 +14,26 @@ Different models may win different capabilities. The correct result may be a por
 
 The approach may be applicable to:
 
-- software maintenance;
-- agent workflow improvement;
-- data pipelines;
-- creative systems;
-- scientific optimisation;
-- infrastructure;
-- accessibility; and
-- security remediation.
+* software maintenance;
+* agent workflow improvement;
+* data pipelines;
+* creative systems;
+* scientific optimisation;
+* infrastructure;
+* accessibility; and
+* security remediation.
 
 ## Implications for Software Architecture
 
 Projects prepared for autonomous improvement require:
 
-- explicit constitutions;
-- executable quality criteria;
-- strong modular boundaries;
-- observable outcomes;
-- reversible deployment;
-- machine-readable architecture; and
-- durable decision records.
+* explicit constitutions;
+* executable quality criteria;
+* strong modular boundaries;
+* observable outcomes;
+* reversible deployment;
+* machine-readable architecture; and
+* durable decision records.
 
 ## Design Principles and Requirements
 
@@ -56,14 +56,14 @@ The system requirements should be presented before the components:
 
 Changes to the harness, constitution, or evaluation system require a separate meta-governance process.
 
-## 1. Introduction
+## 1\. Introduction
 
 ### 1.1 Motivation
 
 Explain the widening gap between:
 
-- the rate at which frontier models acquire new capabilities; and
-- the rate at which individual software projects can safely adopt those capabilities.
+* the rate at which frontier models acquire new capabilities; and
+* the rate at which individual software projects can safely adopt those capabilities.
 
 Most projects rely on manual experimentation, occasional model substitutions, or ad hoc prompting changes. Consequently, significant external research investment is not systematically converted into project-level improvement.
 
@@ -71,10 +71,10 @@ Most projects rely on manual experimentation, occasional model substitutions, or
 
 A model release is an exogenous capability event. It can be treated similarly to:
 
-- a dependency release;
-- a new compiler optimisation;
-- a hardware improvement; or
-- a new scientific instrument.
+* a dependency release;
+* a new compiler optimisation;
+* a hardware improvement; or
+* a new scientific instrument.
 
 However, because model behaviour is stochastic and changes can introduce hidden regressions, conventional dependency-update automation is insufficient.
 
@@ -88,7 +88,7 @@ The paper should claim five principal contributions:
 4. **A project-adapter specification:** enabling the same kernel to operate across heterogeneous repositories.
 5. **A multi-repository empirical evaluation:** measuring effectiveness, portability, safety, and cost across three independent projects.
 
-## 2. Background and Related Work
+## 2\. Background and Related Work
 
 Organise this section by research tradition rather than by listing products.
 
@@ -96,23 +96,23 @@ Organise this section by research tradition rather than by listing products.
 
 Cover:
 
-- SWE-agent;
-- OpenHands;
-- Aider;
-- automated program repair;
-- repository-level coding agents; and
-- SWE-bench and related benchmarks.
+* SWE-agent;
+* OpenHands;
+* Aider;
+* automated program repair;
+* repository-level coding agents; and
+* SWE-bench and related benchmarks.
 
 ### 2.2 Self-Improving and Evolutionary Agents
 
 Cover:
 
-- Darwin Gödel Machine;
-- AlphaEvolve and OpenEvolve;
-- CORAL;
-- EvoAgentX;
-- AFlow; and
-- Agent Lightning.
+* Darwin Gödel Machine;
+* AlphaEvolve and OpenEvolve;
+* CORAL;
+* EvoAgentX;
+* AFlow; and
+* Agent Lightning.
 
 Distinguish self-modification of an agent from improvement of an external project.
 
@@ -120,49 +120,49 @@ Distinguish self-modification of an agent from improvement of an external projec
 
 Cover:
 
-- multi-provider gateways;
-- quality/cost routing;
-- capability registries;
-- model lifecycle metadata; and
-- provider-native versus normalised interfaces.
+* multi-provider gateways;
+* quality/cost routing;
+* capability registries;
+* model lifecycle metadata; and
+* provider-native versus normalised interfaces.
 
 ### 2.4 Agent Evaluation and AI Control
 
 Cover:
 
-- Inspect;
-- Vivaria;
-- ControlArena;
-- model-graded evaluation;
-- independent monitors;
-- evaluator separation; and
-- sandboxing and least privilege.
+* Inspect;
+* Vivaria;
+* ControlArena;
+* model-graded evaluation;
+* independent monitors;
+* evaluator separation; and
+* sandboxing and least privilege.
 
 ### 2.5 CI/CD, MLOps, and Autonomic Computing
 
 Connect the proposal to:
 
-- continuous integration;
-- staged deployment;
-- champion–challenger testing;
-- feature flags;
-- rollback;
-- policy-as-code;
-- self-adaptive systems; and
-- autonomic computing's monitor–analyse–plan–execute loop.
+* continuous integration;
+* staged deployment;
+* champion–challenger testing;
+* feature flags;
+* rollback;
+* policy-as-code;
+* self-adaptive systems; and
+* autonomic computing's monitor–analyse–plan–execute loop.
 
 ### 2.6 Positioning Against Prior Work
 
-| System | Release-triggered | Multi-provider proposals | Independent review | Project portable | Failure memory | Staged promotion |
-|---|---:|---:|---|---:|---:|---:|
-| DGM | No | Partial | Partial | No | Yes | No |
-| CORAL | No | Yes | Grader separation | Partial | Yes | No |
-| GitHub Agentic Workflows | Schedule/event | Yes | Configurable | Yes | Limited | Partial |
-| Proposed system | Yes | Yes | Required | Yes | Yes | Yes |
+|System|Release-triggered|Multi-provider proposals|Independent review|Project portable|Failure memory|Staged promotion|
+|-|-:|-:|-|-:|-:|-:|
+|DGM|No|Partial|Partial|No|Yes|No|
+|CORAL|No|Yes|Grader separation|Partial|Yes|No|
+|GitHub Agentic Workflows|Schedule/event|Yes|Configurable|Yes|Limited|Partial|
+|Proposed system|Yes|Yes|Required|Yes|Yes|Yes|
 
 This table will help establish the paper's novelty without claiming that every component is independently new.
 
-## 3. System Architecture
+## 3\. System Architecture
 
 This is the core architecture section.
 
@@ -170,39 +170,76 @@ This is the core architecture section.
 
 Defines:
 
-- permitted change surfaces;
-- forbidden files and operations;
-- quality thresholds;
-- security requirements;
-- acceptable cost;
-- human approval requirements;
-- rollback rules; and
-- promotion authority.
+* permitted change surfaces;
+* forbidden files and operations;
+* quality thresholds;
+* security requirements;
+* acceptable cost;
+* human approval requirements;
+* rollback rules; and
+* promotion authority.
 
 ### 3.2 Context Compiler
 
 Produces a task-specific project representation from:
 
-- repository structure;
-- dependency graph;
-- key symbols;
-- tests;
-- architecture documents;
-- current issues;
-- previous campaign results; and
-- operational constraints.
+* repository structure;
+* dependency graph;
+* key symbols;
+* tests;
+* architecture documents;
+* current issues;
+* previous campaign results; and
+* operational constraints.
+
+#### 3.2.1 The scaling boundary is not only a token-window problem
+
+Context economy is related to context-window size, but not reducible to it.
+There are at least four separable dimensions, and only one of them gets
+solved by a bigger window:
+
+1. **Hard ceiling** — the literal token limit of whatever model is in the
+   rotating seat. This genuinely varies by provider (some sit at 32K–128K
+   tokens, others 200K–2M), and a sufficiently large repository (thousands of
+   files) can exceed even the largest of those regardless of budget.
+2. **Reliability, below the ceiling** — the reference implementation already
+   hit this at roughly 100K tokens: `ECONNRESET` on `grok-4.6`, twice, on
+   prompts nowhere near its advertised window. Large prompts are slow to
+   generate and fail in transit in ways a small reachability probe never
+   exercises.
+3. **Cost and latency** — the headroom-retry mechanism
+   (`callModelWithHeadroom()`) doubles the token budget on a truncated
+   response before falling back, so a near-miss costs twice the tokens, and
+   this repeats every campaign, every candidate model, every cycle. Cost
+   scales roughly linearly with prompt size regardless of whether the prompt
+   fits.
+4. **"Lost in the middle"** — the dimension that persists even as windows
+   grow: models are demonstrably worse at using information buried deep in a
+   large prompt than the same information sent scoped, independent of
+   whether it technically fits. This is the large-scale version of a
+   principle the reference implementation already learned small — send what
+   changes the decision, not what describes the codebase.
+
+The practical consequence: the fix is not "wait for a bigger context window."
+A scoped-context strategy (dependency graph plus targeted symbol/file
+retrieval, per the component list above) is required past some repository
+size independent of nominal capacity, because dimension 4 does not shrink as
+capacity grows. The compiler's real job is choosing between a full-dump
+strategy and a scoped strategy per campaign, not merely fitting inside
+whatever window the selected model advertises. See RQ7 (§6) and the context
+economy metric (§7).
 
 ### 3.3 Model-Release Detector
 
 Identifies:
 
-- newly available models;
-- new modalities or tool capabilities;
-- pricing and context changes;
-- preview-to-general-availability transitions;
-- deprecations;
-- provider alias changes; and
-- regional or account-level availability.
+* newly available models;
+* new modalities or tool capabilities;
+* pricing and context changes;
+* preview-to-general-availability transitions;
+* deprecations;
+* provider alias changes; and
+* regional or account-level availability.
 
 It should distinguish a published model announcement from a model that is genuinely accessible to the harness.
 
@@ -210,34 +247,34 @@ It should distinguish a published model announcement from a model that is genuin
 
 Preserves a common invocation contract while retaining:
 
-- provider identity;
-- model version;
-- native capabilities;
-- generation parameters;
-- costs;
-- latency; and
-- provenance.
+* provider identity;
+* model version;
+* native capabilities;
+* generation parameters;
+* costs;
+* latency; and
+* provenance.
 
 ### 3.5 Parallel Proposal Stage
 
 Produces multiple independently generated candidate improvements using:
 
-- different models;
-- different providers;
-- varied strategies;
-- alternative context selections; and
-- potentially multiple proposal generations per model.
+* different models;
+* different providers;
+* varied strategies;
+* alternative context selections; and
+* potentially multiple proposal generations per model.
 
 ### 3.6 Bounded Patch Executor
 
 Applies candidates inside isolated workspaces with:
 
-- branch or worktree isolation;
-- restricted credentials;
-- network controls;
-- resource limits;
-- command policies; and
-- complete execution logs.
+* branch or worktree isolation;
+* restricted credentials;
+* network controls;
+* resource limits;
+* command policies; and
+* complete execution logs.
 
 ### 3.7 Independent Reviewer
 
@@ -245,51 +282,51 @@ Reviews candidates without knowing which provider generated them, where practica
 
 Reviewer independence should include:
 
-- separate context;
-- preferably a different provider or model family;
-- no access to hidden evaluator answers;
-- explicit constitutional checks; and
-- structured findings rather than an unqualified score.
+* separate context;
+* preferably a different provider or model family;
+* no access to hidden evaluator answers;
+* explicit constitutional checks; and
+* structured findings rather than an unqualified score.
 
 ### 3.8 Automated Evaluator
 
 Combines:
 
-- deterministic tests;
-- static analysis;
-- security scanning;
-- performance benchmarks;
-- cost and latency measurement;
-- project-specific quality metrics; and
-- human or model-based judgement only where deterministic metrics are insufficient.
+* deterministic tests;
+* static analysis;
+* security scanning;
+* performance benchmarks;
+* cost and latency measurement;
+* project-specific quality metrics; and
+* human or model-based judgement only where deterministic metrics are insufficient.
 
 ### 3.9 Failure and Proposal Memory
 
 Records:
 
-- attempted changes;
-- model and provider;
-- context supplied;
-- reviewer findings;
-- test outcomes;
-- failure classification;
-- cost;
-- promotion decision; and
-- subsequent production outcome.
+* attempted changes;
+* model and provider;
+* context supplied;
+* reviewer findings;
+* test outcomes;
+* failure classification;
+* cost;
+* promotion decision; and
+* subsequent production outcome.
 
 ### 3.10 Staging and Promotion Layer
 
 Supports:
 
-- pull-request-only mode;
-- shadow deployment;
-- feature flags;
-- canary release;
-- human approval;
-- automated rollback; and
-- post-promotion monitoring.
+* pull-request-only mode;
+* shadow deployment;
+* feature flags;
+* canary release;
+* human approval;
+* automated rollback; and
+* post-promotion monitoring.
 
-## 4. Improvement Campaign Lifecycle
+## 4\. Improvement Campaign Lifecycle
 
 Describe the complete state machine:
 
@@ -313,7 +350,7 @@ Describe the complete state machine:
 
 Every campaign should produce a signed or immutable campaign record.
 
-## 5. Portability and Project-Adapter Model
+## 5\. Portability and Project-Adapter Model
 
 Each project adapter may be expressed in a configuration such as:
 
@@ -321,40 +358,40 @@ Each project adapter may be expressed in a configuration such as:
 project:
   id:
   repository:
-  default_branch:
+  default\\\\\\\\\\\\\\\_branch:
 
 constitution:
-  allowed_paths:
-  prohibited_actions:
-  approval_class:
+  allowed\\\\\\\\\\\\\\\_paths:
+  prohibited\\\\\\\\\\\\\\\_actions:
+  approval\\\\\\\\\\\\\\\_class:
 
 context:
-  architecture_sources:
-  token_budget:
+  architecture\\\\\\\\\\\\\\\_sources:
+  token\\\\\\\\\\\\\\\_budget:
 
 evaluation:
-  test_commands:
-  quality_metrics:
-  hard_constraints:
-  promotion_thresholds:
+  test\\\\\\\\\\\\\\\_commands:
+  quality\\\\\\\\\\\\\\\_metrics:
+  hard\\\\\\\\\\\\\\\_constraints:
+  promotion\\\\\\\\\\\\\\\_thresholds:
 
 deployment:
-  staging_target:
-  rollback_command:
+  staging\\\\\\\\\\\\\\\_target:
+  rollback\\\\\\\\\\\\\\\_command:
 ```
 
 Portability should itself be measured through:
 
-- adapter lines of code;
-- configuration volume;
-- integration time;
-- number of custom evaluator components;
-- percentage of kernel code changed; and
-- maintenance effort when the kernel is upgraded.
+* adapter lines of code;
+* configuration volume;
+* integration time;
+* number of custom evaluator components;
+* percentage of kernel code changed; and
+* maintenance effort when the kernel is upgraded.
 
 A successful portability result would require **no project-specific changes to the core kernel**.
 
-## 6. Research Questions
+## 6\. Research Questions
 
 ### RQ1 — Effectiveness
 
@@ -380,99 +417,116 @@ Can the same improvement kernel be applied across three heterogeneous repositori
 
 What is the cost, latency, and compute consumption per successfully promoted improvement?
 
-## 7. Metrics
+### RQ7 — Context Economy at Scale
+
+At what repository size does a full-source context strategy stop being
+viable, and does switching to a scoped strategy (dependency graph plus
+targeted retrieval) at that boundary preserve proposal quality relative to
+full-source on repositories small enough for both to be tried? Distinguish
+the four contributing factors named in §3.2.1 — hard ceiling, reliability
+below the ceiling, cost and latency, and attention degradation within the
+window — rather than treating "context economy" as one variable.
+
+## 7\. Metrics
 
 Use metrics unique to the proposed methodology:
 
-- **Release yield:** proportion of releases producing at least one promoted improvement.
-- **Promotion precision:** proportion of promoted changes remaining acceptable after later audit.
-- **Failure-recurrence rate:** repetition of previously recorded unsuccessful approaches.
-- **Cost per accepted improvement.**
-- **Portability burden:** effort required to connect each repository.
-- **Reviewer agreement:** agreement between automated, independent, and human assessment.
+* **Release yield:** proportion of releases producing at least one promoted improvement.
+* **Promotion precision:** proportion of promoted changes remaining acceptable after later audit.
+* **Failure-recurrence rate:** repetition of previously recorded unsuccessful approaches.
+* **Cost per accepted improvement.**
+* **Portability burden:** effort required to connect each repository.
+* **Reviewer agreement:** agreement between automated, independent, and human assessment.
+* **Context economy:** tokens, cost, and latency spent per proposal as a
+  function of repository size, and the size at which a full-source strategy
+  must switch to a scoped one (§3.2.1, RQ7).
 
-## 8. Failure Analysis
+## 8\. Failure Analysis
 
 Develop a taxonomy covering:
 
-- syntactically valid but incorrect changes;
-- test overfitting;
-- evaluator gaming;
-- context omission;
-- fabricated dependencies;
-- security regression;
-- performance regression;
-- excessive proposal scope;
-- repeated failed approaches;
-- reviewer–proposer correlation;
-- model alias drift;
-- provider outages;
-- excessive campaign cost; and
-- successful tests but degraded user value.
+* syntactically valid but incorrect changes;
+* test overfitting;
+* evaluator gaming;
+* context omission;
+* fabricated dependencies;
+* security regression;
+* performance regression;
+* excessive proposal scope;
+* repeated failed approaches;
+* reviewer–proposer correlation;
+* model alias drift;
+* provider outages;
+* excessive campaign cost; and
+* successful tests but degraded user value.
 
 Include several detailed failure narratives, not just counts.
 
-## 9. Security, Safety, and Governance
+## 9\. Security, Safety, and Governance
 
 ### Threat Model
 
 Address:
 
-- generated malicious code;
-- prompt injection embedded in repositories;
-- secret exfiltration;
-- supply-chain attacks;
-- manipulation of evaluators;
-- unauthorised network activity;
-- destructive commands;
-- compromised project memory; and
-- collusion or correlated errors between models.
+* generated malicious code;
+* prompt injection embedded in repositories;
+* secret exfiltration;
+* supply-chain attacks;
+* manipulation of evaluators;
+* unauthorised network activity;
+* destructive commands;
+* compromised project memory; and
+* collusion or correlated errors between models.
 
 ### Controls
 
 Describe:
 
-- isolated execution;
-- network deny-by-default;
-- ephemeral credentials;
-- immutable evaluator assets;
-- branch protection;
-- signed campaign records;
-- scoped permissions;
-- human approval classes;
-- kill switches;
-- rollback; and
-- post-promotion monitoring.
+* isolated execution;
+* network deny-by-default;
+* ephemeral credentials;
+* immutable evaluator assets;
+* branch protection;
+* signed campaign records;
+* scoped permissions;
+* human approval classes;
+* kill switches;
+* rollback; and
+* post-promotion monitoring.
 
-## 10. Limitations and Threats to Validity
+## 10\. Limitations and Threats to Validity
 
 Acknowledge:
 
-- only three repositories;
-- repositories may not represent all software systems;
-- imperfect independence between related model families;
-- benchmark contamination;
-- model and pricing changes during the study;
-- subjective evaluation dimensions;
-- dependence on existing test quality;
-- substantial compute cost;
-- limited observation of long-term production effects; and
-- researcher involvement in repository and evaluator design.
+* only three repositories;
+* repositories may not represent all software systems;
+* imperfect independence between related model families;
+* benchmark contamination;
+* model and pricing changes during the study;
+* subjective evaluation dimensions;
+* dependence on existing test quality;
+* substantial compute cost;
+* limited observation of long-term production effects;
+* researcher involvement in repository and evaluator design; and
+* the scoped-context strategy in §3.2.1 is unvalidated: the reference
+  implementation has only ever run a full-source strategy, on repositories
+  small enough that the scaling boundary was never actually crossed.
 
-## 11. Reproducibility and Open-Science Package
+## 11\. Reproducibility and Open-Science Package
 
 Publish:
 
-- versioned kernel;
-- adapter specification;
-- campaign manifest schema;
-- constitution schema;
-- provider interfaces;
-- container definitions;
-- rejected and successful proposals;
-- cost records; and
-- statistical analysis scripts.
+* versioned kernel;
+* adapter specification;
+* campaign manifest schema;
+* constitution schema;
+* provider interfaces;
+* container definitions;
+* rejected and successful proposals;
+* cost records; and
+* statistical analysis scripts.
 
-## 12. Conclusion
+## 12\. Conclusion
 
 Model releases can be treated as triggers for controlled software-improvement experiments. The proposed architecture evaluates whether a reusable kernel can convert external model advances into measurable project improvements while preserving project constraints, reviewer independence, auditability, and reversible promotion.
+
