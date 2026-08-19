@@ -5,12 +5,14 @@ a project, and a governed suggest → implement → review → gate → promote 
 lets each newly released frontier model propose one improvement, gated by
 that project's own tests before anything ships.
 
-**Status: design and documentation, nothing runnable yet.** The reference
-implementation is a separate, real project (two educational HTML games) that
-has run this loop for 18+ real generations, including real incidents. This
-repository is the work of extracting that into something project-agnostic.
-Nothing here should be read as "already built" unless a file says so
-explicitly.
+**Status: two kernel components genericised and smoke-tested; nothing
+orchestrated end to end yet.** The reference implementation is a separate,
+real project (two educational HTML games) that has run this loop for 18+
+real generations, including real incidents. This repository is the work of
+extracting that into something project-agnostic. Nothing here should be read
+as "already built" unless a file says so explicitly — `harness/lib/` and
+`harness/providers/` exist and pass real checks (see below); the detector,
+context compiler, orchestration, and CLI scaffolder do not yet.
 
 ## Where to start
 
@@ -49,12 +51,25 @@ self_optimisation/
 │                                     # starter kit, diagrams — ported from the
 │                                     # reference implementation, written to
 │                                     # need no project-specific knowledge
-└── examples/
-    └── carrotgame/                  # a real installation's config, hand-written
-                                      # in the proposed adapter schema, plus notes
-                                      # on where the schema had to grow
+├── examples/
+│   └── carrotgame/                  # a real installation's config, hand-written
+│                                     # in the proposed adapter schema, plus notes
+│                                     # on where the schema had to grow
+└── harness/
+    ├── lib/
+    │   ├── llm-provider.mjs         # provider-blind registry, transport, retry/headroom
+    │   ├── edit-format.mjs          # SEARCH/REPLACE parser, allowlist supplied by the caller
+    │   └── glob.mjs                 # adapter glob strings -> RegExp
+    └── providers/                   # one file per lab, each self-registering
+        ├── anthropic.mjs, openai.mjs, google.mjs, moonshot.mjs,
+        │   deepseek.mjs, qwen.mjs, xai.mjs, meta.mjs, zai.mjs
+        ├── _openai-compatible.mjs   # shared factory for the 6 OpenAI-shaped labs
+        ├── index.mjs                # registers all 9; a project can import a subset instead
+        └── CONTRIBUTING-A-PROVIDER.md
 ```
 
-`harness/`, `templates/`, and `cli/` — the actual generic code and the
-`init` scaffolder — don't exist yet. `Portable-Harness-Design.md` §10 has the
-build order.
+`harness/lib/context-pack.mjs`, the model-release detector, orchestration,
+`templates/`, and `cli/` — the rest of the generic code and the `init`
+scaffolder — don't exist yet. `Portable-Harness-Design.md` §10 has the build
+order; provider router and edit-format were step 4's first two, in the
+dependency order §7's kernel table implies.
