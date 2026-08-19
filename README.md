@@ -19,6 +19,7 @@ explicitly.
 | The concepts, principles, and incidents this is built from — written to be lifted into any project | [`learning/`](learning/), starting with [`learning/README.md`](learning/README.md) |
 | Copy-paste templates (agent brief, reviewer brief, guard config, edit format) | [`learning/06-starter-kit.md`](learning/06-starter-kit.md) |
 | What's being ported from the reference implementation, what needs genericising, and the proposed repo/CLI structure | [`Portable-Harness-Design.md`](Portable-Harness-Design.md) |
+| A real project's configuration written out in the (proposed) adapter schema, and what that exercise found | [`examples/carrotgame/`](examples/carrotgame/) |
 | The academic framing — the ten-component kernel, research questions, threat model, related work | [`Model-Release-Driven-Software-Improvement-Paper-Outline.md`](Model-Release-Driven-Software-Improvement-Paper-Outline.md) |
 | The research corpus this draws on (AlphaEvolve, Darwin Gödel Machine, self-rewarding/self-adapting LMs, harness engineering) | [`docs/`](docs/), indexed in [`docs/SOURCES.md`](docs/SOURCES.md) |
 
@@ -44,10 +45,14 @@ self_optimisation/
 ├── Portable-Harness-Design.md       # what ports, what's generic, what's next
 ├── Model-Release-Driven-Software-Improvement-Paper-Outline.md
 ├── docs/                            # research corpus
-└── learning/                        # principles, blueprint, failure modes,
-                                      # starter kit, diagrams — ported from the
-                                      # reference implementation, written to
-                                      # need no project-specific knowledge
+├── learning/                        # principles, blueprint, failure modes,
+│                                     # starter kit, diagrams — ported from the
+│                                     # reference implementation, written to
+│                                     # need no project-specific knowledge
+└── examples/
+    └── carrotgame/                  # a real installation's config, hand-written
+                                      # in the proposed adapter schema, plus notes
+                                      # on where the schema had to grow
 ```
 
 `harness/`, `templates/`, and `cli/` — the actual generic code and the
