@@ -1,0 +1,35 @@
+%%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
+flowchart TB
+  src["editable source, in full<br/>2 games + index.html · ~57k tok"] --> pk
+  map["repository map · ~0.6k tok"] --> pk
+  idx["test index · assertion<br/>NAMES only · ~1.1k tok"] --> pk
+  hist["history · merged AND<br/>abandoned · ~0.2k tok"] --> pk
+  fb["player feedback · sanitised,<br/>or the section is omitted"] --> pk
+  png["screenshots · 3 PNGs"] --> pk
+
+  pk["one prompt · ~59k tok + 3 images"] ==> disp{"llm-provider.mjs<br/>resolve the lab from the model id"}
+
+  disp -->|anthropic| a["source.base64"]
+  disp -->|google| g["inlineData"]
+  disp -->|"openai"| o["image_url<br/>max_completion_tokens"]
+  disp -->|"moonshot · deepseek<br/>qwen · xai · meta"| m["image_url · max_tokens<br/>one shared factory"]
+  disp -->|"zai"| z["image_url · max_tokens<br/>+ extraBody: reasoning_effort low"]
+
+  a --> s1
+  o --> s1
+  g --> s1
+  m --> s1
+  z --> s1
+
+  s1["STAGE 1 · every newly released<br/>model, asked in parallel"] -->|"image rejected ·<br/>matched by error SHAPE, not wording"| nov["drop images, retry once"]
+  nov -.->|"a model without vision still runs"| s1
+  s1 -->|"one lab errors"| drop(["dropped · the run<br/>continues on the rest"])
+  s1 ==>|"N prose proposals"| rk["STAGE 1b · rank · claude-opus-5<br/>authors withheld"]
+  rk ==>|"the winner"| impl["STAGE 2 · implement · claude-opus-5"]
+
+  impl ==>|"SEARCH / REPLACE"| w1{"allowlist 1 · edit-format.mjs<br/>before any write"}
+  w1 -->|"frozen path, or SEARCH<br/>matching 0 or 2+ times"| no(["refused · nothing reaches disk"])
+  w1 ==>|"validated in memory for every file first"| tree[("working tree")]
+  tree ==> w2{"allowlist 2 · check-guarded-paths.mjs<br/>in CI, on the agent branch"}
+  w2 ==>|"the same rule again"| yes(["merge candidate"])
+  w2 -->|"frozen path, or churn ceiling"| no

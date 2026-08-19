@@ -1,0 +1,40 @@
+flowchart TD
+  clock["scheduled check<br/>e.g. monthly"] --> detect
+
+  subgraph detect_box["1 · detect"]
+    detect["is there anything<br/>genuinely new?"]
+  end
+
+  detect -->|"no"| idle(["stop. no cost,<br/>no commit, no email"])
+  detect -->|"yes"| pre["2 · preflight<br/>all checks already green?"]
+
+  pre -->|"already red"| abort(["abort — a later failure<br/>would not be attributable"])
+  pre -->|"baseline proven"| branch["3 · work on a<br/>throwaway branch"]
+
+  subgraph loop_box["one process — a review/refine cycle must be able to loop"]
+    branch --> pack["4 · assemble context<br/>see 04-context-recipe"]
+    pack --> suggest["5 · SUGGEST<br/>the rotating seat<br/>returns prose, no code"]
+    suggest --> impl["6 · IMPLEMENT<br/>a pinned model<br/>small anchored edits"]
+    impl --> apply{"7 · do the edits<br/>apply cleanly?"}
+    apply -->|"no · all-or-nothing"| reset["reset to a clean slate"]
+    apply -->|"yes"| review["8 · REVIEW<br/>pinned model, fresh context,<br/>full modified files"]
+    review -->|"rejected, or<br/>no clear verdict"| reset
+    reset -->|"9 · REFINE<br/>attempt < 3"| impl
+  end
+
+  review -->|"approved"| push["10 · commit to<br/>the agent branch"]
+  reset -->|"attempts exhausted"| record["write down what<br/>was tried and why it died"]
+  record --> memory[("failure memory")]
+  memory -.->|"read back next run"| pack
+
+  push --> guard["11 · guard check<br/>ON THE AGENT BRANCH"]
+  guard -->|"clean"| tests["12 · full test suites<br/>ON THE AGENT BRANCH"]
+  tests -->|"all green"| merge["13 · merge, tag, log"]
+  merge --> live["14 · verify the LIVE product<br/>actually carries the change"]
+  merge --> shots[("artefacts:<br/>screenshots, records")]
+  shots -.->|"shown next run"| pack
+  live --> done(["15 · report honestly"])
+
+  guard -->|"touched a frozen file"| held(["left unmerged,<br/>for a human to look at"])
+  tests -->|"any check red"| held
+  held --> done

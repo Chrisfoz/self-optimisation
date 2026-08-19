@@ -1,0 +1,20 @@
+flowchart TB
+  src["the editable source, in full<br/>every file the agent may change"] --> pk
+  map["a repository map<br/>path · size · purpose · may I edit it?"] --> pk
+  idx["a test index<br/>assertion NAMES only, not bodies"] --> pk
+  hist["history · what shipped<br/>AND what was tried and died"] --> pk
+  fb["real user feedback<br/>sanitised, or the section is omitted"] --> pk
+  png["pictures of the product<br/>as it looks right now"] --> pk
+
+  pk["one prompt<br/>send what changes the decision,<br/>not what describes the project"] ==> ask
+
+  omit(["deliberately NOT sent:<br/>everything else.<br/>raw source dilutes attention"]) -.-> pk
+
+  ask["SUGGEST · the rotating seat<br/>returns prose, writes no code"] ==>|"a proposal"| impl["IMPLEMENT · a pinned model"]
+
+  impl ==>|"anchored old → new edits"| w1{"allowlist 1 · in-process,<br/>before any write"}
+  w1 -->|"frozen path, or an anchor<br/>matching 0 or 2+ times"| no(["refused ·<br/>nothing reaches disk"])
+  w1 ==>|"validated in memory<br/>for every file first"| tree[("working copy")]
+  tree ==> w2{"allowlist 2 · in CI,<br/>on the agent branch"}
+  w2 ==>|"the same rule again"| yes(["merge candidate"])
+  w2 -->|"frozen path, or churn ceiling"| no

@@ -1,0 +1,22 @@
+flowchart TB
+  idea["a proposed change"] --> l1
+
+  l1{"1 · allowlist,<br/>in-process<br/>before any write"} -->|"not on the list"| no(["refused —<br/>nothing reaches disk"])
+  l1 -->|"validated for every<br/>affected file first"| l2
+
+  l2{"2 · anchors unique?<br/>set applies whole?"} -->|"no · all-or-nothing"| no
+  l2 -->|"yes"| tree[("working copy")]
+
+  tree --> l3{"3 · reviewer<br/>fresh context, full files<br/>fails closed"}
+  l3 -->|"rejected, or<br/>no clear verdict"| retry(["reset · refine ·<br/>3 attempts, then stop"])
+  l3 -->|"approved"| l4
+
+  l4{"4 · guard in CI<br/>ON THE AGENT BRANCH<br/>frozen · append-only · churn"} -->|"violation"| held(["left unmerged<br/>for a human"])
+  l4 -->|"clean"| l5
+
+  l5{"5 · full test suites<br/>ON THE AGENT BRANCH"} -->|"any red"| held
+  l5 -->|"green"| merge(["merge · tag · log"])
+
+  merge --> l6{"6 · does the LIVE product<br/>carry the change?"}
+  l6 -->|"stale"| loud(["fail loudly —<br/>green gates, no delivery"])
+  l6 -->|"serving it"| done(["generation complete"])

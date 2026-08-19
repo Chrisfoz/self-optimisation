@@ -1,0 +1,43 @@
+%%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
+flowchart TD
+  cron["monthly cron<br/>1st, 00:00 UTC"] --> poll
+
+  subgraph detect["job 1 · check-releases"]
+    poll["poll 9 model<br/>catalogues"]
+    poll --> fresh{"id absent from<br/>the snapshot?"}
+  end
+
+  fresh -->|"no"| idle(["ends without building"])
+  fresh -->|"yes · id + provider"| pre
+
+  pre["job 2 · preflight<br/>3 suites already green"] -->|"baseline proven"| br["job 3 · improve<br/>branch agent/gen-NNN"]
+
+  subgraph proc["one Node process · Actions cannot loop jobs"]
+    br --> pack["context-pack.mjs<br/>assemble the prompt"]
+    pack -->|"~59k tokens + 3 images,<br/>once per new model"| s1["STAGE 1 · SUGGEST<br/>EVERY new model, each on<br/>its own lab's API, in parallel"]
+    s1 -->|"N prose proposals<br/>no code"| rank{"more than one?"}
+    rank -->|"no"| s2
+    rank -->|"yes · authors stripped"| rk["STAGE 1b · RANK<br/>claude-opus-5 picks one"]
+    rk --> s2["STAGE 2 · IMPLEMENT<br/>claude-opus-5"]
+    s2 -->|"search/replace"| chk{"each SEARCH<br/>unique?"}
+    chk -->|"no · all-or-nothing"| rev
+    chk -->|"yes · written"| s3["STAGE 3 · REVIEW<br/>claude-opus-5,<br/>fresh context"]
+    s3 -->|"REJECTED, or<br/>no verdict at all"| rev["restore the<br/>pristine tree"]
+    rev -->|"STAGE 4 · REFINE<br/>attempt &lt; 3"| s2
+  end
+
+  s3 -->|APPROVED| push["commit + push<br/>agent/gen-NNN"]
+  rev -->|"3rd attempt<br/>exhausted"| rec["write attempts.json"]
+  rec -->|"own commit<br/>to main"| mem[("failure<br/>memory")]
+  mem -.->|"read back next run"| pack
+
+  push --> g1["job 4 · guard<br/>AGENT branch"]
+  g1 -->|"no frozen path"| g2["job 5 · tests<br/>98 + 601 + 19"]
+  g2 -->|"all green"| mg["job 6 · merge<br/>tag, log, snapshot"]
+  mg --> shots[("screenshots<br/>per generation")]
+  shots -.->|"shown next run"| pack
+  mg --> mail(["job 7 · email digest"])
+
+  g1 -->|"frozen path touched"| held(["left unmerged<br/>for inspection"])
+  g2 -->|"any suite red"| held
+  held --> mail
