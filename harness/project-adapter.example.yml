@@ -57,14 +57,27 @@ constitution:
   create_only_paths: []
     # - "tests/**/*.test.js"
 
+  # --- LIVE: harness/scripts/check-guarded-paths.mjs reads the rest of
+  # this section. This is the enforcement half of "what may an autonomous
+  # change touch" — allowed_paths above is what it MAY edit; everything
+  # below is what it may NEVER touch at all, checked against a real git
+  # diff in CI.
+  frozen_paths: []
+    # - ".github/**"                # workflow definitions
+    # - "[path to this brief]"      # the agent's own instructions
+    # - "package.json"              # or your project's dependency manifest
+  append_only_paths: []
+    # - "tests/**"                  # new tests may be added; existing ones may not change
+  frozen_fields: {}
+    # package.json:
+    #   - scripts                   # rewriting the test command would defeat every other gate
+  churn_ceiling:
+    max_files: 50
+    max_lines: 10000
+
 # --- RESERVED: no orchestrator exists yet to read any of the below --------
 # Filling these in is free and forward-compatible; nothing acts on them yet.
 
-# frozen_paths: []          # never touched by an autonomous change, ever
-# append_only_paths: []     # new files may be added; existing ones may not change
-# churn_ceiling:
-#   max_files: 50
-#   max_lines: 10000
 # approval_class: autonomous-merge   # or human-approval-required
 
 # cadence:

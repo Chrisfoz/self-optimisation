@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadAdapter, watchedProviders, snapshotPath, maxFanout, constitutionAllowlist } from '../../harness/lib/adapter.mjs';
+import { loadAdapter, watchedProviders, snapshotPath, maxFanout, constitutionAllowlist, guardConfig } from '../../harness/lib/adapter.mjs';
 
 async function withTempFile(content, fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'adapter-test-'));
@@ -90,6 +90,42 @@ providers:
       assert.deepEqual(watchedProviders(await loadAdapter(file)), ['anthropic', 'openai']);
     }
   );
+});
+
+test('guardConfig reads frozen/append-only/frozen-fields/churn-ceiling', async () => {
+  await withTempFile(
+    `
+constitution:
+  frozen_paths:
+    - ".github/**"
+    - "netlify.toml"
+  append_only_paths:
+    - "tests/**"
+  frozen_fields:
+    package.json:
+      - scripts
+  churn_ceiling:
+    max_files: 25
+    max_lines: 5000
+`,
+    async (file) => {
+      const config = guardConfig(await loadAdapter(file));
+      assert.deepEqual(config.frozenPaths, ['.github/**', 'netlify.toml']);
+      assert.deepEqual(config.appendOnlyPaths, ['tests/**']);
+      assert.deepEqual(config.frozenFields, { 'package.json': ['scripts'] });
+      assert.equal(config.maxFiles, 25);
+      assert.equal(config.maxLines, 5000);
+    }
+  );
+});
+
+test('guardConfig returns empty/null defaults when the adapter has no constitution section', () => {
+  const config = guardConfig(null);
+  assert.deepEqual(config.frozenPaths, []);
+  assert.deepEqual(config.appendOnlyPaths, []);
+  assert.deepEqual(config.frozenFields, {});
+  assert.equal(config.maxFiles, null);
+  assert.equal(config.maxLines, null);
 });
 
 test('accessors return null/empty defaults on a null adapter, never throw', () => {

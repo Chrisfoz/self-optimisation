@@ -110,3 +110,25 @@ export function constitutionAllowlist(adapter) {
     createOnlyPaths: adapter?.constitution?.create_only_paths ?? [],
   };
 }
+
+/**
+ * Guard rule config, ready for harness/lib/glob.mjs's globToRegExp() to
+ * turn frozenPaths/appendOnlyPaths into the RegExp[] guard.mjs's
+ * checkGuardedPaths() expects. Returned as raw glob strings here rather
+ * than pre-converted — same reasoning as constitutionAllowlist() staying
+ * raw: this file's job is YAML -> plain JS, not YAML -> a specific
+ * consumer's internal shape.
+ */
+export function guardConfig(adapter) {
+  return {
+    frozenPaths: adapter?.constitution?.frozen_paths ?? [],
+    appendOnlyPaths: adapter?.constitution?.append_only_paths ?? [],
+    frozenFields: adapter?.constitution?.frozen_fields ?? {},
+    maxFiles: Number.isFinite(adapter?.constitution?.churn_ceiling?.max_files)
+      ? adapter.constitution.churn_ceiling.max_files
+      : null,
+    maxLines: Number.isFinite(adapter?.constitution?.churn_ceiling?.max_lines)
+      ? adapter.constitution.churn_ceiling.max_lines
+      : null,
+  };
+}

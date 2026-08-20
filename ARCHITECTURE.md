@@ -23,7 +23,7 @@ flowchart TD
   cron(["schedule / workflow_dispatch"]) --> detector
 
   subgraph today["Usable today — copy examples/workflows/watch-releases.yml"]
-    detector["✅ Model-Release Detector<br/>harness/lib/model-release-detector.mjs<br/>40 tests"]
+    detector["✅ Model-Release Detector<br/>harness/lib/model-release-detector.mjs"]
     probe["✅ Reachability Probe<br/>harness/lib/probe-models.mjs"]
     adapter["✅ Adapter Loader<br/>harness/lib/adapter.mjs (js-yaml)<br/>reads project-adapter.yml"]
     router["✅ Provider Router<br/>harness/lib/llm-provider.mjs<br/>+ 9 providers/*.mjs"]
@@ -40,16 +40,17 @@ flowchart TD
 
   subgraph missing["NOT built yet — a human does this by hand, or it doesn't happen"]
     context["❌ Context Compiler<br/>harness/lib/context-pack.mjs<br/>real design work, not a port — see §8.2"]
-    executor["✅ Bounded Patch Executor<br/>harness/lib/edit-format.mjs<br/>40 tests — ready, but nothing calls it yet"]
+    executor["✅ Bounded Patch Executor<br/>harness/lib/edit-format.mjs<br/>ready, but nothing upstream calls it yet"]
     propose["❌ Parallel Proposal Stage<br/>fan out to every new model,<br/>rank with authors withheld"]
     reviewer["❌ Independent Reviewer<br/>fresh-context approve/reject"]
-    evaluator["❌ Automated Evaluator<br/>guard + test-command runner"]
+    guard["✅ Guard<br/>harness/lib/guard.mjs<br/>ready, but nothing upstream calls it yet"]
+    testrunner["❌ Test-command runner<br/>evaluation.test_commands<br/>in project-adapter.yml — not consumed by anything"]
     memory["❌ Failure & Proposal Memory<br/>escalations ledger, themes review"]
     promote["❌ Staging & Promotion<br/>merge, tag, verify-deployment"]
 
-    context --> propose --> executor --> reviewer --> evaluator --> promote
+    context --> propose --> executor --> reviewer --> guard --> testrunner --> promote
     memory -.->|"read back next run"| context
-    evaluator -.-> memory
+    testrunner -.-> memory
   end
 
   human -.->|"the missing half of the loop,<br/>manually, for now"| context
@@ -61,11 +62,14 @@ flowchart TD
 **Read this diagram as an honest gap, not a roadmap with checkboxes filled
 in.** The blue box is real, tested, and runnable via
 `examples/workflows/watch-releases.yml` right now. The tan box is the rest
-of the campaign lifecycle from the paper's §4 — none of it exists, so a
-human currently plays the part of every node in it by hand, reading the
+of the campaign lifecycle from the paper's §4 — most of it doesn't exist,
+so a human currently plays the part of those nodes by hand, reading the
 issue the detector opened and deciding what to do next. `edit-format.mjs`
-is the one exception inside the tan box: it's fully built and tested, it
-just has nothing upstream of it yet that produces edits for it to apply.
+and `guard.mjs` are the two exceptions inside the tan box: both fully built
+and tested, both waiting on the orchestrator that would actually call them
+in sequence. Nothing yet reads `evaluation.test_commands` from
+`project-adapter.yml` either — the field exists in the schema, but no
+component runs a project's tests on the harness's behalf.
 
 `Portable-Harness-Design.md`'s Status table has the same information as
 prose, kept in sync by hand — if the two ever disagree, trust whichever was

@@ -205,6 +205,44 @@ project already wired for the day the rest of the loop ships.
 
 ---
 
+## What only you can provide
+
+The harness never knows your project. Everything above installs the parts
+that are the same for every installation; everything below is content only
+you (or whoever knows the project) can supply. **The harness never runs any
+of this for you — it just knows how to call whatever you name.** Precision
+matters here, so each item below is marked with what actually happens if
+you fill it in today, checked against the code rather than assumed:
+
+| You provide | Where | What happens with it, right now |
+|---|---|---|
+| Provider API keys | `.env` locally, GitHub Secrets in CI | **Used immediately** — the detector calls the real API the moment a key is present (Step 2–5) |
+| Which labs to watch | `project-adapter.yml` → `providers.watched` | **Used immediately** — read by `check-model-releases.mjs` on every run |
+| Frozen / append-only paths, frozen JSON fields, churn ceiling | `project-adapter.yml` → `constitution.frozen_paths` / `append_only_paths` / `frozen_fields` / `churn_ceiling` | **Used immediately** — `harness/scripts/check-guarded-paths.mjs` enforces these against a real git diff today |
+| Which paths an agent may edit or create | `project-adapter.yml` → `constitution.allowed_paths` / `create_only_paths` | **Parsed, not yet enforced** — `edit-format.mjs` can apply this allowlist, but nothing calls it yet; there's no orchestrator producing edits for it to check |
+| Your actual test commands | `project-adapter.yml` → `evaluation.test_commands` (reserved) | **Not consumed by anything yet** — no test-command runner exists (see `ARCHITECTURE.md`) |
+| What "better" means for your project | `harness/templates/agent-brief.md.tmpl`, the HINTS section | **Not consumed by anything yet** — no orchestrator reads the brief |
+
+Filling in the bottom three rows today costs you nothing and loses nothing
+— they're forward-compatible, not busywork you'll redo. But don't read
+writing them down as switching anything on; check the table, not your
+intuition, for what's actually live.
+
+**A fast way to populate the ones that need real project knowledge:** hand
+`harness/project-adapter.example.yml` and `harness/templates/agent-brief.md.tmpl`
+to a coding agent you already use — Claude Code or similar — pointed at your
+repository, and ask it to fill in the bracketed placeholders from what it
+can see: your real file structure for `allowed_paths`, your real `package.json`
+scripts (or equivalent) for `test_commands`, your project's own quality bar
+for the HINTS section. It can see your codebase in a way this README can't;
+you should still read what it wrote before committing it; wrong file
+paths in `constitution.allowed_paths` will fail loud and fail safe (edits
+targeting an unlisted path are just refused, same as `frozen_paths`), which
+is a mistake worth catching before it costs a real run's budget rather than
+mid-generation.
+
+---
+
 ## OS-specific notes
 
 Read this before assuming something that works on one platform works on all
@@ -296,7 +334,8 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Context compiler (`harness/lib/context-pack.mjs`) | ❌ Not started — real design work, not a port; see `Portable-Harness-Design.md` §8.2 |
 | Orchestrator (suggest → implement → review → refine, one process) | ❌ Not started |
 | Independent reviewer | ❌ Not started |
-| Automated evaluator (guard + test-command runner) | ❌ Not started |
+| Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested — ready, but nothing upstream produces a change for it to check yet |
+| Automated evaluator — test-command runner (`evaluation.test_commands`) | ❌ Not started |
 | Failure & proposal memory (escalations ledger, themes review) | ❌ Not started |
 | Staging & promotion (merge, tag, verify-deployment) | ❌ Not started |
 | Notifier (email/Slack digest) | ❌ Not started |
