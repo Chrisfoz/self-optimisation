@@ -11,15 +11,20 @@ runs end to end today, against your own project's adapter and brief files —
 sketch. The reference implementation is a separate, real project (two
 educational HTML games) that has run this loop for 18+ real generations,
 including real incidents; this repository is the work of extracting that
-into something project-agnostic, and eleven kernel components are now
-ported, tested, and — for the first time this session — wired to each other
-rather than merely sitting next to each other. What's still missing sits
-*around* the loop, not inside it: nothing yet merges an approved change,
-notifies you about it, or generates the full workflow file that would run
-this on a schedule without you invoking it by hand. See
-[`ARCHITECTURE.md`](ARCHITECTURE.md) for exactly which is real versus still
-a human doing it by hand, and [Status in detail](#status-in-detail) before
-you assume more works than does.
+into something project-agnostic, and twelve kernel components are now
+ported, tested, and wired to each other rather than merely sitting next to
+each other — including, as of the most recent work, staging & promotion
+(`harness/lib/promote.mjs`, `verify-deployment.mjs`) and a notifier
+(`harness/lib/notify.mjs`) that emails a plain-language digest of what
+happened, with a reliable terse fallback if that call fails. What's still
+missing is the thing that would chain all of it into one command: nothing
+yet calls the merge step and the notifier automatically after a run
+approves a change — each is a real, tested, standalone CLI a workflow's own
+job invokes, not one generated workflow file that wires them together for
+you. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for exactly which is real
+versus still a human doing it by hand, and
+[Status in detail](#status-in-detail) before you assume more works than
+does.
 
 ---
 
@@ -223,9 +228,11 @@ you fill it in today, checked against the code rather than assumed:
 | Provider API keys | `.env` locally, GitHub Secrets in CI | **Used immediately** — the detector calls the real API the moment a key is present (Step 2–5) |
 | Which labs to watch | `project-adapter.yml` → `providers.watched` | **Used immediately** — read by `check-model-releases.mjs` on every run |
 | Frozen / append-only paths, frozen JSON fields, churn ceiling | `project-adapter.yml` → `constitution.frozen_paths` / `append_only_paths` / `frozen_fields` / `churn_ceiling` | **Used immediately** — `harness/scripts/check-guarded-paths.mjs` enforces these against a real git diff today |
-| Which paths an agent may edit or create | `project-adapter.yml` → `constitution.allowed_paths` / `create_only_paths` | **Parsed, not yet enforced** — `edit-format.mjs` can apply this allowlist, but nothing calls it yet; there's no orchestrator producing edits for it to check |
-| Your actual test commands | `project-adapter.yml` → `evaluation.test_commands` (reserved) | **Not consumed by anything yet** — no test-command runner exists (see `ARCHITECTURE.md`) |
-| What "better" means for your project | `harness/templates/agent-brief.md.tmpl`, the HINTS section | **Not consumed by anything yet** — no orchestrator reads the brief |
+| Which paths an agent may edit or create | `project-adapter.yml` → `constitution.allowed_paths` / `create_only_paths` | **Used immediately** — `run-generation.mjs` compiles this into `edit-format.mjs`'s allowlist and enforces it against every edit the orchestrator produces |
+| Your actual test commands | `project-adapter.yml` → `evaluation.test_commands` (reserved) | **Not consumed by anything yet** — no test-command runner exists (see `ARCHITECTURE.md`); your real test commands still need to be a CI step you write |
+| What "better" means for your project | your own filled-in `agent-brief.md`, at the path named by `project-adapter.yml` → `roles.agent_brief_path` | **Used immediately, and used whole** — `run-generation.mjs` reads the file and sends it as the suggestion stage's entire system prompt, not a summary of it |
+| Where digest/escalation emails go, and how they're sent | `project-adapter.yml` → `notify.recipient` / `notify.from` / `notify.provider`, plus `<PROVIDER>_API_KEY` (e.g. `SENDGRID_API_KEY`) in `.env`/Secrets | **Used immediately** — `send-digest.mjs` / `send-escalation-notice.mjs` read these and actually send, once you (or your workflow) invoke them; SendGrid ships built in, other senders are added via `notify.mjs`'s `registerSender()` |
+| Real, well-received email bodies from your own project's history | `project-adapter.yml` → `notify.calibration_examples` (optional file paths) | **Used immediately once present** — quoted into the digest's system prompt to calibrate register; a fresh project with none yet still gets a working prompt from the rules alone |
 
 Filling in the bottom three rows today costs you nothing and loses nothing
 — they're forward-compatible, not busywork you'll redo. But don't read
@@ -341,8 +348,8 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested — still awaiting a workflow step that runs it against a real PR from the orchestrator, since that's CI wiring, not harness code |
 | Automated evaluator — test-command runner (`evaluation.test_commands`) | ❌ Not built, and — now that the loop itself is real — turns out not to need any harness *code*: a project's test commands become CI steps directly, the same way the guard already runs as one |
 | Failure & proposal memory — escalations ledger (`harness/lib/escalations.mjs`), themes review read-side (`harness/lib/themes.mjs`, `generate-themes.mjs`) | ✅ Built, tested, wired: the orchestrator folds every run's proposals into the ledger and reads it back into the next prompt |
-| Staging & promotion — merge + tag (`harness/lib/promote.mjs`), live-deploy check (`harness/lib/verify-deployment.mjs`) | ✅ Built, tested (`url` verify strategy only — `registry`/`artifact` still ❌) |
-| Notifier (email/Slack digest) | ❌ Not started |
+| Staging & promotion — merge + tag (`harness/lib/promote.mjs`), live-deploy check (`harness/lib/verify-deployment.mjs`) | ✅ Built, tested (`url` verify strategy only — `registry`/`artifact` still ❌) — not yet called automatically after an approved run; a standalone CLI a workflow's own job invokes |
+| Notifier — plain-language digest with a reliable fallback (`harness/lib/notify.mjs`, `harness/scripts/send-digest.mjs`, `send-escalation-notice.mjs`) | ✅ Built, tested — sender is pluggable (`registerSender()`; SendGrid ships built in, Slack/webhook/another email API are added by registering one under its own name), calibration examples are optional project config, not hardcoded. Same as staging & promotion: a standalone CLI, not yet called automatically. |
 | `init` CLI scaffolder | ❌ Not started |
 | `templates/` (generated agent brief, reviewer brief, guard config, workflow) | ❌ Not started |
 

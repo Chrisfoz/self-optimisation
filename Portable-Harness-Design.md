@@ -93,7 +93,7 @@ uniform:
 | `scripts/lib/escalations.mjs` | 419 | Failure & proposal memory (the "argue without editing" channel) | The whole ledger + consensus-bar (3 models / 2 labs) + email mechanism | ✅ **Ported** — `harness/lib/escalations.mjs`, nearly verbatim; this file was already fully generic. `LEDGER_PATH`/`CONSENSUS` became overridable options rather than module constants; `renderForEmail` renamed `renderForNotification` since the harness's notifier is channel-agnostic by design (email/Slack/webhook). 18 tests, including the specific behaviors worth locking down: distinct-model-not-raw-count consensus counting, a second model raising the *same* title backing rather than duplicating, flagging exactly once (a 4th supporter after the bar is cleared must not re-flag), and support/dissent against an already-resolved entry being ignored. No CLI wrapper yet — its only real caller is an orchestrator that doesn't exist. |
 | `scripts/build-generations-table.mjs` | 292 | Reporting / record generation | "Generate the record, never hand-maintain it" — table built from `docs/generations/` + ledger | Output format (the HTML deck) — keep as an optional renderer, not a requirement |
 | `scripts/verify-production.mjs` | 157 | Staging & promotion — the live check | "Every other gate tests a branch; this one tests what a user opens" | ✅ **Ported (the `url` strategy)** — `harness/lib/verify-deployment.mjs` + `harness/scripts/verify-deployment.mjs`, dispatching on the adapter's `deployment.verify_strategy`. The HTML-canonicalisation trick (compare `<script>` contents and visible text, since hosts commonly rewrite markup on the way out) is genuinely generic, not carrotgame-specific, and ported verbatim. `registry`/`artifact` strategies are named in the schema but not implemented — they'd need real per-ecosystem work (npm/PyPI/NuGet/Maven Central APIs differ too much to fake a shared shape) rather than a port. 14 tests, including a fake-clock pattern (advance time inside the injected `sleep`) that exercises the full poll-until-timeout loop without a single real millisecond of waiting. Alongside it, `harness/lib/promote.mjs` (merge + tag + push, plus branch cleanup) — never its own file in the reference implementation, which does this as inline bash in the workflow's merge job; made into real code for the same reason `guard.mjs` is real code rather than trusted-by-inspection bash. 6 tests against a **real two-repo setup** (a genuine bare "origin" plus a working clone, not simulated), including one that provokes an actual git merge conflict and confirms it throws rather than landing something broken. |
-| `scripts/send-digest-email.mjs`, `send-escalation-email.mjs`, `lib/format-digest.mjs` | 247+128+77 | Reporting | Plain-language-via-LLM digest pattern, best-effort-with-reliable-floor posture | SendGrid + recipient — becomes a pluggable notifier (email/Slack/webhook), one interface |
+| `scripts/send-digest-email.mjs`, `send-escalation-email.mjs`, `lib/format-digest.mjs` | 247+128+77 | Reporting | Plain-language-via-LLM digest pattern, best-effort-with-reliable-floor posture | ✅ **Ported** — `harness/lib/notify.mjs` (`buildGenerationDigestEmail()`, `buildEscalationNoticeEmail()`, both plain-language-with-a-reliable-terse-fallback) + `harness/scripts/send-digest.mjs` / `send-escalation-notice.mjs` (CLI wrappers). The reference implementation hardcodes SendGrid directly inside the email-writing code; the port separates the two completely — a `registerSender(name, send)`/`getSender(name)` registry (mirroring `llm-provider.mjs`'s own `registerProvider()` pattern) means nothing above the registry ever imports `fetch` or knows SendGrid exists. `sendViaSendGrid` ships as the one built-in sender; a project adds Slack/a webhook/another email API by registering its own under its own name and pointing `notify.provider` at it in `project-adapter.yml` — no harness code changes. Two computed-not-guessed facts carried over unchanged from the reference implementation, because they exist to prevent a real incident it had: `gatesBlock()` and `blockedByLine()` compute "what actually blocked the merge" from real gate results in code and hand it to the model as a stated fact, never leaving it to infer — a real run once had an automated allowlist check fail while the AI review had genuinely APPROVED, and a digest-writing model invented "the reviewer said no" despite the true verdict being right there in its prompt. `calibrationExamples` (real, well-received email bodies from a project's own history, quoted into the system prompt to calibrate register) is optional config (`notify.calibration_examples`, a list of file paths) rather than the reference implementation's two examples hardcoded as JS string literals — a fresh project with no history yet still gets a working prompt from the rules alone. 23 tests, including the registry (`getSender('sendgrid') === sendViaSendGrid`, a project registering and immediately resolving its own sender), the fallback triggering on a thrown error / truncated response / unparseable response, and `blockedByLine()`'s five scenarios (merged, a failing gate with its own note, a failing gate with none, nothing failed but it still didn't merge, a skipped gate correctly not treated as a blocker). |
 | `scripts/lib/gh-output.mjs` | 30 | Plumbing | GitHub Actions `$GITHUB_OUTPUT` writer | GitHub Actions–specific; other CI targets (GitLab CI, Buildkite) need their own thin equivalent behind the same call sites |
 | `scripts/lib/themes.mjs`, `generate-themes.mjs`, `generate-themes-review.mjs` | 84+84+89 | Longitudinal learning (the every-10th-generation abstraction step) | Entire mechanism — reads history, asks a pinned model for "what we noticed → what it means", feeds back into next context pack | ✅ **Ported (lib only)** — `harness/lib/themes.mjs` (read side, nearly verbatim) and `harness/lib/generate-themes.mjs` (prompt + response parser). One genuinely carrotgame-specific string found and fixed: the system prompt named "two children's browser games" directly; `buildThemesSystemPrompt()` now takes a `projectDescription` parameter instead. `generate-themes-review.mjs` (the CLI that actually calls a model) is **not** ported — it needs "generation history" as an input, which only exists once `context-pack.mjs` and an orchestrator have produced real `docs/generations/gen-NNN/` records; building a CLI around data nothing yet produces would be exactly the kind of fiction §8.4 and `ARCHITECTURE.md` argue against. 15 tests. |
 
@@ -486,17 +486,47 @@ history as input, which now genuinely exists once a project has run
 `docs/generations/gen-NNN/` records — the blocker was never the compiler
 (done) or the orchestrator (done), only real records existing yet.
 
-What's left, now that the loop itself is real: **staging & promotion**
-(merge, tag, verify-deployment — §3.10, still ❌), a **notifier**
-(email/Slack digest — still ❌), the **test-command runner** as an actual
-CI step (turns out this needs no new harness *code* at all — see the note
-in `ARCHITECTURE.md`, it's a workflow-template concern, not a missing
-component), and the **`init` CLI** + `templates/workflow.yml.tmpl` that
-would generate a working end-to-end workflow from all of this. The
+**Revised again, after staging & promotion and the notifier:** both are now
+✅ — `harness/lib/promote.mjs` + `harness/lib/verify-deployment.mjs` (the
+`url` strategy; `registry`/`artifact` are named in the schema but
+unimplemented — real per-ecosystem work, not a port, since npm/PyPI/NuGet/Maven
+Central APIs don't share a fetchable shape to fake), and `harness/lib/notify.mjs`
+together with its two CLI wrappers (`send-digest.mjs`, `send-escalation-notice.mjs`).
+See the Bucket B table (§3) for what each actually does; the design choice
+worth restating here is the same "harness owns mechanism, project owns
+content" split that shaped the orchestrator: the notifier's core (compose a
+plain-language email with a reliable terse fallback; compute *why* a merge
+did or didn't happen from real gate results rather than asking a model to
+guess) is genuinely portable and stayed a straight port. What wasn't
+portable as-is — SendGrid, and two hardcoded calibration examples from
+carrotgame's own history — moved to a `registerSender(name, send)` registry
+(mirroring `llm-provider.mjs`'s own provider registry, so adding Slack or a
+webhook never touches the email-writing code) and an optional
+`notify.calibration_examples` adapter field (file paths, read by the CLI
+wrapper and passed through) respectively.
+
+Neither staging/promotion nor the notifier is wired to run *automatically*
+after `run-generation.mjs` — each is a standalone, tested CLI a workflow's
+own job calls, the same "built but not orchestrated into one command" state
+the orchestrator itself was in before this section's previous revision.
+`run-generation.mjs` now emits `escalations-opened`/`escalations-flagged`/
+`escalations-flagged-json` outputs specifically so a workflow can wire them
+straight into `send-digest.mjs`'s `ESC_OPENED`/`ESC_FLAGGED` and
+`send-escalation-notice.mjs`'s `FLAGGED` env vars without a shell script
+in between — that wiring itself still lives only in
+`templates/workflow.yml.tmpl`, unbuilt.
+
+What's left, now that eleven of the paper's kernel components plus the
+notifier are real: the **`registry`/`artifact` verify strategies** (real,
+per-ecosystem work, not blocked on anything else in the harness), the
+**test-command runner** as an actual CI step (needs no new harness *code*
+at all — see the note in `ARCHITECTURE.md`, it's a workflow-template
+concern, not a missing component), and the **`init` CLI** +
+`templates/workflow.yml.tmpl` that would chain everything above into one
+generated, working end-to-end workflow for a new project. The
 orchestrator's existence makes the full workflow template genuinely close
-now, for the first time — `examples/workflows/watch-releases.yml`'s
-"detector only" scope was never a design ceiling, just the honest limit
-of what existed to call.
+now — `examples/workflows/watch-releases.yml`'s "detector only" scope was
+never a design ceiling, just the honest limit of what existed to call.
 
 Wiring the orchestrator's new adapter fields (`roles.*`, `context.*`) into
 `harness/project-adapter.example.yml` surfaced one more real bug the same

@@ -228,3 +228,31 @@ export function deploymentConfig(adapter) {
     runner: adapter?.deployment?.ci?.runner ?? 'ubuntu-latest',
   };
 }
+
+/**
+ * Notify config — ready for harness/lib/notify.mjs. `provider` names a
+ * sender registered via notify.mjs's registerSender() — 'sendgrid' ships
+ * built in; Slack/webhook/another email API are added by a project
+ * registering its own sender under its own name and pointing `provider` at
+ * it, not by this file knowing their shapes. `escalationNotice` defaults to
+ * true: a project that hasn't turned this off gets notified about a
+ * consensus escalation, which is the safer default for something a human
+ * has to act on. `calibrationExamplesPaths` are files (relative to the
+ * project root) whose contents get passed to notify.mjs's
+ * buildDigestSystemPrompt() as calibrationExamples — real, well-received
+ * email bodies from this project's own history that calibrate the model's
+ * register. Optional; omitted entirely by a fresh project with no history
+ * yet, same as buildDigestSystemPrompt() already defaults to.
+ */
+export function notifyConfig(adapter) {
+  return {
+    channel: adapter?.notify?.channel ?? null,
+    provider: adapter?.notify?.provider ?? null,
+    recipient: adapter?.notify?.recipient ?? null,
+    recipientName: adapter?.notify?.recipient_name ?? null,
+    from: adapter?.notify?.from ?? null,
+    digestModel: adapter?.notify?.digest_model ?? null,
+    escalationNotice: adapter?.notify?.escalation_notice ?? true,
+    calibrationExamplesPaths: adapter?.notify?.calibration_examples ?? [],
+  };
+}

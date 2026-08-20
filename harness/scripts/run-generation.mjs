@@ -201,6 +201,14 @@ setOutput('has-changes', String(result.hasChanges));
 setOutput('scope', result.scope?.scope ?? '');
 if (result.attemptRecordPath) setOutput('attempt-record', result.attemptRecordPath);
 
+// Escalations, if any were recorded this run — feeds send-digest.mjs's
+// ESC_OPENED/ESC_FLAGGED and send-escalation-notice.mjs's FLAGGED directly.
+// Absent on the no-proposal outcome: with no proposals, there is nothing to
+// fold into the ledger (see orchestrator.mjs's recordEscalations() call site).
+setOutput('escalations-opened', String(result.escalations?.opened?.length ?? 0));
+setOutput('escalations-flagged', String(result.escalations?.flagged?.length ?? 0));
+setOutput('escalations-flagged-json', JSON.stringify(result.escalations?.flagged ?? []));
+
 if (result.outcome === 'approved') {
   console.error(`\n✅ Approved on attempt ${result.attempts}`);
   console.error(`   implemented by ${result.implementedBy}`);

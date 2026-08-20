@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadAdapter, watchedProviders, snapshotPath, maxFanout, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, deploymentConfig } from '../../harness/lib/adapter.mjs';
+import { loadAdapter, watchedProviders, snapshotPath, maxFanout, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, deploymentConfig, notifyConfig } from '../../harness/lib/adapter.mjs';
 
 async function withTempFile(content, fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'adapter-test-'));
@@ -253,6 +253,42 @@ test('deploymentConfig defaults strategy to "none" (not null) and runner to ubun
   assert.equal(config.siteUrl, null);
   assert.equal(config.watchedFiles, null);
   assert.equal(config.runner, 'ubuntu-latest');
+});
+
+test('notifyConfig reads a fully populated notify section', async () => {
+  await withTempFile(
+    `
+notify:
+  channel: email
+  provider: sendgrid
+  recipient: you@example.com
+  recipient_name: Alex
+  from:
+    email: bot@example.com
+    name: Bot
+  digest_model: claude-opus-5
+  escalation_notice: false
+  calibration_examples:
+    - docs/calibration/example-1.md
+`,
+    async (file) => {
+      const config = notifyConfig(await loadAdapter(file));
+      assert.equal(config.channel, 'email');
+      assert.equal(config.provider, 'sendgrid');
+      assert.equal(config.recipient, 'you@example.com');
+      assert.equal(config.recipientName, 'Alex');
+      assert.deepEqual(config.from, { email: 'bot@example.com', name: 'Bot' });
+      assert.equal(config.digestModel, 'claude-opus-5');
+      assert.equal(config.escalationNotice, false);
+      assert.deepEqual(config.calibrationExamplesPaths, ['docs/calibration/example-1.md']);
+    }
+  );
+});
+
+test('notifyConfig: escalationNotice defaults to true (the safer default), calibrationExamplesPaths to [], when unset', () => {
+  assert.equal(notifyConfig(null).escalationNotice, true);
+  assert.equal(notifyConfig(null).channel, null);
+  assert.deepEqual(notifyConfig(null).calibrationExamplesPaths, []);
 });
 
 test('accessors return null/empty defaults on a null adapter, never throw', () => {

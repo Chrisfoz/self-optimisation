@@ -20,8 +20,10 @@ portable pattern you'd lift into another project. Read
 **The core loop is real as of this diagram's last edit.** Suggest →
 implement → review → refine runs end to end via
 `harness/scripts/run-generation.mjs`, against your own project's adapter
-and brief files. What's missing now sits *around* the loop — CI wiring,
-merging, notifying — not inside it.
+and brief files. Staging & promotion and the notifier are real too, each a
+standalone tested CLI — what's missing now is the CI wiring that would
+chain the loop, the guard, the tests, promotion and notification into one
+generated workflow, not any of those pieces themselves.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
@@ -66,7 +68,7 @@ flowchart TD
     teststep["🔧 The project's own tests, as a CI step<br/>needs no new harness code —<br/>evaluation.test_commands become<br/>workflow steps directly"]
     promote["✅ Merge + tag<br/>harness/lib/promote.mjs<br/>ready, but no workflow step calls it yet"]
     verify["✅ Live-deploy check<br/>harness/lib/verify-deployment.mjs<br/>url strategy only — registry/artifact still ❌"]
-    notify["❌ Notifier — email/Slack digest"]
+    notify["✅ Notifier — plain-language digest<br/>harness/lib/notify.mjs<br/>pluggable sender, ready, but no<br/>workflow step calls it yet"]
     workflow["❌ templates/workflow.yml.tmpl<br/>+ the init CLI that generates it"]
   end
 
@@ -91,15 +93,18 @@ and the project's own tests need no new harness *code*, only a workflow
 step that calls what already exists — `check-guarded-paths.mjs` already
 runs standalone against a real git diff. `promote.mjs` (merge + tag,
 verified against a real two-repo git setup including an actual merge
-conflict) and `verify-deployment.mjs` (the `url` strategy — poll a live
-site, compare canonicalised content, timeout) are both built and tested
-too now, ready the same way the guard is: nothing calls them yet, only
-because nothing chains them together. The genuinely unbuilt pieces have
-narrowed to three: a notifier, the `registry`/`artifact` verify strategies
-(real per-ecosystem work — npm/PyPI/NuGet/Maven Central APIs differ too
-much to fake a shared shape), and the `templates/workflow.yml.tmpl` +
-`init` CLI that would chain everything above into one file for a new
-project instead of someone running each script by hand.
+conflict), `verify-deployment.mjs` (the `url` strategy — poll a live site,
+compare canonicalised content, timeout), and `notify.mjs` (plain-language
+digest with a reliable terse fallback, delivery behind a `registerSender()`
+registry so SendGrid is one registered sender, not a hardcoded dependency)
+are all built and tested too now, ready the same way the guard is: nothing
+calls them yet, only because nothing chains them together. The genuinely
+unbuilt pieces have narrowed to two: the `registry`/`artifact` verify
+strategies (real per-ecosystem work — npm/PyPI/NuGet/Maven Central APIs
+differ too much to fake a shared shape), and the
+`templates/workflow.yml.tmpl` + `init` CLI that would chain everything
+above into one file for a new project instead of someone running each
+script by hand.
 
 `Portable-Harness-Design.md`'s Status table has the same information as
 prose, kept in sync by hand — if the two ever disagree, trust whichever was

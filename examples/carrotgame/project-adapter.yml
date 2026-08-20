@@ -221,8 +221,25 @@ deployment:
 
 notify:
   channel: email
+  # scripts/send-digest-email.mjs / send-escalation-email.mjs hardcode SendGrid
+  # directly. harness/lib/notify.mjs's registerSender()/getSender() genericised
+  # this: "sendgrid" is one registered sender among any a project could add, not
+  # a literal the harness special-cases — provider names *which registered
+  # sender* delivers the email, nothing more.
   provider: sendgrid
   recipient: cfostermcbride@gmail.com
-  digest_style: plain-language      # written by claude-opus-5 from the real generation record
+  recipient_name: Chris             # harness/lib/notify.mjs's buildDigestSystemPrompt()
+  from:
+    email: support@digitalhumanassistants.io
+    name: "Mason's Game Self-Improvement"
+  digest_model: claude-opus-5       # written by claude-opus-5 from the real generation record
+  digest_style: plain-language
   digest_fallback: terse-template   # used if the plain-language pass fails for any reason
   escalation_notice: true           # separate email once consensus is reached
+  # scripts/lib/format-digest.mjs's own system prompt hardcodes two real,
+  # well-received example bodies inline, from this project's own history —
+  # never extracted to files of their own. calibration_examples below is
+  # where the harness version of that would point once/if they are; left
+  # empty here rather than fabricated, since NOTES.md's rule is "reconstruct
+  # from real enforcement code," and no such files exist in this repo today.
+  calibration_examples: []

@@ -150,6 +150,43 @@ context:
   history_limit: 3       # how many recent generations get full detail in the prompt
   scope_required: 2      # clean first-attempt merges in a row before "ambitious" unlocks
 
+# --- LIVE: harness/scripts/verify-deployment.mjs and promote.mjs read this
+# section (via harness/lib/adapter.mjs's deploymentConfig()). Neither is
+# wired to run automatically after run-generation.mjs yet — each is a
+# standalone CLI a workflow's own job calls — but both are real, tested
+# code today, not a stub. Leave verify_strategy at "none" (the default) if
+# you don't have a deployment to check.
+deployment:
+  verify_strategy: none     # url | registry | artifact | none — only "url" and "none" are implemented
+  # production_url: https://your-project.example.com
+  # watched_files: []
+  #   - index.html
+  ci:
+    runner: ubuntu-latest
+
+# --- LIVE: harness/scripts/send-digest.mjs and send-escalation-notice.mjs
+# read this section (via harness/lib/adapter.mjs's notifyConfig()). Neither
+# is wired to run automatically either — same standalone-CLI situation as
+# deployment above. `provider` names a sender registered in
+# harness/lib/notify.mjs via registerSender() — "sendgrid" ships built in;
+# add your own (Slack, a webhook, another email API) by registering one
+# under its own name and pointing `provider` at it, no harness code needs
+# to change. Its API key is read from `<PROVIDER_NAME_UPPERCASE>_API_KEY`
+# (SENDGRID_API_KEY for the built-in sender).
+# notify:
+#   channel: email
+#   provider: sendgrid
+#   recipient: you@example.com
+#   recipient_name: <your first name>       # used in the digest's system prompt
+#   from:
+#     email: bot@your-project.example.com
+#     name: <your project>'s Self-Improvement
+#   digest_model: claude-opus-5             # writes the plain-language email
+#   escalation_notice: true                 # separate email once consensus is reached
+#   calibration_examples: []                # paths to real, well-received email
+#     # - docs/calibration/example-1.md     # bodies from YOUR project's own history —
+#                                            # optional; omit until you have some
+
 # --- RESERVED: still no CI-wiring/workflow template to read any of the
 # below — see ARCHITECTURE.md's "NOT built yet" box. Filling them in now is
 # free and forward-compatible.
@@ -163,8 +200,3 @@ context:
 # evaluation:
 #   test_commands: []
 #   preflight_required: true
-
-# deployment:
-#   verify_strategy: none     # url | registry | artifact | none
-#   ci:
-#     runner: ubuntu-latest
