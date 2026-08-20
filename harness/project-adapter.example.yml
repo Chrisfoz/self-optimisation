@@ -1,7 +1,11 @@
 # Copy this file to project-adapter.yml at YOUR project's root (not inside
-# harness/) and fill in the bracketed placeholders. This is the one file the
-# harness reads to know how it applies to *this specific project* — see
-# harness/lib/adapter.mjs, the only file in the harness that parses it.
+# harness/) and fill in every <angle-bracket> placeholder. This is the one
+# file the harness reads to know how it applies to *this specific project*
+# — see harness/lib/adapter.mjs, the only file in the harness that parses
+# it. Angle brackets, deliberately, not square ones: `id: [your-name]` is
+# valid YAML for a one-element ARRAY, not a placeholder string, and parses
+# silently into the wrong shape — caught by actually running this file
+# through js-yaml while building it, not by inspection.
 #
 # Every field below is marked either LIVE (a real script reads it today) or
 # RESERVED (part of the schema, matches Portable-Harness-Design.md's design,
@@ -16,8 +20,8 @@
 # meant to be copied over this file.
 
 project:
-  id: [your-project-name]
-  repository: [https://github.com/you/your-project]
+  id: <your-project-name>
+  repository: <https://github.com/you/your-project>
   default_branch: main
 
 # --- LIVE: harness/scripts/check-model-releases.mjs reads this section ----
@@ -50,7 +54,7 @@ constitution:
   # Exact paths an autonomous change may edit. Everything else is refused
   # before anything reaches disk — an allowlist, not a denylist.
   allowed_paths:
-    - [path/to/an/editable/file]
+    - <path/to/an/editable/file>
 
   # Glob patterns a CREATE block may target — ONLY at a path that doesn't
   # already exist yet. Leave empty if your project has no such surface.
@@ -64,7 +68,7 @@ constitution:
   # diff in CI.
   frozen_paths: []
     # - ".github/**"                # workflow definitions
-    # - "[path to this brief]"      # the agent's own instructions
+    # - "<path to this brief>"      # the agent's own instructions
     # - "package.json"              # or your project's dependency manifest
   append_only_paths: []
     # - "tests/**"                  # new tests may be added; existing ones may not change
@@ -75,24 +79,80 @@ constitution:
     max_files: 50
     max_lines: 10000
 
-# --- PARSED but not yet acted on automatically: harness/lib/adapter.mjs's
-# memoryConfig() reads this section, and harness/lib/escalations.mjs and
-# themes.mjs both accept these exact values as options — but nothing calls
-# memoryConfig() for you yet, because no orchestrator exists to fold a
-# generation's proposals into the ledger or to trigger a themes review at a
-# cadence boundary. Filling this in now costs nothing and is exactly what
-# those components will read once built.
-# memory:
-#   escalation_ledger: docs/escalations/ledger.json
-#   escalation_consensus:
-#     models: 3
-#     labs: 2
-#   themes_review:
-#     dir: docs/themes
-#     cadence_generations: 10
+# --- LIVE: harness/scripts/run-generation.mjs reads these three sections --
+# Everything below this point is what turns the pieces above into an actual
+# run of the loop — see ARCHITECTURE.md for the diagram this powers.
 
-# --- RESERVED: no orchestrator exists yet to read any of the below --------
-# Filling these in is free and forward-compatible; nothing acts on them yet.
+roles:
+  # Where your filled-in briefs live. Copy the two templates in
+  # harness/templates/ to these paths and fill in every <placeholder>
+  # before your first real run — see the root README's "What only you can
+  # provide" table.
+  agent_brief_path: .claude/agents/improve.md
+  reviewer_brief_path: .claude/agents/review.md
+
+  suggest:
+    max_output_tokens: 32000   # covers a full analysis plus an ambitious edit set
+  implement:
+    model: claude-opus-5       # the pinned fallback implementer
+  review:
+    model: claude-opus-5       # pinned — this gate does not rotate
+  rank:
+    model: claude-opus-5       # only called when more than one lab proposed this run
+  refine:
+    max_attempts: 3            # on the pinned implementer; a direct edit from the
+                                # suggesting model is tried first and doesn't count against this
+
+memory:
+  escalation_ledger: docs/escalations/ledger.json
+  escalation_consensus:
+    models: 3
+    labs: 2
+  themes_review:
+    dir: docs/themes
+    cadence_generations: 10
+
+context:
+  # Where generation records accumulate — attempts.json, proposal.md — one
+  # directory per run.
+  generations_dir: docs/generations
+
+  # Optional: a doc with standing context about how this project's loop is
+  # built, sent to the suggestion stage in full. append_only_marker, if your
+  # doc has a growing log at the bottom, truncates there rather than sending
+  # ever-more text every run — see context-pack.mjs's own doc comment for
+  # the incident this guards against.
+  # architecture_notes:
+  #   path: ARCHITECTURE.md
+  #   append_only_marker: "*This log is append-only.*"
+
+  # Test files to index by name (not body) for the suggestion stage — see
+  # context-pack.mjs's buildTestIndex(). Defaults to matching
+  # test/it/describe, which covers Node's own test runner, Jest, Mocha and
+  # Jasmine; override with a custom extractor if your suite uses something
+  # else.
+  test_files: []
+    # - tests/lib/example.test.mjs
+
+  # One-line purpose for each path worth naming in the repo manifest the
+  # suggestion stage sees — helps rule out a structurally impossible
+  # proposal before it's written. Optional; an empty map is fine.
+  purposes: {}
+    # index.html: the landing page and game picker
+
+  # A short paragraph about where and how this project actually runs —
+  # device, network, session length, audience — sent as-is. This is not a
+  # function to call; context-pack.mjs has no builder for it, because it's
+  # just prose only you know.
+  # platform_notes: >
+  #   Runs in any current browser. No specific device or network assumptions.
+
+  history_limit: 3       # how many recent generations get full detail in the prompt
+  scope_required: 2      # clean first-attempt merges in a row before "ambitious" unlocks
+
+# --- RESERVED: still no CI-wiring/workflow template to read any of the
+# below — see ARCHITECTURE.md's "NOT built yet" box. Filling them in now is
+# free and forward-compatible.
 
 # approval_class: autonomous-merge   # or human-approval-required
 

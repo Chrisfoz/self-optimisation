@@ -17,63 +17,82 @@ portable pattern you'd lift into another project. Read
 
 ## What's actually built here, today
 
+**The core loop is real as of this diagram's last edit.** Suggest →
+implement → review → refine runs end to end via
+`harness/scripts/run-generation.mjs`, against your own project's adapter
+and brief files. What's missing now sits *around* the loop — CI wiring,
+merging, notifying — not inside it.
+
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
 flowchart TD
   cron(["schedule / workflow_dispatch"]) --> detector
 
-  subgraph today["Usable today — copy examples/workflows/watch-releases.yml"]
+  subgraph detect["Detector — copy examples/workflows/watch-releases.yml"]
     detector["✅ Model-Release Detector<br/>harness/lib/model-release-detector.mjs"]
     probe["✅ Reachability Probe<br/>harness/lib/probe-models.mjs"]
-    adapter["✅ Adapter Loader<br/>harness/lib/adapter.mjs (js-yaml)<br/>reads project-adapter.yml"]
-    router["✅ Provider Router<br/>harness/lib/llm-provider.mjs<br/>+ 9 providers/*.mjs"]
-
-    adapter -.->|"providers.watched"| detector
     detector --> probe
-    probe --> router
   end
 
-  detector -->|"new model found"| issue(["✅ open a GitHub issue<br/>(watch-releases.yml)"])
   detector -->|"nothing new"| idle(["stop. no cost,<br/>no commit"])
+  probe -->|"survivors"| rungen
 
-  issue -.->|"a human reads it and<br/>decides whether to try it"| human(["👤 you, today"])
+  subgraph loop["The loop — harness/scripts/run-generation.mjs, end to end, tested"]
+    adapter["✅ Adapter + briefs<br/>harness/lib/adapter.mjs (js-yaml)<br/>project-adapter.yml + agent-brief.md + reviewer-brief.md"]
+    rungen["✅ runGeneration()<br/>harness/lib/orchestrator.mjs"]
+    router["✅ Provider Router<br/>llm-provider.mjs + 9 providers/*.mjs"]
+    context["✅ Context Compiler<br/>context-pack.mjs (7/9 functions)"]
+    propose["✅ Suggest + Rank<br/>gatherProposals() + rankProposals()<br/>fan out, authors withheld"]
+    executor["✅ Implement<br/>edit-format.mjs — targeted edits,<br/>all-or-nothing"]
+    reviewer["✅ Review<br/>review.mjs — fresh context,<br/>fails closed"]
+    refine["✅ Refine<br/>rejected? restore to pristine,<br/>retry up to maxAttempts"]
+    memory["✅ Memory<br/>escalations.mjs + themes.mjs<br/>folded in every run"]
 
-  subgraph missing["NOT built yet — a human does this by hand, or it doesn't happen"]
-    context["✅ Context Compiler<br/>harness/lib/context-pack.mjs<br/>ready, but nothing upstream calls it yet"]
-    executor["✅ Bounded Patch Executor<br/>harness/lib/edit-format.mjs<br/>ready, but nothing upstream calls it yet"]
-    propose["❌ Parallel Proposal Stage<br/>fan out to every new model,<br/>rank with authors withheld"]
-    reviewer["❌ Independent Reviewer<br/>fresh-context approve/reject"]
-    guard["✅ Guard<br/>harness/lib/guard.mjs<br/>ready, but nothing upstream calls it yet"]
-    testrunner["❌ Test-command runner<br/>evaluation.test_commands<br/>in project-adapter.yml — not consumed by anything"]
-    memory["✅ Failure & Proposal Memory<br/>harness/lib/escalations.mjs + themes.mjs<br/>ready, but nothing upstream calls it yet"]
-    promote["❌ Staging & Promotion<br/>merge, tag, verify-deployment"]
-
-    context --> propose --> executor --> reviewer --> guard --> testrunner --> promote
+    adapter --> context --> propose
+    propose --> router
+    propose --> executor --> reviewer
+    reviewer -->|"rejected"| refine --> executor
+    propose -.-> memory
     memory -.->|"read back next run"| context
-    testrunner -.-> memory
   end
 
-  human -.->|"the missing half of the loop,<br/>manually, for now"| context
+  rungen -.->|"composes all of this"| adapter
 
-  style today fill:#DCE7F0,stroke:#4A5C6A
+  reviewer -->|"approved"| approved(["✅ change on disk,<br/>attempts.json + proposal.md written"])
+  refine -->|"attempts exhausted"| abandoned(["✅ tree restored to pristine,<br/>attempts.json written — real data,<br/>not a wasted run"])
+
+  subgraph missing["NOT built yet"]
+    guardstep["🔧 Guard as a CI step<br/>harness/lib/guard.mjs already works —<br/>no workflow step calls it against<br/>the orchestrator's own branch yet"]
+    teststep["🔧 The project's own tests, as a CI step<br/>needs no new harness code —<br/>evaluation.test_commands become<br/>workflow steps directly"]
+    promote["❌ Merge, tag, verify-deployment"]
+    notify["❌ Notifier — email/Slack digest"]
+    workflow["❌ templates/workflow.yml.tmpl<br/>+ the init CLI that generates it"]
+  end
+
+  approved -.->|"still needs"| guardstep --> teststep --> promote --> notify
+  workflow -.->|"would generate all of the above,<br/>chained, for a new project"| loop
+
+  style detect fill:#DCE7F0,stroke:#4A5C6A
+  style loop fill:#DCE7F0,stroke:#4A5C6A
   style missing fill:#F3E3D4,stroke:#9FB0BE
 ```
 
 **Read this diagram as an honest gap, not a roadmap with checkboxes filled
-in.** The blue box is real, tested, and runnable via
-`examples/workflows/watch-releases.yml` right now. Inside the tan box,
-`context-pack.mjs`, `edit-format.mjs`, `guard.mjs` and the memory pair
-(`escalations.mjs`, `themes.mjs`) are all fully built and tested — five of
-the tan box's seven nodes — but every one of them is still waiting on the
-orchestrator that would actually call them in the right sequence. Only the
-Parallel Proposal Stage, the Independent Reviewer, the test-command runner
-and Staging & Promotion remain genuinely unbuilt in any form. A human
-currently plays the part of all seven by hand, reading the issue the
-detector opened and deciding what to do next — the tested components would
-narrow that gap the moment something calls them, not before. Nothing yet
-reads `evaluation.test_commands` from `project-adapter.yml` either — the
-field exists in the schema, but no component runs a project's tests on the
-harness's behalf.
+in.** Both blue boxes are real: the detector via
+`examples/workflows/watch-releases.yml`, and the loop via
+`harness/scripts/run-generation.mjs` run directly — 29 tests against fake
+model responses, plus one real end-to-end run against a temp project with a
+real adapter and real brief files (no API key configured, which correctly
+produced a `no-proposal` outcome rather than crashing on a wiring bug — see
+`Portable-Harness-Design.md`'s Bucket B table for that verification in
+detail). What's left is real too, but it's smaller than it looks: the guard
+and the project's own tests need no new harness *code*, only a workflow
+step that calls what already exists — `check-guarded-paths.mjs` already
+runs standalone against a real git diff. The genuinely unbuilt pieces are
+merge/tag, `verify-deployment` (project-specific: url/registry/artifact per
+the adapter), a notifier, and the `templates/workflow.yml.tmpl` + `init`
+CLI that would chain all of this into one file for a new project instead of
+someone running `run-generation.mjs` by hand.
 
 `Portable-Harness-Design.md`'s Status table has the same information as
 prose, kept in sync by hand — if the two ever disagree, trust whichever was

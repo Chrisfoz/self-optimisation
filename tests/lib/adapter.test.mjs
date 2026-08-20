@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadAdapter, watchedProviders, snapshotPath, maxFanout, constitutionAllowlist, guardConfig, memoryConfig } from '../../harness/lib/adapter.mjs';
+import { loadAdapter, watchedProviders, snapshotPath, maxFanout, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig } from '../../harness/lib/adapter.mjs';
 
 async function withTempFile(content, fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'adapter-test-'));
@@ -156,6 +156,74 @@ test('memoryConfig returns null defaults when the adapter has no memory section'
   assert.deepEqual(config.consensus, { models: null, labs: null });
   assert.equal(config.themesDir, null);
   assert.equal(config.themesCadence, null);
+});
+
+test('briefPaths, rolesConfig and contextConfig read a fully populated adapter', async () => {
+  await withTempFile(
+    `
+roles:
+  agent_brief_path: .claude/agents/improve.md
+  reviewer_brief_path: .claude/agents/review.md
+  suggest:
+    max_output_tokens: 32000
+  implement:
+    model: claude-opus-5
+  review:
+    model: claude-opus-5
+  rank:
+    model: claude-opus-5
+  refine:
+    max_attempts: 3
+
+context:
+  generations_dir: docs/generations
+  architecture_notes:
+    path: ARCHITECTURE.md
+    append_only_marker: "*This log is append-only.*"
+  test_files:
+    - tests/a.test.mjs
+  purposes:
+    index.html: the landing page
+  platform_notes: "Runs in any modern browser."
+  history_limit: 3
+  scope_required: 2
+`,
+    async (file) => {
+      const adapter = await loadAdapter(file);
+
+      assert.deepEqual(briefPaths(adapter), {
+        agentBriefPath: '.claude/agents/improve.md',
+        reviewerBriefPath: '.claude/agents/review.md',
+      });
+
+      assert.deepEqual(rolesConfig(adapter), {
+        suggestMaxTokens: 32000,
+        implementModel: 'claude-opus-5',
+        reviewModel: 'claude-opus-5',
+        rankModel: 'claude-opus-5',
+        maxAttempts: 3,
+      });
+
+      const ctx = contextConfig(adapter);
+      assert.equal(ctx.generationsDir, 'docs/generations');
+      assert.equal(ctx.architectureNotesPath, 'ARCHITECTURE.md');
+      assert.equal(ctx.architectureNotesMarker, '*This log is append-only.*');
+      assert.deepEqual(ctx.testFiles, ['tests/a.test.mjs']);
+      assert.deepEqual(ctx.purposes, { 'index.html': 'the landing page' });
+      assert.equal(ctx.platformNotes, 'Runs in any modern browser.');
+      assert.equal(ctx.historyLimit, 3);
+      assert.equal(ctx.scopeRequired, 2);
+    }
+  );
+});
+
+test('briefPaths, rolesConfig and contextConfig return null/empty defaults on a bare adapter', () => {
+  assert.deepEqual(briefPaths(null), { agentBriefPath: null, reviewerBriefPath: null });
+  assert.deepEqual(rolesConfig(null), { suggestMaxTokens: null, implementModel: null, reviewModel: null, rankModel: null, maxAttempts: null });
+  assert.deepEqual(contextConfig(null), {
+    generationsDir: null, architectureNotesPath: null, architectureNotesMarker: null,
+    testFiles: [], purposes: {}, platformNotes: null, historyLimit: null, scopeRequired: null,
+  });
 });
 
 test('accessors return null/empty defaults on a null adapter, never throw', () => {

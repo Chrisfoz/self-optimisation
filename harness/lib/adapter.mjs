@@ -135,11 +135,12 @@ export function guardConfig(adapter) {
 
 /**
  * Memory config — where the escalation ledger and themes reviews live, and
- * the consensus bar. Ready for harness/lib/escalations.mjs's loadLedger()
- * and harness/lib/themes.mjs's loadLatestThemesReview(). Nothing calls
- * this yet — there's no orchestrator to fold a generation's proposals into
- * the ledger, or to trigger a themes review at a cadence boundary — but the
- * shape is here so a project can start recording its own values now.
+ * the consensus bar. Consumed by harness/lib/orchestrator.mjs's
+ * runGeneration() (the ledger path and consensus bar) and, for the read
+ * side, harness/lib/themes.mjs's loadLatestThemesReview() (themesDir).
+ * Nothing yet triggers a themes review AT a cadence boundary — that's
+ * still `generate-themes-review.mjs`'s unbuilt CLI (see
+ * Portable-Harness-Design.md's Bucket B table for why).
  */
 export function memoryConfig(adapter) {
   return {
@@ -156,5 +157,55 @@ export function memoryConfig(adapter) {
     themesCadence: Number.isFinite(adapter?.memory?.themes_review?.cadence_generations)
       ? adapter.memory.themes_review.cadence_generations
       : null,
+  };
+}
+
+/**
+ * Where a project keeps its filled-in brief files — see
+ * harness/templates/agent-brief.md.tmpl and reviewer-brief.md.tmpl. These
+ * are read as plain text and become system prompts directly (see
+ * orchestrator.mjs's own doc comment for why: the brief IS the prompt, not
+ * a summary of it read separately).
+ */
+export function briefPaths(adapter) {
+  return {
+    agentBriefPath: adapter?.roles?.agent_brief_path ?? null,
+    reviewerBriefPath: adapter?.roles?.reviewer_brief_path ?? null,
+  };
+}
+
+/** Which models fill which seat, and how many refine attempts are allowed. Consumed by orchestrator.mjs's runGeneration(). */
+export function rolesConfig(adapter) {
+  return {
+    suggestMaxTokens: Number.isFinite(adapter?.roles?.suggest?.max_output_tokens)
+      ? adapter.roles.suggest.max_output_tokens
+      : null,
+    implementModel: adapter?.roles?.implement?.model ?? null,
+    reviewModel: adapter?.roles?.review?.model ?? null,
+    rankModel: adapter?.roles?.rank?.model ?? null,
+    maxAttempts: Number.isFinite(adapter?.roles?.refine?.max_attempts)
+      ? adapter.roles.refine.max_attempts
+      : null,
+  };
+}
+
+/**
+ * Configuration for context-pack.mjs's builders — the pieces that are
+ * always project-specific (a generations directory, an architecture doc,
+ * a test-file list, a purposes map for the repo manifest, a platform-notes
+ * paragraph). Every field is optional; each corresponding builder already
+ * degrades gracefully (returns null, or an empty section) when its input
+ * is unset — see context-pack.mjs's own functions.
+ */
+export function contextConfig(adapter) {
+  return {
+    generationsDir: adapter?.context?.generations_dir ?? null,
+    architectureNotesPath: adapter?.context?.architecture_notes?.path ?? null,
+    architectureNotesMarker: adapter?.context?.architecture_notes?.append_only_marker ?? null,
+    testFiles: adapter?.context?.test_files ?? [],
+    purposes: adapter?.context?.purposes ?? {},
+    platformNotes: adapter?.context?.platform_notes ?? null,
+    historyLimit: Number.isFinite(adapter?.context?.history_limit) ? adapter.context.history_limit : null,
+    scopeRequired: Number.isFinite(adapter?.context?.scope_required) ? adapter.context.scope_required : null,
   };
 }

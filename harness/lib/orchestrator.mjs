@@ -1,0 +1,981 @@
+#!/usr/bin/env node
+
+/**
+ * The orchestrator — suggest, implement, review, refine, in one process.
+ * Composes every other kernel component built this session
+ * (llm-provider, edit-format, model-release-detector's sibling probe,
+ * context-pack, escalations, themes, guard, adapter) into the actual loop.
+ * Ported from carrotgame's scripts/invoke-self-improvement-agent.mjs (the
+ * reference implementation, 1,450 lines) — this is real design work, not a
+ * 1:1 extraction, for one reason above all others: the reference
+ * implementation's prompts are carrotgame's own words, hardcoded as JS
+ * template literals (game design pillars, hospital-tablet context, a
+ * canvas pixel-math lesson). None of that belongs in a portable harness.
+ *
+ * The fix is a division of responsibility this file holds to throughout:
+ * **the harness owns mechanism, the project owns content.** A project's
+ * filled-in `agent-brief.md` (see harness/templates/agent-brief.md.tmpl)
+ * IS the suggestion stage's system prompt — not a summary of it, not
+ * something this file also duplicates in its own words. This file adds
+ * only what's genuinely mechanical and the same shape for any project: the
+ * edit-format contract, the response-field structure the parsers expect,
+ * and a scope note for the current run. Compare this to the reference
+ * implementation's own redundancy — its hardcoded system prompt restates
+ * much of what `.claude/agents/self-improvement.md` already says, in
+ * different words, because nothing enforced them staying in sync. That
+ * redundancy doesn't port forward.
+ *
+ * Same split for stage 3: `reviewChanges()` (review.mjs) takes the
+ * project's filled-in reviewer-brief.md as its entire system prompt.
+ *
+ * The four stages, unchanged from the reference implementation's design:
+ *
+ *   Stage 1 — SUGGEST    the rotating seat: whichever model(s) a release
+ *                        was just detected for. Returns prose, optionally
+ *                        with its own edit blocks.
+ *   Stage 2 — IMPLEMENT  a pinned model turns the proposal into targeted
+ *                        edits, unless the suggesting model already wrote
+ *                        usable ones.
+ *   Stage 3 — REVIEW     a pinned model, fresh context, approves or
+ *                        rejects with required fixes. Fails closed.
+ *   Stage 4 — REFINE     on rejection, back to stage 2 with the feedback,
+ *                        up to maxAttempts times, always from a pristine
+ *                        tree.
+ *
+ * This lives in one process, not across separate steps, because a
+ * review→refine→review cycle has to be able to loop — the same constraint
+ * that shaped the reference implementation (GitHub Actions cannot loop
+ * jobs).
+ */
+
+import fs from 'fs';
+import path from 'path';
+import { callModelWithHeadroom, resolveProvider } from './llm-provider.mjs';
+import { setOutput, oneLine } from './gh-output.mjs';
+import { buildEditFormatSpec, parseResponse, applyEdits, renderForReview } from './edit-format.mjs';
+import { reviewChanges } from './review.mjs';
+import { parseEscalation, recordRound, loadLedger, saveLedger, renderForNotification } from './escalations.mjs';
+
+// ---------------------------------------------------------------------------
+// Pure text-processing helpers — ported verbatim, no genericisation needed.
+// These operate on response text and field names, never on project content.
+// ---------------------------------------------------------------------------
+
+/**
+ * Pull a labelled prose block out of a response. Runs from the label to
+ * the next ALL-CAPS label, the first edit block, or the end — whichever
+ * comes first. Deliberately forgiving: this feeds a human or a parser
+ * downstream, and a field that is merely mangled is worth more than one
+ * dropped because a model added a stray blank line.
+ */
+export function extractField(text, label) {
+  const start = text.search(new RegExp(`^${label}:`, 'im'));
+  if (start === -1) return '';
+  const rest = text.slice(start).replace(new RegExp(`^${label}:[ \\t]*`, 'i'), '');
+  const end = rest.search(/^(?:[A-Z][A-Z ]{2,}:|<<<(?:EDIT|CREATE)>>>)/m);
+  return (end === -1 ? rest : rest.slice(0, end)).trim();
+}
+
+/**
+ * The edits a suggesting model chose to write itself, if it wrote any.
+ * Tried before the pinned implementer's own attempts — a model that
+ * cannot hit the edit-format contract costs nothing, because the run
+ * falls back; a model that can hit it gets to ship its own code.
+ */
+export function extractDirectEdits(text) {
+  const parsed = parseResponse(text);
+  if (parsed.edits.length === 0 && parsed.creates.length === 0) return null;
+  return parsed;
+}
+
+/**
+ * Rescue the analysis from a response that hit its output cap even after
+ * a headroom retry. `anchorField` is the last field the response format
+ * requires before any edit blocks — its presence proves every field
+ * before it finished, so everything after it (a partial edit set, half a
+ * line of feedback) can be safely cut away. A truncated edit set is
+ * exactly the thing this harness refuses to touch (see edit-format.mjs).
+ *
+ * @param {string} text
+ * @param {string} [anchorField]  Default 'VERIFICATION' — matches
+ *   SUGGEST_RESPONSE_FORMAT below.
+ * @returns {string|null}  Salvaged prose, or null when truncation landed
+ *   mid-analysis and there is nothing trustworthy to keep.
+ */
+export function salvageTruncated(text, anchorField = 'VERIFICATION') {
+  if (!new RegExp(`^${anchorField}:`, 'im').test(text)) return null;
+
+  const prose = text
+    .replace(/<<<(?:EDIT|CREATE)>>>[\s\S]*$/m, '')
+    .trimEnd();
+
+  // A stray SEARCH or REPLACE marker means an edit block began before the
+  // regex above could anchor on its opening tag. Refuse rather than guess.
+  if (/<<<(?:SEARCH|REPLACE|CONTENT|END)>>>/.test(prose)) return null;
+
+  return `${prose}\n\n[NOTE: this response hit its output limit. The analysis above is complete; any edits the model began writing were discarded.]`;
+}
+
+/** The argument only: no edit blocks, no note to the maintainers. Used when a proposal is shown to a different model than the one that wrote it (ranking, or a rejected attempt's context). */
+export function forRanking(text) {
+  return text
+    .replace(/<<<(?:EDIT|CREATE)>>>[\s\S]*$/m, '')
+    .replace(/^BRIEF FEEDBACK:[\s\S]*$/im, '')
+    .trim();
+}
+
+/** Drop a prompt section entirely when its content is missing, rather than sending an empty heading. */
+export function section(heading, body) {
+  return body ? `\n# ${heading}\n${body}\n` : '';
+}
+
+// ---------------------------------------------------------------------------
+// The suggestion-stage response format — mechanical, not project-specific.
+// Field names match what extractField()/parseEscalation() expect.
+// ---------------------------------------------------------------------------
+
+export const SUGGEST_RESPONSE_FORMAT = `Respond in this structure:
+
+PILLAR: <which quality dimension this strengthens>
+PROBLEM: <what is weak today, citing the specific code or behaviour you saw>
+CHANGE: <precisely what should change — name the functions, constants,
+         handlers or markup involved, and describe the new behaviour
+         concretely enough that another engineer could implement it
+         without guessing>
+WHY THIS ONE: <why this beats the other candidates you considered>
+RISK: <what could break, and how the change stays backwards compatible>
+ALSO UPDATE: <every other place that has to change with it, or "nothing" if
+         the change genuinely shows up nowhere else. Be specific: name the
+         file and the text.>
+VERIFICATION: <what a reviewer should check to confirm it works>
+BRIEF FEEDBACK: <REQUIRED, and read by a human rather than a machine. Which
+         parts of the brief genuinely helped? Which constrained you for no
+         good reason, or pushed you toward a worse answer than you would
+         have given unprompted? What would you delete?>
+ESCALATION: <REQUIRED, and "none" is a perfectly good answer. One line
+         naming a change to something you are not allowed to edit that you
+         believe would make this project better.>
+ESCALATION TARGET: <agent-brief | pipeline | hard-constraint | none>
+ESCALATION CASE: <if you opened one: what is blocked today, exactly what
+         should change, what it would unlock, what risk it carries.>
+ESCALATION SUPPORT: <none, or the id(s) of open escalations you independently
+         agree with, and why.>
+ESCALATION DISSENT: <none, or the id of one you think is wrong, and why.>
+
+Then, optionally, the edit blocks implementing your change.`;
+
+/**
+ * Build the suggestion stage's system prompt. The project's agent brief
+ * (in full) IS the prompt — this only adds the two things that vary per
+ * run and are the same mechanical shape for any project: which scope this
+ * generation may attempt, and the optional edit-format contract.
+ *
+ * @param {object} opts
+ * @param {string} opts.agentBrief  Required — the project's filled-in
+ *   agent-brief.md content.
+ * @param {string} opts.scopeText   e.g. "focused: one small, localised
+ *   improvement" or an "ambitious" variant. See buildScopeText() below.
+ * @param {string[]} opts.editableFiles
+ * @param {string} [opts.createOnlyDescription]
+ * @param {number} [opts.suggestMaxTokens]
+ */
+export function buildSuggestSystemPrompt({ agentBrief, scopeText, editableFiles, createOnlyDescription, suggestMaxTokens = 32000 }) {
+  const editSpec = buildEditFormatSpec({
+    createSection: createOnlyDescription
+      ? { pathDescription: createOnlyDescription, examplePath: '<a new path matching that pattern>' }
+      : null,
+  });
+
+  return `${agentBrief}
+
+# Scope for this generation
+
+${scopeText}
+
+# Implementing it yourself (optional)
+
+You may optionally implement your own proposal. If you do, it is applied
+and reviewed exactly as written, and this generation is credited to you as
+the implementer. This is entirely optional: a proposal that stands on its
+own, with no edits attached, is a complete and acceptable response.
+
+${editSpec}
+
+**Order matters, and so does your output budget.** You have roughly
+${suggestMaxTokens.toLocaleString()} tokens. Write the complete analysis
+FIRST, then the edit blocks. If you find yourself running long, stop
+emitting edit blocks and end cleanly — a complete analysis with no edits is
+a good outcome; a truncated response is a wasted one.
+
+You may edit only these files:
+${editableFiles.map((f) => `- ${f}`).join('\n')}`;
+}
+
+/** Default scope text for the two standard modes. A project may supply its own via config.scopeText instead. */
+export const DEFAULT_SCOPE_TEXT = {
+  focused: `- ONE focused improvement, not a list. Choose the single highest-value change.
+- It must be expressible as a small number of localised edits to existing code.
+  Do not propose anything that requires rewriting a file wholesale.`,
+  ambitious: `- ONE coherent improvement, but this generation is explicitly allowed to be
+  AMBITIOUS. The recent generations all merged cleanly, so there is headroom.
+- Structural work is in scope: it may touch several files and several hundred
+  lines.
+- It must still arrive as targeted edits to existing code — many edits is
+  fine, a wholesale file rewrite is not — and it must still be ONE idea
+  rather than a collection of small ones.`,
+};
+
+/**
+ * Build the suggestion stage's user prompt: the context blocks (already
+ * assembled, typically by context-pack.mjs's builders) plus the response
+ * format instructions.
+ *
+ * @param {object} opts
+ * @param {string} opts.genLabel
+ * @param {object} opts.context  Named text blocks — sources, manifest,
+ *   testIndex, generationIndex, history, themes, escalations, feedback,
+ *   platform, scorecard, architectureNotes — any of which may be
+ *   null/undefined and is dropped from the prompt via section().
+ * @param {{images: Array, source: string|null}} [opts.screenshots]
+ */
+export function buildSuggestUserPrompt({ genLabel, context, screenshots = { images: [], source: null } }) {
+  const shots = screenshots.images.length
+    ? `\n# Screenshots\nThe ${screenshots.images.length} image(s) attached to this message show the current state of the project. Judge visual details from these rather than inferring them from source alone.\n`
+    : '';
+
+  return `${genLabel}
+
+# Repository map
+${context.manifest ?? ''}
+${section('Target platform', context.platform)}${section('Deployment readiness scorecard', context.scorecard)}${section('Frozen test invariants', context.testIndex)}${section('Every generation on record (compact — nothing here is ever dropped)', context.generationIndex)}${section('Most recent generations, in full detail (including what failed)', context.history)}${section('Recurring themes from the last review', context.themes)}${section('Open escalations — what earlier models asked us to change', context.escalations)}${section('Player feedback', context.feedback)}${section('How this project is built, and what it has learned building itself', context.architectureNotes)}
+${shots}
+# Current source
+${context.sources ?? ''}
+
+# Your task
+
+Pick the ONE improvement you would make. ${SUGGEST_RESPONSE_FORMAT}`;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 1 — suggest
+// ---------------------------------------------------------------------------
+
+/**
+ * Ask one model to suggest an improvement.
+ *
+ * @param {object} promptConfig  Everything buildSuggestSystemPrompt/buildSuggestUserPrompt need.
+ * @param {{id: string, provider: string}} model
+ * @param {{call?: typeof callModelWithHeadroom, log?: (msg: string) => void}} [deps]
+ */
+export async function suggest(promptConfig, model, { call = callModelWithHeadroom, log = () => {} } = {}) {
+  const system = buildSuggestSystemPrompt(promptConfig);
+  const user = buildSuggestUserPrompt(promptConfig);
+
+  const result = await call({
+    model: model.id,
+    provider: model.provider,
+    system,
+    user,
+    maxTokens: promptConfig.suggestMaxTokens ?? 32000,
+    images: promptConfig.screenshots?.images ?? [],
+  });
+
+  if (result.truncated) {
+    const salvaged = salvageTruncated(result.text, promptConfig.anchorField);
+    if (!salvaged) {
+      throw new Error(
+        `Response was truncated (stop reason: ${result.stopReason}) before the analysis was complete, so there is nothing usable to implement.`
+      );
+    }
+    log(`   ⚠️  ${model.id} was truncated (${result.stopReason}); analysis was complete, so any partial edits were dropped and the prose kept.`);
+    return { ...result, text: salvaged, truncatedButUsable: true };
+  }
+
+  log(`   ${result.provider}/${result.model} → ${result.text.length} chars (${result.sentImages} screenshot(s) accepted)`);
+  return result;
+}
+
+/**
+ * Ask every candidate model, in parallel. `allSettled`, not `all`: one lab
+ * returning a 500 must not cost the whole generation when other proposals
+ * arrived intact.
+ */
+export async function gatherProposals(promptConfig, models, deps = {}) {
+  const log = deps.log ?? (() => {});
+  log(`🔍 Stage 1 — asking ${models.length} model(s): ${models.map((m) => m.id).join(', ')}`);
+
+  const settled = await Promise.allSettled(models.map((m) => suggest(promptConfig, m, deps)));
+
+  const proposals = [];
+  const failures = [];
+
+  settled.forEach((outcome, i) => {
+    const asked = models[i];
+    if (outcome.status === 'fulfilled') {
+      const text = outcome.value.text;
+      const directEdits = extractDirectEdits(text);
+      const escalation = parseEscalation(text);
+      proposals.push({
+        ...asked,
+        result: outcome.value,
+        text,
+        directEdits,
+        briefFeedback: extractField(text, 'BRIEF FEEDBACK'),
+        escalation,
+      });
+      if (escalation.opened) log(`   ${asked.id} opened an escalation: ${escalation.opened.title}`);
+      for (const ref of escalation.supports) log(`   ${asked.id} backs ${ref.id}`);
+      if (directEdits) log(`   ${asked.id} also offered ${directEdits.edits.length} edit(s) and ${directEdits.creates.length} new file(s)`);
+    } else {
+      failures.push({ ...asked, reason: oneLine(outcome.reason?.message ?? String(outcome.reason), 200) });
+      log(`   ⚠️  ${asked.id} produced nothing — ${outcome.reason?.message ?? outcome.reason}`);
+    }
+  });
+
+  log(`   ${proposals.length} proposal(s), ${failures.length} failure(s)\n`);
+  return { proposals, failures };
+}
+
+// ---------------------------------------------------------------------------
+// Stage 1b — rank
+// ---------------------------------------------------------------------------
+
+/**
+ * Choose which proposal to implement, when more than one exists. The
+ * ranker is given proposals with their authors withheld, so it judges the
+ * idea rather than the brand — see learning/01-principles.md for the
+ * tension this is a deliberate compromise on (one lab's taste decides
+ * which lab's idea ships).
+ *
+ * @param {object} opts
+ * @param {string} opts.projectDescription  One sentence, e.g. "a CLI tool
+ *   for parsing log files" — used the same way generate-themes.mjs's
+ *   buildThemesSystemPrompt() uses it.
+ * @param {string} [opts.manifest] @param {string} [opts.testIndex]
+ * @param {Array} opts.proposals
+ * @param {string} [opts.rankModel]
+ */
+export async function rankProposals({ projectDescription, manifest = '', testIndex = null, proposals, rankModel = 'claude-opus-5' }, deps = {}) {
+  const call = deps.call ?? callModelWithHeadroom;
+  const log = deps.log ?? (() => {});
+
+  if (proposals.length === 1) return { index: 0, reason: 'only one proposal' };
+
+  const system = `You are choosing between improvement proposals for ${projectDescription}, written by different frontier models that each looked at the same code.
+
+Judge only on the merit of the change itself:
+- How much it improves the outcome the change claims to strengthen
+- Whether it is genuinely implementable as a few localised edits
+- Whether it risks breaking a frozen test invariant or a stated constraint
+- Whether it fixes something real rather than adding decoration
+
+Prefer a fix to something broken over an addition. Prefer a change that helps the common case over one that helps an edge case.
+
+Respond in EXACTLY this format:
+CHOICE: <the number of the winning proposal>
+REASON: <one or two sentences on why it beats the others>`;
+
+  const blocks = proposals.map((p, i) => `## Proposal ${i + 1}\n${forRanking(p.text)}`).join('\n\n---\n\n');
+
+  log(`⚖️  Stage 1b — ranking ${proposals.length} proposals with ${rankModel}`);
+
+  const result = await call({
+    model: rankModel,
+    system,
+    user: `# Repository map\n${manifest}\n${section('Frozen test invariants', testIndex)}\n# The proposals\n\n${blocks}\n\nWhich single proposal should be implemented?`,
+    maxTokens: 2000,
+  });
+
+  const choice = Number(result.text.match(/^CHOICE:\s*(\d+)/im)?.[1]);
+  const reason = oneLine(result.text.match(/^REASON:\s*(.+)$/im)?.[1] ?? '', 300);
+
+  // Fail safe rather than closed: an unparseable ranking should not cost
+  // the generation, so fall back to the first (typically newest) model.
+  if (!Number.isInteger(choice) || choice < 1 || choice > proposals.length) {
+    log(`   ⚠️  Ranking returned no usable choice; falling back to the first model.\n`);
+    return { index: 0, reason: 'ranking unparseable — fell back to the first model' };
+  }
+
+  log(`   → proposal ${choice} from ${proposals[choice - 1].id}: ${reason}\n`);
+  return { index: choice - 1, reason };
+}
+
+// ---------------------------------------------------------------------------
+// Stage 2 / 4 — implement and refine
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the implementer's system prompt. Deliberately generic and
+ * boilerplate-only — the actual constraints already shaped the proposal
+ * at stage 1, and stage 3 is the real safety gate; this stage's one job is
+ * faithful, minimal implementation.
+ */
+export function buildImplementSystemPrompt({ editableFiles, createOnlyDescription, implementationNotes = null }) {
+  const editSpec = buildEditFormatSpec({
+    createSection: createOnlyDescription
+      ? { pathDescription: createOnlyDescription, examplePath: '<a new path matching that pattern>' }
+      : null,
+  });
+
+  return `You are implementing an approved improvement. Another model proposed the change; your job is to apply it faithfully and safely.
+
+You are not redesigning it. If the proposal is ambiguous, choose the smallest, most conservative reading that still delivers the intent.
+
+Keep it focused: implement this improvement and nothing else. No drive-by refactors, no unrelated tidying, no reformatting of untouched code. Match the surrounding code's style, naming and comment density.
+${implementationNotes ? `\n${implementationNotes}\n` : ''}
+You may only edit these files:
+${editableFiles.map((f) => `- ${f}`).join('\n')}
+
+${editSpec}`;
+}
+
+/**
+ * @param {object} promptConfig
+ * @param {string} proposal
+ * @param {{applyErrors?: string[], reviewFeedback?: string, rejectedRender?: object, attempt: number, author: string}} state
+ */
+export async function implement(promptConfig, proposal, { applyErrors, reviewFeedback, rejectedRender, attempt, author }, deps = {}) {
+  const call = deps.call ?? callModelWithHeadroom;
+  const log = deps.log ?? (() => {});
+  const maxAttempts = deps.maxAttempts;
+
+  const system = buildImplementSystemPrompt(promptConfig);
+  const invariants = promptConfig.context.testIndex ? `\n# Frozen test invariants\n${promptConfig.context.testIndex}\n` : '';
+
+  let correction = '';
+  if (applyErrors) {
+    correction = `
+# YOUR PREVIOUS ATTEMPT COULD NOT BE APPLIED
+
+${applyErrors.map((e) => `- ${e}`).join('\n')}
+
+The usual cause is a SEARCH block that was not copied verbatim. Check
+whitespace and indentation character by character against the source below,
+and include more surrounding context where a snippet was ambiguous.
+Produce the full corrected set of edit blocks.
+`;
+  } else if (reviewFeedback) {
+    correction = `
+# THE PREVIOUS ATTEMPT WAS REJECTED BY REVIEW
+
+${reviewFeedback}
+
+Address the required fixes above. Keep the same core improvement — do not
+substitute a different idea. The source below is the ORIGINAL, unmodified
+file content: your previous edits have been reverted, so write SEARCH
+blocks against what you see here.
+`;
+  }
+
+  const images = rejectedRender?.available ? rejectedRender.images : [];
+  const renderBack = rejectedRender?.available
+    ? `
+# WHAT YOUR REJECTED ATTEMPT ACTUALLY LOOKED LIKE
+
+The last ${rejectedRender.images.length} image(s) — ${rejectedRender.images.map((i) => i.label).join(', ')} — were
+rendered from the working tree your previous edits produced. This is the
+change the reviewer saw and turned down. Look at them before you write the
+next version.
+`
+    : '';
+
+  log(`🔧 Stage 2 — implementation on ${promptConfig.implementModel}` + (attempt > 1 ? ` (attempt ${attempt}/${maxAttempts})` : ''));
+
+  const result = await call({
+    model: promptConfig.implementModel,
+    system,
+    user: `${promptConfig.genLabel}
+
+# The proposed improvement, from ${author}
+${forRanking(proposal)}
+${invariants}
+# Current source
+${promptConfig.context.sources ?? ''}
+${correction}${renderBack}
+Implement the proposal above using the required edit format.`,
+    maxTokens: 16000,
+    images,
+  });
+
+  if (result.truncated) {
+    throw new Error(`Stage 2 response was truncated (stop reason: ${result.stopReason}) even after a headroom retry. Applying a partial edit set would risk corrupting a working project.`);
+  }
+
+  log(`   → ${result.text.length} chars`);
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Records
+// ---------------------------------------------------------------------------
+
+/**
+ * Every attempt a generation made, and how each one ended. Written on
+ * success AND on total failure — the failures are the part worth keeping,
+ * since the next generation reads this back and can see which ideas
+ * already died and why.
+ */
+export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize }) {
+  const dir = path.join(repoRoot, generationsDir, `gen-${genNumber}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const relative = `${generationsDir}/gen-${genNumber}/attempts.json`;
+
+  const proposalSummary = oneLine(
+    proposal?.match(/^CHANGE:\s*(.+)$/im)?.[1] ?? proposal?.split('\n').find((l) => l.trim()) ?? '',
+    300
+  );
+
+  fs.writeFileSync(
+    path.join(repoRoot, relative),
+    JSON.stringify(
+      {
+        generation: genNumber,
+        date: new Date().toISOString().slice(0, 10),
+        outcome,
+        scope: scope?.scope ?? null,
+        scopeReason: scope?.reason ?? null,
+        suggestModel: suggestResult ? `${suggestResult.model} (${suggestResult.provider})` : null,
+        fanOut: fanOut ?? null,
+        screenshotsSent: suggestResult?.sentImages ?? 0,
+        implementModel: implementModel ?? null,
+        implementedBy: implementedBy ?? null,
+        selfImplemented: Boolean(implementedBy) && implementedBy !== implementModel,
+        proposalSummary,
+        escalations: escalations ?? null,
+        contextSize: contextSize ?? null,
+        attempts,
+      },
+      null,
+      2
+    ) + '\n',
+    'utf8'
+  );
+
+  return relative;
+}
+
+export function writeProposal({ repoRoot, generationsDir = 'docs/generations', genNumber, proposal, parsed, suggestResult, applied, review, attempts, implementedBy, implementModel, reviewModel, scope, briefFeedback }) {
+  const dir = path.join(repoRoot, generationsDir, `gen-${genNumber}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const relative = `${generationsDir}/gen-${genNumber}/proposal.md`;
+
+  fs.writeFileSync(
+    path.join(repoRoot, relative),
+    `# Generation ${genNumber} — proposal
+
+- **Date:** ${new Date().toISOString().slice(0, 10)}
+- **Scope:** ${scope?.scope ?? 'focused'} — ${scope?.reason ?? 'default'}
+- **Suggested by:** \`${suggestResult.model}\` (${suggestResult.provider})
+- **Implemented by:** \`${implementedBy}\`${implementedBy !== implementModel ? ' — **the suggesting model wrote its own edits**' : ''}
+- **Reviewed by:** \`${reviewModel}\`
+- **Attempts:** ${attempts}
+- **Summary:** ${parsed.summary}
+- **Pillar:** ${parsed.pillar ?? ''}
+
+## Rationale
+
+${parsed.rationale}
+
+## What the suggesting model said about its own brief
+
+${briefFeedback || '(none given)'}
+
+## Files changed
+
+${applied.map((a) => `- \`${a.file}\` (−${a.removedLines}/+${a.addedLines} lines)`).join('\n')}
+
+## The suggestion, verbatim
+
+\`\`\`
+${proposal.trim()}
+\`\`\`
+
+## Review
+
+${review.raw.trim()}
+`,
+    'utf8'
+  );
+
+  return relative;
+}
+
+/**
+ * Fold every asked model's escalation fields into the ledger, and report
+ * what crossed the consensus line in this run specifically — not
+ * everything currently flagged, so a notifier doesn't repeat the same
+ * idea every run.
+ */
+export function recordEscalations(proposals, { repoRoot, ledgerPath, genNumber, threshold }) {
+  const entries = proposals.map((p) => ({ model: p.id, provider: p.provider, parsed: p.escalation }));
+
+  const round = recordRound({
+    generation: genNumber,
+    date: new Date().toISOString().slice(0, 10),
+    entries,
+    ledger: loadLedger({ repoRoot, ledgerPath }),
+    threshold,
+  });
+
+  const touched = round.opened.length + round.supported.length + round.dissented.length;
+  if (touched > 0) {
+    saveLedger(round.ledger, { repoRoot, ledgerPath });
+  }
+
+  return {
+    opened: round.opened.map((o) => ({ id: o.id, title: o.title, by: `${o.model} (${o.provider})` })),
+    supported: round.supported.map((s) => ({ id: s.id, by: `${s.model} (${s.provider})` })),
+    dissented: round.dissented.map((s) => ({ id: s.id, by: `${s.model} (${s.provider})` })),
+    flagged: round.flagged.map((e) => ({ id: e.id, title: e.title, target: e.target, notification: renderForNotification(e, { threshold }) })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Filesystem helpers for the attempt loop
+// ---------------------------------------------------------------------------
+
+export function snapshotEditableFiles(repoRoot, editableFiles) {
+  const snapshot = new Map();
+  for (const relative of editableFiles) {
+    const absolute = path.join(repoRoot, relative);
+    if (fs.existsSync(absolute)) snapshot.set(relative, fs.readFileSync(absolute, 'utf8'));
+  }
+  return snapshot;
+}
+
+export function restoreSnapshot(repoRoot, snapshot, createdPaths = []) {
+  for (const [relative, content] of snapshot) {
+    fs.writeFileSync(path.join(repoRoot, relative), content, 'utf8');
+  }
+  for (const relative of createdPaths) {
+    const absolute = path.join(repoRoot, relative);
+    if (fs.existsSync(absolute)) fs.unlinkSync(absolute);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The main loop
+// ---------------------------------------------------------------------------
+
+/**
+ * Run one full generation: suggest, implement, review, refine.
+ *
+ * Unlike the reference implementation, this never throws for an ordinary
+ * "nothing shipped" outcome (no proposal, or every attempt rejected) — it
+ * returns a result object with `hasChanges` and `outcome`, and the CLI
+ * layer decides what that means for its own exit code. It DOES throw for
+ * a genuinely unexpected failure (a bug, an exception outside the
+ * try/catch this function already wraps everything else in) — and before
+ * it does, it writes a `crashed` attempt record with whatever state had
+ * accumulated so far. That guarantee — a crash always leaves a record —
+ * is the direct lesson of a real incident: a review call that died
+ * mid-loop once erased its whole generation, because the record was only
+ * ever written on the paths that returned cleanly. See
+ * learning/01-principles.md's "20d" for the incident.
+ *
+ * @param {object} config
+ * @param {string} config.repoRoot
+ * @param {string} config.genNumber            e.g. "001"
+ * @param {string} [config.generationsDir]      Default 'docs/generations'.
+ * @param {string} config.agentBrief            Required — the project's filled-in agent-brief.md.
+ * @param {string} config.reviewerBrief         Required — the project's filled-in reviewer-brief.md.
+ * @param {string[]} config.editableFiles
+ * @param {object} config.allowlist             edit-format.mjs's compileAllowlist() result.
+ * @param {string} [config.createOnlyDescription]
+ * @param {Array<{id: string, provider?: string}>} config.suggestModels
+ * @param {string} [config.implementModel]      Default 'claude-opus-5'.
+ * @param {string} [config.reviewModel]         Default 'claude-opus-5'.
+ * @param {string} [config.rankModel]           Default implementModel.
+ * @param {number} [config.maxAttempts]         Default 3.
+ * @param {number} [config.suggestMaxTokens]    Default 32000.
+ * @param {{scope: 'focused'|'ambitious', reason: string}} config.scope  Required
+ *   — callers decide this (typically via context-pack.mjs's recommendScope())
+ *   before calling, so this function stays fs-independent for that decision.
+ * @param {Record<string,string>} [config.scopeText]  Default DEFAULT_SCOPE_TEXT.
+ * @param {string} config.projectDescription    One sentence, used in the ranking prompt.
+ * @param {string} [config.testDescription]     Passed to the reviewer.
+ * @param {object} config.context               Pre-assembled context-pack blocks.
+ * @param {{images: Array, source: string|null}} [config.screenshots]
+ * @param {string} [config.ledgerPath]
+ * @param {{models: number, labs: number}} [config.consensus]
+ * @param {() => Promise<object>} [config.captureVisual]  Passed to review.mjs.
+ * @param {string} [config.implementationNotes]
+ * @param {{call?: Function, log?: (msg: string) => void}} [deps]
+ * @returns {Promise<object>}
+ */
+export async function runGeneration(config, deps = {}) {
+  const {
+    repoRoot,
+    genNumber,
+    generationsDir = 'docs/generations',
+    agentBrief,
+    reviewerBrief,
+    editableFiles,
+    allowlist,
+    createOnlyDescription,
+    suggestModels,
+    implementModel = 'claude-opus-5',
+    reviewModel = 'claude-opus-5',
+    rankModel = implementModel,
+    maxAttempts = 3,
+    suggestMaxTokens = 32000,
+    scope,
+    scopeText = DEFAULT_SCOPE_TEXT,
+    projectDescription,
+    testDescription = null,
+    context,
+    screenshots = { images: [], source: null },
+    ledgerPath,
+    consensus,
+    captureVisual,
+    implementationNotes = null,
+  } = config;
+
+  const call = deps.call ?? callModelWithHeadroom;
+  const log = deps.log ?? (() => {});
+
+  if (!agentBrief || !agentBrief.trim()) throw new Error('runGeneration requires a non-empty agentBrief.');
+  if (!reviewerBrief || !reviewerBrief.trim()) throw new Error('runGeneration requires a non-empty reviewerBrief.');
+  if (!Array.isArray(suggestModels) || suggestModels.length === 0) {
+    throw new Error('runGeneration requires at least one entry in suggestModels.');
+  }
+  if (!scope) throw new Error('runGeneration requires a scope decision — see recommendScope() in context-pack.mjs.');
+
+  const genLabel = `Generation #${genNumber}`;
+  const asking = suggestModels.map((m) => ({ ...m, provider: m.provider || resolveProvider(m.id) }));
+
+  log(`🚀 Generation ${genNumber}`);
+  log(`   suggest:   ${asking.map((m) => `${m.id} (${m.provider})`).join(', ')}`);
+  log(`   implement: ${implementModel}`);
+  log(`   review:    ${reviewModel}\n`);
+
+  const promptConfig = {
+    agentBrief,
+    scopeText: scopeText[scope.scope] ?? scopeText.focused,
+    editableFiles,
+    createOnlyDescription,
+    suggestMaxTokens,
+    context,
+    screenshots,
+    genLabel,
+    implementModel,
+  };
+
+  const pristine = snapshotEditableFiles(repoRoot, editableFiles);
+
+  const { proposals, failures } = await gatherProposals(promptConfig, asking, { call, log });
+
+  if (proposals.length === 0) {
+    const recordPath = writeAttemptRecord({
+      repoRoot, generationsDir, genNumber,
+      outcome: 'no-proposal',
+      suggestResult: null,
+      proposal: null,
+      attempts: failures.map((f, i) => ({ attempt: i + 1, by: `${f.id} (${f.provider})`, outcome: 'suggestion-failed', detail: f.reason })),
+      fanOut: { asked: asking.map((m) => `${m.id} (${m.provider})`), proposed: [], failed: failures.map((f) => `${f.id}: ${f.reason}`) },
+      implementedBy: null,
+      implementModel,
+      scope,
+    });
+
+    return {
+      outcome: 'no-proposal',
+      hasChanges: false,
+      scope,
+      attemptRecordPath: recordPath,
+      summary: oneLine(`no usable proposal — ${failures.map((f) => `${f.id}: ${f.reason}`).join('; ')}`, 200),
+      askedModels: asking,
+      failures,
+    };
+  }
+
+  // Before ranking, and before anything below can throw. An escalation is
+  // an opinion about the harness, not about the change, so it's worth
+  // exactly as much from a proposal that loses the ranking or dies in
+  // review as from the one that ships — recording it here means the
+  // ledger survives an abandoned generation, which is the run most likely
+  // to produce one.
+  const escalationRound = recordEscalations(proposals, { repoRoot, ledgerPath, genNumber, threshold: consensus });
+
+  const crashState = { suggestResult: null, proposal: null, fanOut: null, attempts: [], by: null };
+
+  try {
+    const ranking = await rankProposals({ projectDescription, manifest: context.manifest, testIndex: context.testIndex, proposals, rankModel }, { call, log });
+    const winner = proposals[ranking.index];
+    const suggestResult = winner.result;
+    const proposal = winner.text;
+
+    const fanOut = {
+      asked: asking.map((m) => `${m.id} (${m.provider})`),
+      proposed: proposals.map((p) => p.id),
+      offeredEdits: proposals.filter((p) => p.directEdits).map((p) => p.id),
+      failed: failures.map((f) => `${f.id}: ${f.reason}`),
+      chosen: `${winner.id} (${winner.provider})`,
+      rankedBy: proposals.length > 1 ? rankModel : null,
+      rankingReason: ranking.reason,
+      briefFeedback: Object.fromEntries(proposals.filter((p) => p.briefFeedback).map((p) => [p.id, p.briefFeedback])),
+    };
+    crashState.suggestResult = suggestResult;
+    crashState.proposal = proposal;
+    crashState.fanOut = fanOut;
+
+    let applyErrors = null;
+    let reviewFeedback = null;
+    let rejectedRender = null;
+    let createdLastAttempt = [];
+    const attemptLog = crashState.attempts;
+
+    // Who implements, in order. When the suggesting model wrote its own
+    // edits they are tried first and do not consume one of the pinned
+    // implementer's attempts.
+    const plan = [];
+    if (winner.directEdits) plan.push({ by: `${winner.id} (${winner.provider})`, direct: true });
+    for (let i = 0; i < maxAttempts; i++) plan.push({ by: implementModel, direct: false });
+
+    for (const [index, step] of plan.entries()) {
+      const attempt = index + 1;
+      crashState.by = step.by;
+
+      restoreSnapshot(repoRoot, pristine, createdLastAttempt);
+
+      let parsed;
+      if (step.direct) {
+        log(`✍️  Stage 2 — edits written by ${step.by} itself`);
+        parsed = winner.directEdits;
+      } else {
+        const implemented = await implement(
+          { ...promptConfig, implementModel, implementationNotes },
+          proposal,
+          { applyErrors, reviewFeedback, rejectedRender, attempt, author: `${winner.id} (${winner.provider})` },
+          { call, log, maxAttempts }
+        );
+        parsed = parseResponse(implemented.text, ['PILLAR']);
+      }
+      createdLastAttempt = parsed.creates.map((c) => c.file);
+
+      const outcome = applyEdits(parsed.edits, { repoRoot, allowlist, creates: parsed.creates, createDescription: createOnlyDescription });
+
+      if (outcome.errors.length) {
+        log(`⚠️  Attempt ${attempt} (${step.by}): edits did not apply`);
+        attemptLog.push({ attempt, by: step.by, outcome: 'edits-did-not-apply', detail: oneLine(outcome.errors.join('; '), 400) });
+        applyErrors = step.direct ? null : outcome.errors;
+        reviewFeedback = null;
+        rejectedRender = null;
+        continue;
+      }
+
+      log(`   applied ${outcome.applied.length} edit(s) to ${outcome.filesChanged.join(', ')}`);
+      log(`🔎 Stage 3 — review`);
+
+      const review = await reviewChanges({
+        reviewerBrief,
+        genLabel,
+        diff: renderForReview(parsed),
+        filesChanged: outcome.filesChanged,
+        repoRoot,
+        testDescription,
+        captureVisual,
+        reviewModel,
+        call,
+      });
+
+      if (!review.approved) {
+        log(`❌ Attempt ${attempt} (${step.by}): rejected — ${review.reason}\n`);
+        attemptLog.push({ attempt, by: step.by, outcome: 'rejected-by-review', detail: oneLine(review.reason || 'no reason given', 400) });
+        reviewFeedback = review.feedback;
+        rejectedRender = review.visual;
+        applyErrors = null;
+        continue;
+      }
+
+      // Approved.
+      const implementedBy = step.by;
+      const summary = oneLine(parsed.summary || `Generation ${genNumber} improvement`, 80);
+      attemptLog.push({ attempt, by: step.by, outcome: 'approved', detail: summary });
+
+      const proposalPath = writeProposal({
+        repoRoot, generationsDir, genNumber, proposal, parsed, suggestResult,
+        applied: outcome.applied, review, attempts: attempt, implementedBy,
+        implementModel, reviewModel, scope, briefFeedback: winner.briefFeedback,
+      });
+
+      const attemptRecordPath = writeAttemptRecord({
+        repoRoot, generationsDir, genNumber,
+        outcome: 'approved', suggestResult, proposal, attempts: attemptLog,
+        fanOut, implementedBy, implementModel, scope, escalations: escalationRound,
+      });
+
+      log(`\n✅ Approved on attempt ${attempt}: ${review.reason}`);
+      log(`   implemented by ${implementedBy}`);
+
+      return {
+        outcome: 'approved',
+        hasChanges: true,
+        scope,
+        summary,
+        suggestModel: suggestResult.model,
+        suggestProvider: suggestResult.provider,
+        implementedBy,
+        selfImplemented: implementedBy !== implementModel,
+        filesChanged: outcome.filesChanged,
+        proposalPath,
+        attemptRecordPath,
+        reviewVerdict: review.verdict,
+        attempts: attempt,
+        briefFeedback: winner.briefFeedback,
+        escalations: escalationRound,
+        fanOut,
+      };
+    }
+
+    // Never approved. Leave the tree exactly as we found it, except for
+    // the record of what was tried — that file is the whole value of a
+    // failed run.
+    restoreSnapshot(repoRoot, pristine, createdLastAttempt);
+    const attemptRecordPath = writeAttemptRecord({
+      repoRoot, generationsDir, genNumber,
+      outcome: 'abandoned', suggestResult, proposal, attempts: attemptLog,
+      fanOut, implementedBy: null, implementModel, scope, escalations: escalationRound,
+    });
+
+    return {
+      outcome: 'abandoned',
+      hasChanges: false,
+      scope,
+      suggestModel: suggestResult.model,
+      suggestProvider: suggestResult.provider,
+      attempts: plan.length,
+      attemptRecordPath,
+      briefFeedback: winner.briefFeedback,
+      escalations: escalationRound,
+      fanOut,
+    };
+  } catch (err) {
+    // A genuinely unexpected failure. Write down whatever state had
+    // accumulated before re-throwing, so the generation this run was
+    // supposed to be leaves a record instead of silently not existing —
+    // see this function's own doc comment for the incident this guards
+    // against.
+    const attemptRecordPath = writeAttemptRecord({
+      repoRoot, generationsDir, genNumber,
+      outcome: 'crashed',
+      suggestResult: crashState.suggestResult,
+      proposal: crashState.proposal,
+      attempts: [...crashState.attempts, {
+        attempt: crashState.attempts.length + 1,
+        by: crashState.by,
+        outcome: 'crashed',
+        detail: oneLine(err?.message ?? String(err), 400),
+      }],
+      fanOut: crashState.fanOut,
+      implementedBy: null,
+      implementModel,
+      scope,
+      escalations: escalationRound,
+    });
+    log(`📓 Recorded the crash in ${attemptRecordPath}`);
+    err.attemptRecordPath = attemptRecordPath;
+    throw err;
+  }
+}

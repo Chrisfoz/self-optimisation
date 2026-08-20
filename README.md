@@ -5,21 +5,21 @@ a project, and a governed suggest → implement → review → gate → promote 
 lets each newly released frontier model propose one improvement, gated by
 that project's own tests before anything ships.
 
-**Status: eight kernel components genericised, tested, and usable today —
-not the full autonomous loop yet.** The reference implementation is a
-separate, real project (two educational HTML games) that has run this loop
-for 18+ real generations, including real incidents; this repository is the
-work of extracting that into something project-agnostic. What you can
-actually install and run right now, following the guide below, is the
-**model-release detector**: it watches whichever labs you choose and tells
-you the moment a genuinely new model ships. Everything else this session has
-built — edit-format, the guard, the escalation ledger, the context
-compiler — is fully tested but not yet wired to anything, because the one
-component that would call them all in sequence, the **orchestrator**, isn't
-built yet. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for exactly which of
-this is real versus still a human doing it by hand, and
-[Status in detail](#status-in-detail) before you assume more works
-than does.
+**Status: the core loop is real.** Suggest → implement → review → refine
+runs end to end today, against your own project's adapter and brief files —
+`harness/scripts/run-generation.mjs` is a working entry point, not a design
+sketch. The reference implementation is a separate, real project (two
+educational HTML games) that has run this loop for 18+ real generations,
+including real incidents; this repository is the work of extracting that
+into something project-agnostic, and eleven kernel components are now
+ported, tested, and — for the first time this session — wired to each other
+rather than merely sitting next to each other. What's still missing sits
+*around* the loop, not inside it: nothing yet merges an approved change,
+notifies you about it, or generates the full workflow file that would run
+this on a schedule without you invoking it by hand. See
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for exactly which is real versus still
+a human doing it by hand, and [Status in detail](#status-in-detail) before
+you assume more works than does.
 
 ---
 
@@ -335,12 +335,12 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Model-release detector (`harness/lib/model-release-detector.mjs`) | ✅ Built, tested |
 | Reachability probe (`harness/lib/probe-models.mjs`) | ✅ Built, tested |
 | Adapter loader (`harness/lib/adapter.mjs`, reads `project-adapter.yml`) | ✅ Built, tested — the one file in the harness with an npm dependency (`js-yaml`), scoped deliberately narrowly |
-| Context compiler (`harness/lib/context-pack.mjs`) | ✅ Built, tested (7 of 9 functions — screenshots/scorecard stay project-specific plugins) — ready, but nothing upstream calls it yet |
-| Orchestrator (suggest → implement → review → refine, one process) | ❌ Not started |
-| Independent reviewer | ❌ Not started |
-| Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested — ready, but nothing upstream produces a change for it to check yet |
-| Automated evaluator — test-command runner (`evaluation.test_commands`) | ❌ Not started |
-| Failure & proposal memory — escalations ledger (`harness/lib/escalations.mjs`), themes review read-side (`harness/lib/themes.mjs`, `generate-themes.mjs`) | ✅ Built, tested — ready, but nothing upstream produces proposals or generation history to feed them yet |
+| Context compiler (`harness/lib/context-pack.mjs`) | ✅ Built, tested (7 of 9 functions — screenshots/scorecard stay project-specific plugins) — wired: `run-generation.mjs` calls its builders to assemble every prompt |
+| **Orchestrator** (`harness/lib/orchestrator.mjs` + `harness/scripts/run-generation.mjs`) | ✅ **Built, tested, and runnable** — suggest → implement → review → refine, end to end, against your own adapter and brief files |
+| Independent reviewer (`harness/lib/review.mjs`) | ✅ Built, tested, wired into the orchestrator |
+| Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested — still awaiting a workflow step that runs it against a real PR from the orchestrator, since that's CI wiring, not harness code |
+| Automated evaluator — test-command runner (`evaluation.test_commands`) | ❌ Not built, and — now that the loop itself is real — turns out not to need any harness *code*: a project's test commands become CI steps directly, the same way the guard already runs as one |
+| Failure & proposal memory — escalations ledger (`harness/lib/escalations.mjs`), themes review read-side (`harness/lib/themes.mjs`, `generate-themes.mjs`) | ✅ Built, tested, wired: the orchestrator folds every run's proposals into the ledger and reads it back into the next prompt |
 | Staging & promotion (merge, tag, verify-deployment) | ❌ Not started |
 | Notifier (email/Slack digest) | ❌ Not started |
 | `init` CLI scaffolder | ❌ Not started |
