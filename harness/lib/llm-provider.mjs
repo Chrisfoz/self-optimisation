@@ -110,6 +110,27 @@ export function isProviderRegistered(name) {
   return Boolean(PROVIDERS[name]);
 }
 
+/**
+ * Read-only access to a registered provider's full config — hostname,
+ * envKey, headers(), and whatever else its file registered (e.g.
+ * `listModels`, used by model-release-detector.mjs to fetch a lab's model
+ * catalogue). This is the reason `listModels` lives on the same
+ * registerProvider() call as everything else about a lab: a hostname and an
+ * auth header shape are facts about the lab, not about calling a model
+ * versus listing one, and duplicating them in a second, separate registry
+ * would reopen exactly the "three parallel literals" failure mode that
+ * produced EDITABLE_FILES' single-definition rule in edit-format.mjs.
+ *
+ * Returns null for an unregistered name rather than throwing — callers that
+ * are enumerating providers (e.g. "which of these have a catalogue at all")
+ * need to test-and-skip, not catch.
+ */
+export function getProvider(name) {
+  const config = PROVIDERS[name];
+  if (!config) return null;
+  return { ...config, truncationReasons: [...config.truncationReasons] };
+}
+
 /** The names of every provider currently registered, in registration order. */
 export function registeredProviders() {
   return Object.keys(PROVIDERS);

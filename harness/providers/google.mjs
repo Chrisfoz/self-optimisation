@@ -9,6 +9,25 @@ registerProvider('google', {
   path: ({ model, key }) =>
     `/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
   headers: () => ({}),
+  listModels: {
+    path: (key) => `/v1beta/models?key=${encodeURIComponent(key)}&pageSize=200`,
+    // Google exposes no creation timestamp, but does declare which methods a
+    // model supports — a stronger filter than name matching. It also,
+    // unlike every other provider here, reports the model's real context
+    // window (inputTokenLimit) in this listing — no other lab's /models
+    // endpoint carries this, so it's captured only here rather than assumed
+    // for providers that never actually send it. See checkContextFit() in
+    // probe-models.mjs for how this is used: to skip a candidate whose
+    // window plainly cannot fit the real prompt, never to guess one.
+    parseModels: (data) =>
+      (data.models || [])
+        .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+        .map((m) => ({
+          id: m.name.split('/').pop(),
+          created: 0,
+          contextWindow: Number.isFinite(m.inputTokenLimit) ? m.inputTokenLimit : null,
+        })),
+  },
   body: ({ system, user, maxTokens, images }) => ({
     systemInstruction: { parts: [{ text: system }] },
     contents: [{

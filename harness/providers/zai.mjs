@@ -43,5 +43,11 @@ registerProvider('zai', {
   ...openAiCompatible('ZAI_API_KEY', 'api.z.ai', {
     path: '/api/paas/v4/chat/completions',
     extraBody: { thinking: { type: 'enabled' }, reasoning_effort: 'low' },
+    // The catalogue lives under the same "paas v4" prefix, not at
+    // /v1/models — verified live: /v1/models on this host is a bare nginx
+    // 404. This path returns { data: [{ id, created, owned_by:'z-ai' }] }
+    // with `created` in unix seconds, like every other listing on this
+    // factory.
+    listModelsPath: '/api/paas/v4/models',
   }),
 });

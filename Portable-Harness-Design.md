@@ -80,8 +80,8 @@ uniform:
 | File | Lines | Kernel role (see §7) | What's generic | What's carrotgame-specific and must become config |
 |---|---|---|---|---|
 | `scripts/lib/llm-provider.mjs` | 561 | Provider/model router | The `callModel()` / `callModelWithHeadroom()` contract, the truncation-retry mechanism, the "throw on unrecognised id" posture | ✅ **Ported** — `harness/lib/llm-provider.mjs` (provider-blind core, zero hardcoded labs) + `harness/providers/*.mjs` (all 9 labs, each a self-registering file, smoke-tested against real model ids from the generation log). Shipped all 9 rather than a 3-lab default subset — they're free as separate files, and the per-lab quirks (GLM's forced `reasoning_effort`, the DashScope/Zhipu id collision, OpenAI's legacy-field retry) are hard-won and expensive to rediscover. See `harness/providers/CONTRIBUTING-A-PROVIDER.md`. |
-| `scripts/check-model-releases.mjs` | 340 | Model-release detector | Snapshot-diff logic, "unknown never means no release" posture | Which catalogues to poll, at what cadence — becomes adapter config |
-| `scripts/probe-models.mjs` + `lib/probe-models.mjs` | 82 + 119 | Reachability check (feeds the detector) | The "send the real call shape, drop what 404s" method, `checkContextFit()` | Nothing carrotgame-specific — this one ports almost directly |
+| `scripts/check-model-releases.mjs` | 340 | Model-release detector | Snapshot-diff logic, "unknown never means no release" posture | ✅ **Ported** — `harness/lib/model-release-detector.mjs` (pure: no fs/env/console) + `harness/scripts/check-model-releases.mjs` (CLI, owns the snapshot file and env). The per-lab catalogue config (URL, parser) moved onto each provider's `registerProvider()` call as `listModels`, alongside its call-time config — see `getProvider()` in `llm-provider.mjs` for why that avoided reopening the "three parallel literals" bug `edit-format.mjs`'s own history warns about. `isChatModel()`'s keyword filter is now applied centrally after each provider's own `parseModels`, rather than repeated inside all nine. 61-check smoke test covers every provider's real catalogue-response shape, the ranking tie-break, the all-keys-missing skip path, and snapshot preservation on a failed check. |
+| `scripts/probe-models.mjs` + `lib/probe-models.mjs` | 82 + 119 | Reachability check (feeds the detector) | The "send the real call shape, drop what 404s" method, `checkContextFit()` | ✅ **Ported** — `harness/lib/probe-models.mjs` (verbatim; it was already fully generic) + `harness/scripts/probe-models.mjs`. One deliberate gap: the reference CLI hard-imports `estimateContextSize()` from `context-pack.mjs`, which isn't ported yet (§7's still-open row below). The harness CLI takes an optional `--estimated-tokens`/`CONTEXT_ESTIMATE_TOKENS` instead and skips the context-fit check when it's absent — the same conservative default `checkContextFit()` already applies to any provider that reports no window at all, so this isn't a capability loss, just an honest placeholder until context-pack ships. |
 | `scripts/lib/context-pack.mjs` | 819 | Context compiler | `buildGenerationIndex()` (full history, one line each), `buildGenerationHistory()` (recent-detail window), `recommendScope()`, `estimateContextSize()` | The specific blocks assembled (screenshots, player feedback, readiness scorecard) are carrotgame's own context recipe — becomes a **pluggable block list** per `04-context-recipe.md`'s checklist |
 | `scripts/lib/edit-format.mjs` | 324 | Bounded patch executor | The whole SEARCH/REPLACE parser, exactly-once matching, all-or-nothing apply, CREATE-only-for-new-paths | ✅ **Ported** — `harness/lib/edit-format.mjs`. `EDITABLE_FILES` became `compileAllowlist({allowedPaths, createOnlyPaths})`, fed from the adapter (`constitution.allowed_paths` / `create_only_paths`, glob strings via the new `harness/lib/glob.mjs`) instead of a module constant. `EDIT_FORMAT_SPEC` became `buildEditFormatSpec()`, templated on an optional extra metadata field (carrotgame's `PILLAR`) and an optional CREATE section, so a project with no pillar taxonomy isn't forced to have one. 28-check smoke test covers allowlist edge cases, all-or-nothing failure, non-unique-SEARCH rejection, and create-at-existing-path rejection. |
 | `scripts/invoke-self-improvement-agent.mjs` | 1,450 | Orchestrates suggest→implement→review→refine (the paper's whole §4 lifecycle in one file, because Actions can't loop jobs) | The 4-stage state machine, the fan-out/rank-with-authors-withheld pattern, the refine-loop-with-pristine-reset | The specific prompt content (game design pillars, child-safety framing) — becomes adapter-supplied prompt fragments |
@@ -166,10 +166,30 @@ self_optimisation/
 │   └── init.mjs                     # `npx self-improve init` entry point (§6)
 │
 └── examples/
-    └── carrotgame/                  # the worked example — adapter file + notes
-        ├── project-adapter.yml      # carrotgame's real config, reconstructed
-        └── NOTES.md                 # what carrotgame's install had to add beyond the defaults (wordless-play, visual-check, feedback digest)
+    ├── carrotgame/                  # the worked example — adapter file + notes
+    │   ├── project-adapter.yml      # carrotgame's real config, reconstructed
+    │   └── NOTES.md                 # what carrotgame's install had to add beyond the defaults (wordless-play, visual-check, feedback digest)
+    └── workflows/
+        └── watch-releases.yml       # ✅ built — a real, minimal CI job usable today: schedule +
+                                      # detector + snapshot commit + issue-on-new-model. Not the
+                                      # full loop (no implement/review/merge stage exists yet), but
+                                      # honest and complete on its own terms — see the file's header.
 ```
+
+Two more pieces exist now that weren't in the original sketch above, both
+added in response to actually using the harness rather than only designing
+it: a root **`package.json`** (`type: module`, zero dependencies, one script
+— `npm test`) and **`tests/lib/`**, converting the throwaway smoke checks
+used to verify each Bucket B port into a permanent suite (33 checks as of
+this writing). This is deliberately a *second, separate* test surface from
+the one a target project's own adapter points `evaluation.test_commands` at
+— that convention (`06-starter-kit.md` §5's append-only `tests/`) is for the
+project *being improved*; this one is for the harness *doing the improving*,
+and conflating them was never the intent. Root `README.md` was also
+substantially rewritten around a step-by-step "Getting started" — clone,
+API keys, `.env` vs. GitHub Secrets, try the detector locally, wire the
+example workflow — since the audience for this repo is someone adopting the
+harness into their own project, not only someone reading about the design.
 
 ## 5. Why a CLI and not just "copy these folders"
 
@@ -228,7 +248,7 @@ rather than for someone reading harness source.
 
 | Paper component (§3) | carrotgame implementation | Harness module (proposed) |
 |---|---|---|
-| 3.1 Project Constitution | `.claude/agents/self-improvement.md` (brief) + `EDITABLE_FILES` in `edit-format.mjs` + `check-guarded-paths.mjs` config | `project-adapter.yml` + generated brief |
+| 3.1 Project Constitution | `.claude/agents/self-improvement.md` (brief) + `EDITABLE_FILES` in `edit-format.mjs` + `check-guarded-paths.mjs` config | ✅ **Partially real** — `harness/lib/adapter.mjs` actually parses `project-adapter.yml` now (the one file in the harness with an npm dependency, `js-yaml`, loaded lazily so a project without an adapter file never needs it installed — see the doc comment on `loadAdapter()`), and `harness/scripts/check-model-releases.mjs` reads `providers.watched`/`snapshot_path`/`max_fanout` from it. `constitution.allowed_paths`/`create_only_paths` are parsed too (`constitutionAllowlist()`) but nothing calls `edit-format.mjs` with them yet — no orchestrator exists to need them. The generated brief half of this row is still unbuilt (`templates/`). |
 | 3.2 Context Compiler | `scripts/lib/context-pack.mjs` | `harness/lib/context-pack.mjs` |
 | 3.3 Model-Release Detector | `scripts/check-model-releases.mjs` + `.agent/model-snapshot.json` | `harness/scripts/check-model-releases.mjs` |
 | 3.4 Provider/Model Router | `scripts/lib/llm-provider.mjs` | `harness/lib/llm-provider.mjs` + `harness/providers/*` |
@@ -401,3 +421,28 @@ should on paper.
    this document's own non-goals list (§9) or in the eventual README until
    this run has actually happened on Windows, Mac, and Linux dev machines and
    at least one non-`ubuntu-latest` CI runner (§8.3).
+
+**Revised as of the adapter-loading and diagrams work:** step 4 turned out to
+have a real sub-order within it, surfaced by actually building rather than
+only planning. Provider router, edit-format, model-release detector,
+reachability probe, and now the adapter loader are done — five ports and one
+genuinely new file (`adapter.mjs`, since no such component existed in the
+reference implementation; the paper's §3.1 assumed it, carrotgame's
+brief-as-a-file never needed one). Still open from Bucket B, and next in
+line because each is flagged "ports directly" with no orchestrator
+dependency — the same property that made the detector and probe tractable
+before context-pack:
+
+- **`harness/lib/escalations.mjs`** — the ledger mechanism and consensus bar.
+  Establishes `docs/escalations/ledger.json` as a real, harness-managed
+  convention rather than only a documented one.
+- **`harness/lib/themes.mjs` + `generate-themes.mjs`** — same status, for
+  `docs/themes/review-NNN.json`.
+- **`harness/scripts/check-guarded-paths.mjs`** — the guard. Diffs a branch
+  against the adapter's `frozen_paths`/`append_only_paths`/`frozen_fields`/
+  `churn_ceiling`, all of which the schema already has fields for (§5); no
+  orchestrator needed to exercise it standalone against any two refs.
+
+`context-pack.mjs` and the orchestrator remain the two components that
+actually require new design work rather than a port — see §8.2 and the
+kernel table's remaining ❌ rows in `ARCHITECTURE.md`.

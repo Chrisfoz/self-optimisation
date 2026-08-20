@@ -10,6 +10,14 @@ registerProvider('anthropic', {
     'x-api-key': key,
     'anthropic-version': '2023-06-01',
   }),
+  // Catalogue listing, for the model-release detector. Same hostname and
+  // auth headers as a real call — see getProvider() in llm-provider.mjs for
+  // why this lives here rather than a second, separate registry.
+  listModels: {
+    path: () => '/v1/models',
+    // created_at is an ISO timestamp.
+    parseModels: (data) => data.data.map((m) => ({ id: m.id, created: Date.parse(m.created_at) || 0 })),
+  },
   body: ({ model, system, user, maxTokens, images }) => ({
     model,
     max_tokens: maxTokens,

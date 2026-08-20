@@ -46,13 +46,22 @@ export const openAiContent = (user, images) =>
  *   OpenAI-compatible entry stays untouched.
  * @param {string[]} [opts.truncationReasons]  Default ['length'], the
  *   OpenAI-dialect stop-reason for "ran out of room".
+ * @param {string} [opts.listModelsPath]  Where this lab's model catalogue
+ *   lives. Default '/v1/models' — matches most labs on this factory, but
+ *   not all: DeepSeek serves it bare at '/models', Qwen (DashScope) at
+ *   '/compatible-mode/v1/models', Z.ai at '/api/paas/v4/models`. Verified
+ *   live per lab, not assumed from the chat-completions path.
  */
-export function openAiCompatible(envKey, hostname, { path = '/v1/chat/completions', extraBody = null, truncationReasons = ['length'] } = {}) {
+export function openAiCompatible(envKey, hostname, { path = '/v1/chat/completions', extraBody = null, truncationReasons = ['length'], listModelsPath = '/v1/models' } = {}) {
   return {
     envKey,
     hostname,
     truncationReasons,
     path: () => path,
+    listModels: {
+      path: () => listModelsPath,
+      parseModels: (data) => data.data.map((m) => ({ id: m.id, created: (m.created || 0) * 1000 })),
+    },
     headers: (key) => ({ Authorization: `Bearer ${key}` }),
     body: ({ model, system, user, maxTokens, images }) => ({
       model,

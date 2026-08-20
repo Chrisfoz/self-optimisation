@@ -1,0 +1,81 @@
+# Copy this file to project-adapter.yml at YOUR project's root (not inside
+# harness/) and fill in the bracketed placeholders. This is the one file the
+# harness reads to know how it applies to *this specific project* — see
+# harness/lib/adapter.mjs, the only file in the harness that parses it.
+#
+# Every field below is marked either LIVE (a real script reads it today) or
+# RESERVED (part of the schema, matches Portable-Harness-Design.md's design,
+# but nothing consumes it yet — see that document's Status table for what's
+# still being built). Filling in a RESERVED field costs nothing and means
+# your project is ready the day the component that reads it ships; leaving
+# it blank is equally fine.
+#
+# examples/carrotgame/project-adapter.yml is a full worked instance of this
+# same schema, reconstructed from a real installation's enforcement code —
+# useful for seeing every field populated with real reasoning attached, not
+# meant to be copied over this file.
+
+project:
+  id: [your-project-name]
+  repository: [https://github.com/you/your-project]
+  default_branch: main
+
+# --- LIVE: harness/scripts/check-model-releases.mjs reads this section ----
+providers:
+  # Which labs to watch for new releases. Delete any you don't have a key
+  # for — see the root README's "Getting started" for where keys go
+  # (.env locally, GitHub Secrets in CI). A bare name is enough; the env
+  # var name shown here is only for a human reading the file — the harness
+  # already knows each provider's real env var from harness/providers/*.mjs.
+  watched:
+    - anthropic
+    # - openai
+    # - google
+    # - moonshot
+    # - deepseek
+    # - qwen
+    # - xai
+    # - meta
+    # - zai
+
+  # Where "which models have I already seen" is remembered between runs.
+  snapshot_path: .agent/model-snapshot.json
+
+  # Ceiling on how many newly-released models one run may fan out to — a
+  # blast-radius backstop, not a cost control.
+  max_fanout: 8
+
+# --- LIVE: harness/lib/edit-format.mjs's compileAllowlist() reads this ----
+constitution:
+  # Exact paths an autonomous change may edit. Everything else is refused
+  # before anything reaches disk — an allowlist, not a denylist.
+  allowed_paths:
+    - [path/to/an/editable/file]
+
+  # Glob patterns a CREATE block may target — ONLY at a path that doesn't
+  # already exist yet. Leave empty if your project has no such surface.
+  create_only_paths: []
+    # - "tests/**/*.test.js"
+
+# --- RESERVED: no orchestrator exists yet to read any of the below --------
+# Filling these in is free and forward-compatible; nothing acts on them yet.
+
+# frozen_paths: []          # never touched by an autonomous change, ever
+# append_only_paths: []     # new files may be added; existing ones may not change
+# churn_ceiling:
+#   max_files: 50
+#   max_lines: 10000
+# approval_class: autonomous-merge   # or human-approval-required
+
+# cadence:
+#   trigger: model-release
+#   schedule_cron: '0 0 1 * *'
+
+# evaluation:
+#   test_commands: []
+#   preflight_required: true
+
+# deployment:
+#   verify_strategy: none     # url | registry | artifact | none
+#   ci:
+#     runner: ubuntu-latest

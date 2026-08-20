@@ -1,0 +1,106 @@
+# Watch for new frontier model releases and open an issue when one ships.
+#
+# This is NOT the full autonomous suggest -> implement -> review -> merge
+# loop the reference implementation runs — that orchestrator hasn't been
+# ported into this harness yet (see Portable-Harness-Design.md's build
+# order). What this workflow gives you today is real and complete on its
+# own: a monthly check, using the harness's genericised detector and
+# reachability probe, that tells you the moment a model you haven't tried
+# before becomes available. That's useful by itself, and it means your
+# project is already wired for secrets and scheduling once the full loop
+# ships.
+#
+# Copy this file to .github/workflows/watch-releases.yml in your project,
+# then:
+#   1. Add a repository secret for every provider listed under `env:` below
+#      that you actually want watched (Settings -> Secrets and variables ->
+#      Actions -> New repository secret). Delete the env lines for any
+#      provider you don't have a key for — an unwatched provider costs
+#      nothing, but a watched one with no key is reported "skipped", not
+#      silently ignored, so leaving a line in with an empty secret is
+#      harmless too.
+#   2. Adjust `--providers` in the "Check for new releases" step to match
+#      the labs you're actually watching.
+#   3. Commit and push. The schedule runs monthly; use "Run workflow" in the
+#      Actions tab to try it immediately.
+#
+# `shell: bash` is pinned explicitly on every multi-line step, not left to
+# the runner's default — see Portable-Harness-Design.md §8.3. That's what
+# makes it safe to change `runs-on` below to windows-latest or macos-latest
+# if your project needs a different platform for its own build/test steps;
+# GitHub-hosted Windows and macOS runners both ship Git Bash, so these steps
+# keep working unmodified either way.
+
+name: Watch for new model releases
+
+on:
+  schedule:
+    - cron: '0 0 1 * *' # 1st of month, 00:00 UTC — matches the reference cadence
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # to commit the updated "models seen" snapshot
+  issues: write   # to open an issue when something new ships
+
+jobs:
+  check-releases:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check for new model releases
+        id: check
+        shell: bash
+        env:
+          # Delete any line below for a lab you're not watching.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          META_API_KEY: ${{ secrets.META_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+        run: |
+          # Match this list to the secrets you actually set above.
+          node harness/scripts/check-model-releases.mjs \
+            --providers anthropic,openai,google,moonshot,deepseek,qwen,xai,meta,zai \
+            > release-check.json
+
+          echo "has-new=$(jq -r '.hasNewReleases' release-check.json)" >> "$GITHUB_OUTPUT"
+          echo "model=$(jq -r '.selectedModel // "none"' release-check.json)" >> "$GITHUB_OUTPUT"
+          echo "provider=$(jq -r '.selectedProvider // "none"' release-check.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Commit the updated snapshot
+        shell: bash
+        run: |
+          git config user.email "release-watcher@github-actions.local"
+          git config user.name "Model Release Watcher"
+          git add .agent/model-snapshot.json
+          git commit -m "Update model snapshot" || echo "No change to commit"
+          git push
+
+      - name: Open an issue if something new shipped
+        if: steps.check.outputs.has-new == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODEL: ${{ steps.check.outputs.model }}
+          PROVIDER: ${{ steps.check.outputs.provider }}
+        run: |
+          gh issue create \
+            --title "New model available: $MODEL ($PROVIDER)" \
+            --body "The release watcher found at least one model it hasn't seen before. Full detail in this run's job summary: release-check.json." \
+            --label "model-release" 2>/dev/null || \
+          gh issue create \
+            --title "New model available: $MODEL ($PROVIDER)" \
+            --body "The release watcher found at least one model it hasn't seen before."
+          # The --label attempt is best-effort: it only succeeds if a
+          # "model-release" label already exists in the repo. Falls back to
+          # an unlabeled issue rather than failing the whole step over a
+          # missing label.

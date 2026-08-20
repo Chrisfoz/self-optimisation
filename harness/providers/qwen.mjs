@@ -11,5 +11,6 @@ registerProvider('qwen', {
   // not inferred from documentation.
   ...openAiCompatible('QWEN_API_KEY', 'dashscope-intl.aliyuncs.com', {
     path: '/compatible-mode/v1/chat/completions',
+    listModelsPath: '/compatible-mode/v1/models',
   }),
 });

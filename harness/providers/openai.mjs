@@ -15,6 +15,10 @@ registerProvider('openai', {
   truncationReasons: ['length'],
   path: () => '/v1/chat/completions',
   headers: (key) => ({ Authorization: `Bearer ${key}` }),
+  listModels: {
+    path: () => '/v1/models',
+    parseModels: (data) => data.data.map((m) => ({ id: m.id, created: (m.created || 0) * 1000 })),
+  },
   body: ({ model, system, user, maxTokens, images }) => ({
     model,
     messages: [

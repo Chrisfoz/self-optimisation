@@ -6,6 +6,14 @@
 # Source of every value is cited inline. Where the paper outline's §5 sketch
 # didn't have a field for something the real project needed, one was added
 # here rather than dropping the value — see NOTES.md for what that exposed.
+#
+# WHERE THIS FILE ACTUALLY LIVES: in a real installation, project-adapter.yml
+# belongs at THAT project's own repository root — harness/lib/adapter.mjs
+# defaults to looking for it at process.cwd()/project-adapter.yml. This copy
+# is kept inside self_optimisation's examples/ folder purely as the schema's
+# worked reference; it is never loaded by anything and is not meant to be
+# copied verbatim. Start from harness/project-adapter.example.yml instead —
+# it's the generic, bracketed-placeholder version meant to be copied.
 
 project:
   id: carrotgame
@@ -111,6 +119,12 @@ providers:
     - {lab: xai,       env_var: XAI_API_KEY}
     - {lab: meta,      env_var: META_API_KEY}
     - {lab: zai,       env_var: ZAI_API_KEY}
+  # .agent/model-snapshot.json — which models have already been seen.
+  # harness/scripts/check-model-releases.mjs's --snapshot flag / adapter default.
+  snapshot_path: .agent/model-snapshot.json
+  # scripts/check-model-releases.mjs — MAX_FANOUT. A blast-radius limit, not
+  # a cost control — see the field's own doc in model-release-detector.mjs.
+  max_fanout: 8
   reachability_probe: true   # scripts/probe-models.mjs — drop before preflight spends anything
 
 cadence:
