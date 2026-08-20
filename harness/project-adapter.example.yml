@@ -75,6 +75,22 @@ constitution:
     max_files: 50
     max_lines: 10000
 
+# --- PARSED but not yet acted on automatically: harness/lib/adapter.mjs's
+# memoryConfig() reads this section, and harness/lib/escalations.mjs and
+# themes.mjs both accept these exact values as options — but nothing calls
+# memoryConfig() for you yet, because no orchestrator exists to fold a
+# generation's proposals into the ledger or to trigger a themes review at a
+# cadence boundary. Filling this in now costs nothing and is exactly what
+# those components will read once built.
+# memory:
+#   escalation_ledger: docs/escalations/ledger.json
+#   escalation_consensus:
+#     models: 3
+#     labs: 2
+#   themes_review:
+#     dir: docs/themes
+#     cadence_generations: 10
+
 # --- RESERVED: no orchestrator exists yet to read any of the below --------
 # Filling these in is free and forward-compatible; nothing acts on them yet.
 

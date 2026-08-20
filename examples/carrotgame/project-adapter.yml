@@ -188,11 +188,15 @@ evaluation:
 
 memory:
   attempts_record: 'docs/generations/gen-{NNN}/attempts.json'   # written on success AND failure
+  # harness/lib/escalations.mjs's loadLedger/saveLedger default; ready to
+  # read via harness/lib/adapter.mjs's memoryConfig(), though nothing calls
+  # it automatically yet — no orchestrator exists to fold proposals in.
   escalation_ledger: 'docs/escalations/ledger.json'
   escalation_consensus:
     models: 3                       # CONSENSUS.models
     labs: 2                         # CONSENSUS.labs — must span labs, not just models
   themes_review:
+    dir: 'docs/themes'              # harness/lib/themes.mjs's loadLatestThemesReview default
     cadence_generations: 10
     model: claude-opus-5
 

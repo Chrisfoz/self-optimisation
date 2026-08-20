@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadAdapter, watchedProviders, snapshotPath, maxFanout, constitutionAllowlist, guardConfig } from '../../harness/lib/adapter.mjs';
+import { loadAdapter, watchedProviders, snapshotPath, maxFanout, constitutionAllowlist, guardConfig, memoryConfig } from '../../harness/lib/adapter.mjs';
 
 async function withTempFile(content, fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'adapter-test-'));
@@ -126,6 +126,36 @@ test('guardConfig returns empty/null defaults when the adapter has no constituti
   assert.deepEqual(config.frozenFields, {});
   assert.equal(config.maxFiles, null);
   assert.equal(config.maxLines, null);
+});
+
+test('memoryConfig reads escalation ledger/consensus and themes review config', async () => {
+  await withTempFile(
+    `
+memory:
+  escalation_ledger: docs/escalations/ledger.json
+  escalation_consensus:
+    models: 3
+    labs: 2
+  themes_review:
+    dir: docs/themes
+    cadence_generations: 10
+`,
+    async (file) => {
+      const config = memoryConfig(await loadAdapter(file));
+      assert.equal(config.ledgerPath, 'docs/escalations/ledger.json');
+      assert.deepEqual(config.consensus, { models: 3, labs: 2 });
+      assert.equal(config.themesDir, 'docs/themes');
+      assert.equal(config.themesCadence, 10);
+    }
+  );
+});
+
+test('memoryConfig returns null defaults when the adapter has no memory section', () => {
+  const config = memoryConfig(null);
+  assert.equal(config.ledgerPath, null);
+  assert.deepEqual(config.consensus, { models: null, labs: null });
+  assert.equal(config.themesDir, null);
+  assert.equal(config.themesCadence, null);
 });
 
 test('accessors return null/empty defaults on a null adapter, never throw', () => {

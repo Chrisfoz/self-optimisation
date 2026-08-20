@@ -336,7 +336,7 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Independent reviewer | ❌ Not started |
 | Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested — ready, but nothing upstream produces a change for it to check yet |
 | Automated evaluator — test-command runner (`evaluation.test_commands`) | ❌ Not started |
-| Failure & proposal memory (escalations ledger, themes review) | ❌ Not started |
+| Failure & proposal memory — escalations ledger (`harness/lib/escalations.mjs`), themes review read-side (`harness/lib/themes.mjs`, `generate-themes.mjs`) | ✅ Built, tested — ready, but nothing upstream produces proposals or generation history to feed them yet |
 | Staging & promotion (merge, tag, verify-deployment) | ❌ Not started |
 | Notifier (email/Slack digest) | ❌ Not started |
 | `init` CLI scaffolder | ❌ Not started |

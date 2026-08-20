@@ -132,3 +132,29 @@ export function guardConfig(adapter) {
       : null,
   };
 }
+
+/**
+ * Memory config — where the escalation ledger and themes reviews live, and
+ * the consensus bar. Ready for harness/lib/escalations.mjs's loadLedger()
+ * and harness/lib/themes.mjs's loadLatestThemesReview(). Nothing calls
+ * this yet — there's no orchestrator to fold a generation's proposals into
+ * the ledger, or to trigger a themes review at a cadence boundary — but the
+ * shape is here so a project can start recording its own values now.
+ */
+export function memoryConfig(adapter) {
+  return {
+    ledgerPath: adapter?.memory?.escalation_ledger ?? null,
+    consensus: {
+      models: Number.isFinite(adapter?.memory?.escalation_consensus?.models)
+        ? adapter.memory.escalation_consensus.models
+        : null,
+      labs: Number.isFinite(adapter?.memory?.escalation_consensus?.labs)
+        ? adapter.memory.escalation_consensus.labs
+        : null,
+    },
+    themesDir: adapter?.memory?.themes_review?.dir ?? null,
+    themesCadence: Number.isFinite(adapter?.memory?.themes_review?.cadence_generations)
+      ? adapter.memory.themes_review.cadence_generations
+      : null,
+  };
+}

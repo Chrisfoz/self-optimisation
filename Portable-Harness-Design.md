@@ -90,12 +90,12 @@ uniform:
 | `scripts/lib/wordless-play.mjs` | 759 | Evaluator (accessibility dimension) | Instrumented-draw-call method for telling symbol from word | Extremely game-specific (canvas instrumentation) — **do not port as a default**, keep as a worked example of "a fitness function that measures the real artefact, not a proxy of it" |
 | `scripts/readiness-scorecard.mjs` | 463 | Evaluator (aggregate, non-gating) | The "measured, never gates" posture, retired-dimension handling | The six dimensions themselves are carrotgame's (hospital wifi, WCAG, touch targets) — becomes an adapter-defined metric list |
 | `scripts/check-guarded-paths.mjs` | 118 | Guard / bounded authority | FROZEN / APPEND_ONLY / FROZEN_FIELDS / churn-ceiling mechanism | ✅ **Ported** — `harness/lib/guard.mjs` (pure, git runner injectable for tests) + `harness/scripts/check-guarded-paths.mjs`. Rules come from `constitution.frozen_paths`/`append_only_paths`/`frozen_fields`/`churn_ceiling` in `project-adapter.yml`, glob strings converted via the existing `glob.mjs`. 12 tests: 10 unit (fake git, every rule kind) + 2 against a real temporary git repository, proving the assumed `git diff --name-status --find-renames`/`--shortstat` output shapes are what real git actually produces rather than what the reference implementation's code merely assumed. |
-| `scripts/lib/escalations.mjs` | 419 | Failure & proposal memory (the "argue without editing" channel) | The whole ledger + consensus-bar (3 models / 2 labs) + email mechanism | The lab-count threshold and recipient — becomes adapter config; mechanism ports directly |
+| `scripts/lib/escalations.mjs` | 419 | Failure & proposal memory (the "argue without editing" channel) | The whole ledger + consensus-bar (3 models / 2 labs) + email mechanism | ✅ **Ported** — `harness/lib/escalations.mjs`, nearly verbatim; this file was already fully generic. `LEDGER_PATH`/`CONSENSUS` became overridable options rather than module constants; `renderForEmail` renamed `renderForNotification` since the harness's notifier is channel-agnostic by design (email/Slack/webhook). 18 tests, including the specific behaviors worth locking down: distinct-model-not-raw-count consensus counting, a second model raising the *same* title backing rather than duplicating, flagging exactly once (a 4th supporter after the bar is cleared must not re-flag), and support/dissent against an already-resolved entry being ignored. No CLI wrapper yet — its only real caller is an orchestrator that doesn't exist. |
 | `scripts/build-generations-table.mjs` | 292 | Reporting / record generation | "Generate the record, never hand-maintain it" — table built from `docs/generations/` + ledger | Output format (the HTML deck) — keep as an optional renderer, not a requirement |
 | `scripts/verify-production.mjs` | 157 | Staging & promotion — the live check | "Every other gate tests a branch; this one tests what a user opens" | `PRODUCTION_URL` and the specific host (Netlify) — becomes one config value; the *pattern* (fetch live, compare commit) generalises to any deploy target with a version-visible endpoint |
 | `scripts/send-digest-email.mjs`, `send-escalation-email.mjs`, `lib/format-digest.mjs` | 247+128+77 | Reporting | Plain-language-via-LLM digest pattern, best-effort-with-reliable-floor posture | SendGrid + recipient — becomes a pluggable notifier (email/Slack/webhook), one interface |
 | `scripts/lib/gh-output.mjs` | 30 | Plumbing | GitHub Actions `$GITHUB_OUTPUT` writer | GitHub Actions–specific; other CI targets (GitLab CI, Buildkite) need their own thin equivalent behind the same call sites |
-| `scripts/lib/themes.mjs`, `generate-themes.mjs`, `generate-themes-review.mjs` | 84+84+89 | Longitudinal learning (the every-10th-generation abstraction step) | Entire mechanism — reads history, asks a pinned model for "what we noticed → what it means", feeds back into next context pack | Nothing carrotgame-specific; ports directly, cadence (10) becomes config |
+| `scripts/lib/themes.mjs`, `generate-themes.mjs`, `generate-themes-review.mjs` | 84+84+89 | Longitudinal learning (the every-10th-generation abstraction step) | Entire mechanism — reads history, asks a pinned model for "what we noticed → what it means", feeds back into next context pack | ✅ **Ported (lib only)** — `harness/lib/themes.mjs` (read side, nearly verbatim) and `harness/lib/generate-themes.mjs` (prompt + response parser). One genuinely carrotgame-specific string found and fixed: the system prompt named "two children's browser games" directly; `buildThemesSystemPrompt()` now takes a `projectDescription` parameter instead. `generate-themes-review.mjs` (the CLI that actually calls a model) is **not** ported — it needs "generation history" as an input, which only exists once `context-pack.mjs` and an orchestrator have produced real `docs/generations/gen-NNN/` records; building a CLI around data nothing yet produces would be exactly the kind of fiction §8.4 and `ARCHITECTURE.md` argue against. 15 tests. |
 
 **Not portable, reference-only:** `scripts/lib/player-feedback.mjs` (Supabase
 rating widget — a worked example of "only include real signal, omit the
@@ -436,26 +436,32 @@ should on paper.
    this run has actually happened on Windows, Mac, and Linux dev machines and
    at least one non-`ubuntu-latest` CI runner (§8.3).
 
-**Revised as of the adapter-loading and diagrams work:** step 4 turned out to
-have a real sub-order within it, surfaced by actually building rather than
-only planning. Provider router, edit-format, model-release detector,
-reachability probe, and now the adapter loader are done — five ports and one
-genuinely new file (`adapter.mjs`, since no such component existed in the
-reference implementation; the paper's §3.1 assumed it, carrotgame's
-brief-as-a-file never needed one). Still open from Bucket B, and next in
-line because each is flagged "ports directly" with no orchestrator
-dependency — the same property that made the detector and probe tractable
-before context-pack:
+**Revised as of the adapter-loading, guard, and memory work:** step 4 turned
+out to have a real sub-order within it, surfaced by actually building rather
+than only planning. Done, in the order built: provider router, edit-format,
+model-release detector, reachability probe, adapter loader, guard,
+escalations ledger, themes review (read side). Seven ports and one genuinely
+new file (`adapter.mjs` — no such component existed in the reference
+implementation; the paper's §3.1 assumed it, carrotgame's
+brief-as-a-file-on-disk never needed one).
 
-- **`harness/lib/escalations.mjs`** — the ledger mechanism and consensus bar.
-  Establishes `docs/escalations/ledger.json` as a real, harness-managed
-  convention rather than only a documented one.
-- **`harness/lib/themes.mjs` + `generate-themes.mjs`** — same status, for
-  `docs/themes/review-NNN.json`.
-- **`harness/scripts/check-guarded-paths.mjs`** — the guard. Diffs a branch
-  against the adapter's `frozen_paths`/`append_only_paths`/`frozen_fields`/
-  `churn_ceiling`, all of which the schema already has fields for (§5); no
-  orchestrator needed to exercise it standalone against any two refs.
+Every one of these components shares a property worth naming now that seven
+of them exist: each is fully built and tested, and **none of them are wired
+to each other yet.** `guard.mjs` checks a diff nothing has produced.
+`escalations.mjs` folds proposals into a ledger no orchestrator generates
+proposals for. `edit-format.mjs` applies edits nothing suggests. This is not
+an accident of build order — it's what "the mechanism ports directly, the
+orchestration doesn't" actually looks like while it's still in progress. The
+one component that ties them together is the orchestrator, which is why it
+(along with `context-pack.mjs`, its main input) is the right thing left for
+last rather than a gap in the plan.
+
+Not ported, and deliberately: `generate-themes-review.mjs` (the CLI that
+calls a model to produce a themes review) needs real generation history as
+input, which only exists once `context-pack.mjs` and an orchestrator have
+produced real `docs/generations/gen-NNN/` records over several real runs —
+building a CLI around data nothing yet produces would be exactly the kind of
+fiction §8.4 and `ARCHITECTURE.md` argue against.
 
 `context-pack.mjs` and the orchestrator remain the two components that
 actually require new design work rather than a port — see §8.2 and the

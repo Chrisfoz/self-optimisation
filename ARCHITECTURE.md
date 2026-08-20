@@ -45,7 +45,7 @@ flowchart TD
     reviewer["❌ Independent Reviewer<br/>fresh-context approve/reject"]
     guard["✅ Guard<br/>harness/lib/guard.mjs<br/>ready, but nothing upstream calls it yet"]
     testrunner["❌ Test-command runner<br/>evaluation.test_commands<br/>in project-adapter.yml — not consumed by anything"]
-    memory["❌ Failure & Proposal Memory<br/>escalations ledger, themes review"]
+    memory["✅ Failure & Proposal Memory<br/>harness/lib/escalations.mjs + themes.mjs<br/>ready, but nothing upstream calls it yet"]
     promote["❌ Staging & Promotion<br/>merge, tag, verify-deployment"]
 
     context --> propose --> executor --> reviewer --> guard --> testrunner --> promote
@@ -64,11 +64,12 @@ in.** The blue box is real, tested, and runnable via
 `examples/workflows/watch-releases.yml` right now. The tan box is the rest
 of the campaign lifecycle from the paper's §4 — most of it doesn't exist,
 so a human currently plays the part of those nodes by hand, reading the
-issue the detector opened and deciding what to do next. `edit-format.mjs`
-and `guard.mjs` are the two exceptions inside the tan box: both fully built
-and tested, both waiting on the orchestrator that would actually call them
-in sequence. Nothing yet reads `evaluation.test_commands` from
-`project-adapter.yml` either — the field exists in the schema, but no
+issue the detector opened and deciding what to do next. `edit-format.mjs`,
+`guard.mjs` and the memory pair (`escalations.mjs`, `themes.mjs`) are the
+exceptions inside the tan box: all fully built and tested, all waiting on
+the orchestrator that would actually call them in sequence. Nothing yet
+reads `evaluation.test_commands` from `project-adapter.yml` either — the
+field exists in the schema, but no
 component runs a project's tests on the harness's behalf.
 
 `Portable-Harness-Design.md`'s Status table has the same information as
