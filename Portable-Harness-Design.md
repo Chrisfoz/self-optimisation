@@ -82,7 +82,7 @@ uniform:
 | `scripts/lib/llm-provider.mjs` | 561 | Provider/model router | The `callModel()` / `callModelWithHeadroom()` contract, the truncation-retry mechanism, the "throw on unrecognised id" posture | ✅ **Ported** — `harness/lib/llm-provider.mjs` (provider-blind core, zero hardcoded labs) + `harness/providers/*.mjs` (all 9 labs, each a self-registering file, smoke-tested against real model ids from the generation log). Shipped all 9 rather than a 3-lab default subset — they're free as separate files, and the per-lab quirks (GLM's forced `reasoning_effort`, the DashScope/Zhipu id collision, OpenAI's legacy-field retry) are hard-won and expensive to rediscover. See `harness/providers/CONTRIBUTING-A-PROVIDER.md`. |
 | `scripts/check-model-releases.mjs` | 340 | Model-release detector | Snapshot-diff logic, "unknown never means no release" posture | ✅ **Ported** — `harness/lib/model-release-detector.mjs` (pure: no fs/env/console) + `harness/scripts/check-model-releases.mjs` (CLI, owns the snapshot file and env). The per-lab catalogue config (URL, parser) moved onto each provider's `registerProvider()` call as `listModels`, alongside its call-time config — see `getProvider()` in `llm-provider.mjs` for why that avoided reopening the "three parallel literals" bug `edit-format.mjs`'s own history warns about. `isChatModel()`'s keyword filter is now applied centrally after each provider's own `parseModels`, rather than repeated inside all nine. 61-check smoke test covers every provider's real catalogue-response shape, the ranking tie-break, the all-keys-missing skip path, and snapshot preservation on a failed check. |
 | `scripts/probe-models.mjs` + `lib/probe-models.mjs` | 82 + 119 | Reachability check (feeds the detector) | The "send the real call shape, drop what 404s" method, `checkContextFit()` | ✅ **Ported** — `harness/lib/probe-models.mjs` (verbatim; it was already fully generic) + `harness/scripts/probe-models.mjs`. One deliberate gap: the reference CLI hard-imports `estimateContextSize()` from `context-pack.mjs`, which isn't ported yet (§7's still-open row below). The harness CLI takes an optional `--estimated-tokens`/`CONTEXT_ESTIMATE_TOKENS` instead and skips the context-fit check when it's absent — the same conservative default `checkContextFit()` already applies to any provider that reports no window at all, so this isn't a capability loss, just an honest placeholder until context-pack ships. |
-| `scripts/lib/context-pack.mjs` | 819 | Context compiler | `buildGenerationIndex()` (full history, one line each), `buildGenerationHistory()` (recent-detail window), `recommendScope()`, `estimateContextSize()` | The specific blocks assembled (screenshots, player feedback, readiness scorecard) are carrotgame's own context recipe — becomes a **pluggable block list** per `04-context-recipe.md`'s checklist |
+| `scripts/lib/context-pack.mjs` | 819 | Context compiler | `buildGenerationIndex()` (full history, one line each), `buildGenerationHistory()` (recent-detail window), `recommendScope()`, `estimateContextSize()` | ✅ **Ported (7 of 9 functions)** — `harness/lib/context-pack.mjs`: `buildSourceBundle`, `buildArchitectureNotes` (doc path + append-only marker now parameters, not `SELF-IMPROVEMENT.md` hardcoded), `buildGenerationIndex`, `buildGenerationHistory`, `buildTestIndex` (name extraction now pluggable — ships a `test`/`it`/`describe` default matching Node's own built-in runner, Jest, Mocha and Jasmine, plus the reference implementation's own `check(name, …)` extractor kept as a named export), `buildRepoManifest` (the `PURPOSES` map becomes a caller-supplied parameter — always project-specific, never was going to be otherwise), `recommendScope`. `estimateContextSize()` was redesigned rather than ported: the original called every builder itself; the port takes pre-built `{blocks}` text and an image count, because the builders now have genuinely different configuration needs (a generations dir, a test-file list, a purposes map) that one shared call signature would have had to hide or reinvent. **Not ported**, and marked as such rather than faked: `collectScreenshots()` and `buildScorecardBrief()` stay project-specific plugins (see the visual-canvas plugin entry below); `buildPlatformNotes()` isn't a function to port at all — it's a paragraph of prose, now plain adapter config (`context.platform_notes`). 23 tests, including one that pins down a real footgun in the ported arithmetic: `limit: 0` on `buildGenerationHistory` must return nothing, not everything — `.slice(-0)` in JS is `.slice(0)`, the whole array, unless explicitly guarded against. |
 | `scripts/lib/edit-format.mjs` | 324 | Bounded patch executor | The whole SEARCH/REPLACE parser, exactly-once matching, all-or-nothing apply, CREATE-only-for-new-paths | ✅ **Ported** — `harness/lib/edit-format.mjs`. `EDITABLE_FILES` became `compileAllowlist({allowedPaths, createOnlyPaths})`, fed from the adapter (`constitution.allowed_paths` / `create_only_paths`, glob strings via the new `harness/lib/glob.mjs`) instead of a module constant. `EDIT_FORMAT_SPEC` became `buildEditFormatSpec()`, templated on an optional extra metadata field (carrotgame's `PILLAR`) and an optional CREATE section, so a project with no pillar taxonomy isn't forced to have one. 28-check smoke test covers allowlist edge cases, all-or-nothing failure, non-unique-SEARCH rejection, and create-at-existing-path rejection. |
 | `scripts/invoke-self-improvement-agent.mjs` | 1,450 | Orchestrates suggest→implement→review→refine (the paper's whole §4 lifecycle in one file, because Actions can't loop jobs) | The 4-stage state machine, the fan-out/rank-with-authors-withheld pattern, the refine-loop-with-pristine-reset | The specific prompt content (game design pillars, child-safety framing) — becomes adapter-supplied prompt fragments |
 | `scripts/invoke-code-review.mjs` | 237 | Independent reviewer | Fresh-context call, fail-closed parse | The reviewer's brief content — templated, see `06-starter-kit.md` §4 |
@@ -436,33 +436,43 @@ should on paper.
    this run has actually happened on Windows, Mac, and Linux dev machines and
    at least one non-`ubuntu-latest` CI runner (§8.3).
 
-**Revised as of the adapter-loading, guard, and memory work:** step 4 turned
-out to have a real sub-order within it, surfaced by actually building rather
-than only planning. Done, in the order built: provider router, edit-format,
+**Revised as of the context-pack work:** step 4 turned out to have a real
+sub-order within it, surfaced by actually building rather than only
+planning. Done, in the order built: provider router, edit-format,
 model-release detector, reachability probe, adapter loader, guard,
-escalations ledger, themes review (read side). Seven ports and one genuinely
-new file (`adapter.mjs` — no such component existed in the reference
-implementation; the paper's §3.1 assumed it, carrotgame's
-brief-as-a-file-on-disk never needed one).
+escalations ledger, themes review (read side), and now context-pack (7 of
+its 9 functions — see the Bucket B table above for exactly which two
+didn't port and why). Eight ports and one genuinely new file (`adapter.mjs`
+— no such component existed in the reference implementation; the paper's
+§3.1 assumed it, carrotgame's brief-as-a-file-on-disk never needed one).
 
-Every one of these components shares a property worth naming now that seven
-of them exist: each is fully built and tested, and **none of them are wired
-to each other yet.** `guard.mjs` checks a diff nothing has produced.
-`escalations.mjs` folds proposals into a ledger no orchestrator generates
-proposals for. `edit-format.mjs` applies edits nothing suggests. This is not
-an accident of build order — it's what "the mechanism ports directly, the
-orchestration doesn't" actually looks like while it's still in progress. The
-one component that ties them together is the orchestrator, which is why it
-(along with `context-pack.mjs`, its main input) is the right thing left for
-last rather than a gap in the plan.
+Every one of these components shares a property worth naming now that
+eight of them exist: each is fully built and tested, and **none of them
+are wired to each other yet.** `guard.mjs` checks a diff nothing has
+produced. `escalations.mjs` folds proposals into a ledger no orchestrator
+generates proposals for. `context-pack.mjs`'s builders assemble a prompt
+nothing sends. `edit-format.mjs` applies edits nothing suggests. This is
+not an accident of build order — it's what "the mechanism ports directly,
+the orchestration doesn't" actually looks like while it's still in
+progress. The orchestrator is the one component that ties all of this
+together, which is why it was always going to be the right thing left for
+last rather than a gap in the plan — every other piece it needs to call
+now exists and is tested in isolation.
 
 Not ported, and deliberately: `generate-themes-review.mjs` (the CLI that
-calls a model to produce a themes review) needs real generation history as
-input, which only exists once `context-pack.mjs` and an orchestrator have
-produced real `docs/generations/gen-NNN/` records over several real runs —
-building a CLI around data nothing yet produces would be exactly the kind of
-fiction §8.4 and `ARCHITECTURE.md` argue against.
+calls a model to produce a themes review) still needs real generation
+history as input, which only exists once the orchestrator has produced real
+`docs/generations/gen-NNN/` records over several real runs — the compiler
+that would *build* that history from real records is done; what's missing
+is the records themselves. Building a CLI around data nothing yet produces
+would be exactly the kind of fiction §8.4 and `ARCHITECTURE.md` argue
+against.
 
-`context-pack.mjs` and the orchestrator remain the two components that
-actually require new design work rather than a port — see §8.2 and the
-kernel table's remaining ❌ rows in `ARCHITECTURE.md`.
+The orchestrator is now the one component left that actually requires new
+design work rather than a port — see the kernel table's one remaining ❌ row
+in `ARCHITECTURE.md`. Unlike everything above it, there is no reference file
+to port at 1:1 fidelity and genericise: `invoke-self-improvement-agent.mjs`
+is 1,450 lines that do belong together in the reference implementation
+(one Node process, because Actions cannot loop jobs), but composing eight
+already-generic, already-tested harness components into that same loop is
+a design task in its own right, not a mechanical extraction.

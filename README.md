@@ -5,16 +5,20 @@ a project, and a governed suggest → implement → review → gate → promote 
 lets each newly released frontier model propose one improvement, gated by
 that project's own tests before anything ships.
 
-**Status: four kernel components genericised, tested, and usable today —
+**Status: eight kernel components genericised, tested, and usable today —
 not the full autonomous loop yet.** The reference implementation is a
 separate, real project (two educational HTML games) that has run this loop
 for 18+ real generations, including real incidents; this repository is the
 work of extracting that into something project-agnostic. What you can
 actually install and run right now, following the guide below, is the
 **model-release detector**: it watches whichever labs you choose and tells
-you the moment a genuinely new model ships. The full suggest → implement →
-review → merge loop (the context compiler and orchestrator) isn't ported
-yet — see [Status in detail](#status-in-detail) before you assume more works
+you the moment a genuinely new model ships. Everything else this session has
+built — edit-format, the guard, the escalation ledger, the context
+compiler — is fully tested but not yet wired to anything, because the one
+component that would call them all in sequence, the **orchestrator**, isn't
+built yet. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for exactly which of
+this is real versus still a human doing it by hand, and
+[Status in detail](#status-in-detail) before you assume more works
 than does.
 
 ---
@@ -331,7 +335,7 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Model-release detector (`harness/lib/model-release-detector.mjs`) | ✅ Built, tested |
 | Reachability probe (`harness/lib/probe-models.mjs`) | ✅ Built, tested |
 | Adapter loader (`harness/lib/adapter.mjs`, reads `project-adapter.yml`) | ✅ Built, tested — the one file in the harness with an npm dependency (`js-yaml`), scoped deliberately narrowly |
-| Context compiler (`harness/lib/context-pack.mjs`) | ❌ Not started — real design work, not a port; see `Portable-Harness-Design.md` §8.2 |
+| Context compiler (`harness/lib/context-pack.mjs`) | ✅ Built, tested (7 of 9 functions — screenshots/scorecard stay project-specific plugins) — ready, but nothing upstream calls it yet |
 | Orchestrator (suggest → implement → review → refine, one process) | ❌ Not started |
 | Independent reviewer | ❌ Not started |
 | Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested — ready, but nothing upstream produces a change for it to check yet |

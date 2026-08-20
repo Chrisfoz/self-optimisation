@@ -39,7 +39,7 @@ flowchart TD
   issue -.->|"a human reads it and<br/>decides whether to try it"| human(["👤 you, today"])
 
   subgraph missing["NOT built yet — a human does this by hand, or it doesn't happen"]
-    context["❌ Context Compiler<br/>harness/lib/context-pack.mjs<br/>real design work, not a port — see §8.2"]
+    context["✅ Context Compiler<br/>harness/lib/context-pack.mjs<br/>ready, but nothing upstream calls it yet"]
     executor["✅ Bounded Patch Executor<br/>harness/lib/edit-format.mjs<br/>ready, but nothing upstream calls it yet"]
     propose["❌ Parallel Proposal Stage<br/>fan out to every new model,<br/>rank with authors withheld"]
     reviewer["❌ Independent Reviewer<br/>fresh-context approve/reject"]
@@ -61,16 +61,19 @@ flowchart TD
 
 **Read this diagram as an honest gap, not a roadmap with checkboxes filled
 in.** The blue box is real, tested, and runnable via
-`examples/workflows/watch-releases.yml` right now. The tan box is the rest
-of the campaign lifecycle from the paper's §4 — most of it doesn't exist,
-so a human currently plays the part of those nodes by hand, reading the
-issue the detector opened and deciding what to do next. `edit-format.mjs`,
-`guard.mjs` and the memory pair (`escalations.mjs`, `themes.mjs`) are the
-exceptions inside the tan box: all fully built and tested, all waiting on
-the orchestrator that would actually call them in sequence. Nothing yet
+`examples/workflows/watch-releases.yml` right now. Inside the tan box,
+`context-pack.mjs`, `edit-format.mjs`, `guard.mjs` and the memory pair
+(`escalations.mjs`, `themes.mjs`) are all fully built and tested — five of
+the tan box's seven nodes — but every one of them is still waiting on the
+orchestrator that would actually call them in the right sequence. Only the
+Parallel Proposal Stage, the Independent Reviewer, the test-command runner
+and Staging & Promotion remain genuinely unbuilt in any form. A human
+currently plays the part of all seven by hand, reading the issue the
+detector opened and deciding what to do next — the tested components would
+narrow that gap the moment something calls them, not before. Nothing yet
 reads `evaluation.test_commands` from `project-adapter.yml` either — the
-field exists in the schema, but no
-component runs a project's tests on the harness's behalf.
+field exists in the schema, but no component runs a project's tests on the
+harness's behalf.
 
 `Portable-Harness-Design.md`'s Status table has the same information as
 prose, kept in sync by hand — if the two ever disagree, trust whichever was
