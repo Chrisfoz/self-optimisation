@@ -129,9 +129,15 @@ for exactly how that comparison works, and
 "triggers on real novelty" is the whole point rather than a detail.
 
 A `.agent/model-snapshot.json` file appears after this run — that's the
-detector's memory. Commit it if you want the baseline to persist locally;
-Step 6 covers persisting it in CI, which works differently since GitHub
-Actions runners don't keep state between runs on their own.
+detector's memory, and it's not optional to keep: **commit it**, the same
+way the reference implementation does. GitHub Actions runners are ephemeral
+— nothing persists between scheduled runs except what's in the repo — so
+without this file committed, every monthly run would see an empty snapshot
+and report every model in the catalogue as "new" simultaneously, every
+time. Don't add `.agent/` to `.gitignore`; that's the one directory in this
+walkthrough that's the opposite of `.env` — it holds no secrets and it
+*must* travel with the repo. `examples/workflows/watch-releases.yml`
+already commits it automatically as part of the workflow (Step 6 below).
 
 **Optional but recommended once you're past trying it once:** rather than
 repeating `--providers` on every invocation, copy

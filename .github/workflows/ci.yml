@@ -1,0 +1,37 @@
+name: CI
+
+# Runs the harness's OWN test suite (tests/lib/) on every PR and every push
+# to main. This is not a template for a target project's CI — it's this
+# repository dogfooding harness/lib/ and harness/providers/ the same way any
+# real project would, per README.md's "Testing this harness itself" section.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the harness's own test suite
+        run: npm test

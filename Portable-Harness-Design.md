@@ -155,12 +155,26 @@ self_optimisation/
 │           └── README.md            # the interface a quality-dimension plugin implements (§8.2)
 │
 ├── templates/                       # what `init` fills in and writes to the target repo
-│   ├── agent-brief.md.tmpl          # from learning/06-starter-kit.md §1
-│   ├── reviewer-brief.md.tmpl       # from §4
-│   ├── guard-config.yml.tmpl        # from §5
-│   ├── workflow.yml.tmpl            # GitHub Actions version of carrotgame's workflow
-│   ├── project-adapter.yml.tmpl     # the paper's §5 schema, executable
+│   ├── agent-brief.md.tmpl          # ✅ built — from learning/06-starter-kit.md §1, with the
+│   │                                # dual-purpose-file note (real prompt text AND a valid
+│   │                                # Claude Code subagent) made explicit inline
+│   ├── reviewer-brief.md.tmpl       # ✅ built — from §4. Notes a real inconsistency found while
+│   │                                # building it: the reference implementation's reviewer brief
+│   │                                # is hardcoded inline in invoke-code-review.mjs, NOT read from
+│   │                                # its .claude/agents/ counterpart the way the suggest-stage
+│   │                                # brief is — two sources of truth for one thing. The harness's
+│   │                                # future orchestrator should read this file at runtime instead.
+│   ├── guard-config.yml.tmpl        # from §5 — pending check-guarded-paths.mjs's port
+│   ├── workflow.yml.tmpl            # GitHub Actions version of carrotgame's self-improvement.yml —
+│   │                                # cannot be built honestly until the orchestrator, guard and
+│   │                                # notifier exist; examples/workflows/watch-releases.yml is the
+│   │                                # one real, complete slice today
 │   └── README.installed.md.tmpl     # dropped into the TARGET repo after init
+│
+│   project-adapter.yml.tmpl's role is already filled — by
+│   harness/project-adapter.example.yml, deliberately living under
+│   harness/ rather than templates/, since a user copies it in Step 1 of the
+│   README before `init` exists to generate anything.
 │
 ├── cli/
 │   └── init.mjs                     # `npx self-improve init` entry point (§6)
