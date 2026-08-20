@@ -201,8 +201,20 @@ memory:
     model: claude-opus-5
 
 deployment:
-  verify_strategy: url              # scripts/verify-production.mjs — fetch live, compare commit
+  verify_strategy: url              # harness/lib/verify-deployment.mjs's verifyUrl()
   production_url: https://masonthecarrot.netlify.app
+  # scripts/verify-production.mjs's WATCHED list. styles.css is deliberately
+  # excluded: the host minifies CSS on the way out, so a byte-level
+  # comparison would be permanently red — see that file's own comment on
+  # why a signal that always cries wolf gets muted.
+  watched_files:
+    - carrot_maze_game.html
+    - germ_fighter.html
+    - index.html
+    - about.html
+    - germ_fun_facts.html
+    - vegetable_fun_facts.html
+    - feedback.js
   rollback: git-tag                 # `git revert gen-NNN`; no dedicated rollback script
   ci:
     runner: ubuntu-latest           # every job; bash steps assume it implicitly (not yet pinned via `shell:`)

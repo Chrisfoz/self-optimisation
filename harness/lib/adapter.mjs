@@ -209,3 +209,22 @@ export function contextConfig(adapter) {
     scopeRequired: Number.isFinite(adapter?.context?.scope_required) ? adapter.context.scope_required : null,
   };
 }
+
+/**
+ * Deployment config — ready for harness/lib/verify-deployment.mjs's
+ * verifyDeployment() and harness/lib/promote.mjs's promote(). `strategy`
+ * defaults to 'none' (not null) since verifyDeployment() treats an unset
+ * strategy the same as an explicit 'none' — a project that hasn't
+ * configured this yet gets the honest no-op, not a crash.
+ */
+export function deploymentConfig(adapter) {
+  return {
+    strategy: adapter?.deployment?.verify_strategy ?? 'none',
+    // Matches examples/carrotgame/project-adapter.yml's existing field name
+    // — that file predates this accessor, so the accessor conforms to it
+    // rather than the reverse.
+    siteUrl: adapter?.deployment?.production_url ?? null,
+    watchedFiles: adapter?.deployment?.watched_files ?? null,
+    runner: adapter?.deployment?.ci?.runner ?? 'ubuntu-latest',
+  };
+}

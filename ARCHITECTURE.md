@@ -64,12 +64,13 @@ flowchart TD
   subgraph missing["NOT built yet"]
     guardstep["🔧 Guard as a CI step<br/>harness/lib/guard.mjs already works —<br/>no workflow step calls it against<br/>the orchestrator's own branch yet"]
     teststep["🔧 The project's own tests, as a CI step<br/>needs no new harness code —<br/>evaluation.test_commands become<br/>workflow steps directly"]
-    promote["❌ Merge, tag, verify-deployment"]
+    promote["✅ Merge + tag<br/>harness/lib/promote.mjs<br/>ready, but no workflow step calls it yet"]
+    verify["✅ Live-deploy check<br/>harness/lib/verify-deployment.mjs<br/>url strategy only — registry/artifact still ❌"]
     notify["❌ Notifier — email/Slack digest"]
     workflow["❌ templates/workflow.yml.tmpl<br/>+ the init CLI that generates it"]
   end
 
-  approved -.->|"still needs"| guardstep --> teststep --> promote --> notify
+  approved -.->|"still needs"| guardstep --> teststep --> promote --> verify --> notify
   workflow -.->|"would generate all of the above,<br/>chained, for a new project"| loop
 
   style detect fill:#DCE7F0,stroke:#4A5C6A
@@ -88,11 +89,17 @@ produced a `no-proposal` outcome rather than crashing on a wiring bug — see
 detail). What's left is real too, but it's smaller than it looks: the guard
 and the project's own tests need no new harness *code*, only a workflow
 step that calls what already exists — `check-guarded-paths.mjs` already
-runs standalone against a real git diff. The genuinely unbuilt pieces are
-merge/tag, `verify-deployment` (project-specific: url/registry/artifact per
-the adapter), a notifier, and the `templates/workflow.yml.tmpl` + `init`
-CLI that would chain all of this into one file for a new project instead of
-someone running `run-generation.mjs` by hand.
+runs standalone against a real git diff. `promote.mjs` (merge + tag,
+verified against a real two-repo git setup including an actual merge
+conflict) and `verify-deployment.mjs` (the `url` strategy — poll a live
+site, compare canonicalised content, timeout) are both built and tested
+too now, ready the same way the guard is: nothing calls them yet, only
+because nothing chains them together. The genuinely unbuilt pieces have
+narrowed to three: a notifier, the `registry`/`artifact` verify strategies
+(real per-ecosystem work — npm/PyPI/NuGet/Maven Central APIs differ too
+much to fake a shared shape), and the `templates/workflow.yml.tmpl` +
+`init` CLI that would chain everything above into one file for a new
+project instead of someone running each script by hand.
 
 `Portable-Harness-Design.md`'s Status table has the same information as
 prose, kept in sync by hand — if the two ever disagree, trust whichever was

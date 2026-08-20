@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadAdapter, watchedProviders, snapshotPath, maxFanout, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig } from '../../harness/lib/adapter.mjs';
+import { loadAdapter, watchedProviders, snapshotPath, maxFanout, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, deploymentConfig } from '../../harness/lib/adapter.mjs';
 
 async function withTempFile(content, fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'adapter-test-'));
@@ -224,6 +224,35 @@ test('briefPaths, rolesConfig and contextConfig return null/empty defaults on a 
     generationsDir: null, architectureNotesPath: null, architectureNotesMarker: null,
     testFiles: [], purposes: {}, platformNotes: null, historyLimit: null, scopeRequired: null,
   });
+});
+
+test('deploymentConfig reads verify_strategy, production_url, watched_files and the CI runner', async () => {
+  await withTempFile(
+    `
+deployment:
+  verify_strategy: url
+  production_url: https://example.com
+  watched_files:
+    - index.html
+  ci:
+    runner: windows-latest
+`,
+    async (file) => {
+      const config = deploymentConfig(await loadAdapter(file));
+      assert.equal(config.strategy, 'url');
+      assert.equal(config.siteUrl, 'https://example.com');
+      assert.deepEqual(config.watchedFiles, ['index.html']);
+      assert.equal(config.runner, 'windows-latest');
+    }
+  );
+});
+
+test('deploymentConfig defaults strategy to "none" (not null) and runner to ubuntu-latest', () => {
+  const config = deploymentConfig(null);
+  assert.equal(config.strategy, 'none');
+  assert.equal(config.siteUrl, null);
+  assert.equal(config.watchedFiles, null);
+  assert.equal(config.runner, 'ubuntu-latest');
 });
 
 test('accessors return null/empty defaults on a null adapter, never throw', () => {

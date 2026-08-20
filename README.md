@@ -341,7 +341,7 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested — still awaiting a workflow step that runs it against a real PR from the orchestrator, since that's CI wiring, not harness code |
 | Automated evaluator — test-command runner (`evaluation.test_commands`) | ❌ Not built, and — now that the loop itself is real — turns out not to need any harness *code*: a project's test commands become CI steps directly, the same way the guard already runs as one |
 | Failure & proposal memory — escalations ledger (`harness/lib/escalations.mjs`), themes review read-side (`harness/lib/themes.mjs`, `generate-themes.mjs`) | ✅ Built, tested, wired: the orchestrator folds every run's proposals into the ledger and reads it back into the next prompt |
-| Staging & promotion (merge, tag, verify-deployment) | ❌ Not started |
+| Staging & promotion — merge + tag (`harness/lib/promote.mjs`), live-deploy check (`harness/lib/verify-deployment.mjs`) | ✅ Built, tested (`url` verify strategy only — `registry`/`artifact` still ❌) |
 | Notifier (email/Slack digest) | ❌ Not started |
 | `init` CLI scaffolder | ❌ Not started |
 | `templates/` (generated agent brief, reviewer brief, guard config, workflow) | ❌ Not started |
