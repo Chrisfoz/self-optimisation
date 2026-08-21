@@ -305,6 +305,60 @@ table.writes td.p { font-family: "IBM Plex Mono", monospace; font-size: 12px; wh
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .btn.primary { color: #fff; } }
 .actions .grow { flex: 1; }
 
+ol.steps9 { list-style:none; counter-reset:n; margin:18px 0 0; padding:0; display:flex; flex-direction:column; gap:2px; }
+ol.steps9 li {
+  counter-increment:n; display:grid; grid-template-columns:24px 1fr auto; gap:12px;
+  align-items:center; padding:12px 4px; border-bottom:1px solid var(--line-soft);
+}
+ol.steps9 li::before {
+  content:counter(n); font-family:"IBM Plex Mono",monospace; font-size:11.5px;
+  color:var(--muted); align-self:start; padding-top:3px;
+}
+ol.steps9 li b { font-size:14px; font-weight:600; }
+ol.steps9 li span { display:block; font-size:12.5px; color:var(--muted); line-height:1.5; grid-column:2; }
+ol.steps9 .btn:disabled { opacity:.5; cursor:not-allowed; }
+
+/* ---------- view tabs ---------- */
+.tabs { display:flex; gap:2px; background:var(--surface-2); border:1px solid var(--line); border-radius:var(--radius); padding:2px; }
+.tabs button {
+  font:inherit; font-size:13px; font-weight:600; border:0; border-radius:4px;
+  padding:5px 13px; background:none; color:var(--muted); cursor:pointer;
+}
+.tabs button[aria-selected="true"] { background:var(--surface); color:var(--ink); box-shadow:var(--shadow); }
+
+/* ---------- runs view ---------- */
+.runs-head { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 14px; margin-bottom:16px; }
+.runs-head h2 { margin:0; font-size:20px; font-weight:700; letter-spacing:-.015em; }
+.statpill { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); }
+.statpill i { width:8px; height:8px; border-radius:50%; background:var(--live); display:inline-block; }
+
+.tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
+.tile { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:13px 15px; box-shadow:var(--shadow); }
+.tile .n { font-family:"IBM Plex Mono",monospace; font-size:25px; font-weight:600; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+.tile .l { font-family:"IBM Plex Sans Condensed",sans-serif; font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin-top:2px; }
+.tile .h { font-size:11.5px; color:var(--muted); margin-top:5px; line-height:1.4; }
+
+table.runs { width:100%; border-collapse:collapse; font-size:13.5px; }
+table.runs th, table.runs td { text-align:left; padding:9px 11px; border-bottom:1px solid var(--line-soft); vertical-align:top; }
+table.runs th { font-family:"IBM Plex Sans Condensed",sans-serif; text-transform:uppercase; letter-spacing:.07em; font-size:10.5px; color:var(--muted); font-weight:600; }
+table.runs td.g { font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+table.runs td.sum { color:var(--ink-2); }
+table.runs tr:hover td { background:var(--surface-2); }
+
+.out { display:inline-block; font-family:"IBM Plex Sans Condensed",sans-serif; font-weight:600; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; padding:2px 8px; border-radius:3px; white-space:nowrap; }
+.out.shipped { background:var(--live-wash); color:var(--live); }
+.out.blocked { background:var(--frozen-wash); color:var(--frozen); }
+.out.nothing { background:var(--surface-2); color:var(--muted); border:1px solid var(--line-soft); }
+.out.quiet   { background:var(--surface-2); color:var(--reserved); border:1px dashed var(--line); }
+
+.esc { border:1px solid var(--accent); background:var(--accent-wash); border-radius:var(--radius); padding:15px 17px; margin-bottom:18px; }
+.esc h3 { margin:0 0 6px; font-size:14.5px; font-weight:700; color:var(--accent-2); }
+.esc p { margin:0 0 10px; font-size:13.5px; color:var(--ink-2); }
+.esc .who { font-size:12px; color:var(--muted); margin-bottom:12px; }
+.esc .row { display:flex; flex-wrap:wrap; gap:9px; }
+
+.provenance { margin-top:16px; font-size:12.5px; color:var(--muted); line-height:1.55; }
+
 /* ---------- output column ---------- */
 
 .col-out .panel + .panel { margin-top: 14px; }
@@ -330,19 +384,25 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
   <header class="masthead">
     <h1>Self-Optimisation · Install console</h1>
     <span class="sub mono">Chrisfoz/carrot-games</span>
+    <div class="tabs" role="tablist">
+      <button type="button" id="tabInstall" role="tab" aria-selected="true">Set up</button>
+      <button type="button" id="tabRuns" role="tab" aria-selected="false">Runs</button>
+    </div>
     <span class="spacer"></span>
     <a class="eyebrow" style="color:var(--accent);text-decoration:none" href="https://claude.ai/code/artifact/34273fb4-75b4-4e09-af44-159ccc9677e7">About ↗</a>
     <span class="eyebrow">Wireframe · DESIGN.md §4</span>
   </header>
 
   <div class="wireframe-note">
-    <span><strong>Not a working product.</strong> A clickable sketch of the nine
-    steps in <span class="mono">console/DESIGN.md</span>. Toggles on steps 2, 3,
-    4, 6, 7 and 8 really do update the generated <span class="mono">project-adapter.yml</span>
+    <span><strong>Not a working product.</strong> A clickable sketch of
+    <span class="mono">console/DESIGN.md</span>. Toggles on steps 2, 3, 4, 6, 7
+    and 8 really do update the generated <span class="mono">project-adapter.yml</span>
     on the right — that live "here is exactly what we will write to your repo"
-    panel is the point of the design, not a garnish.</span>
+    panel is the point of the design, not a garnish. <b>Runs</b> above sketches
+    the other half: what the console shows once a repository is live.</span>
   </div>
 
+  <div id="viewInstall">
   <div class="console">
 
     <!-- ============ step rail ============ -->
@@ -485,10 +545,10 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
         <!-- 9 -->
         <section class="step" data-step="9">
           <p class="eyebrow">Step 9 of 9</p>
-          <h2>Review, then rehearse once</h2>
+          <h2>Review, merge, rehearse, then switch on</h2>
           <p class="lede">Four files, one pull request, nothing on your default
-          branch. Rehearsing before the schedule turns on is the difference
-          between believing this works and knowing it.</p>
+          branch until you merge it. Merging switches nothing on — the workflow
+          arrives with no schedule in it at all.</p>
           <div class="scroll-x">
             <table class="writes">
               <tr><th>File</th><th>Change</th><th>What reads it</th></tr>
@@ -498,18 +558,24 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
               <tr><td class="p">.claude/agents/review.md</td><td>new · from template</td><td>the independent reviewer</td></tr>
             </table>
           </div>
-          <div class="custody" style="background:var(--accent-wash);margin-top:16px">
-            <b style="color:var(--accent-2)">In plain terms.</b> Once a month this
-            can change <span id="plainEdit">3 files</span> in your repository and
-            open a pull request for you to merge. It can never touch
-            <span id="plainFrozen">4 protected paths</span>, can never change more
-            than 50 files at once, and can never edit its own instructions.
-          </div>
-          <div class="actions">
-            <button class="btn primary">Open pull request</button>
-            <button class="btn">Rehearse once</button>
-            <span class="grow"></span>
-            <span style="font-size:12.5px;color:var(--muted)">Schedule stays off until a rehearsal passes.</span>
+
+          <ol class="steps9">
+            <li><b>Open a pull request</b><span>Read the diff. The workflow in it can only be run by hand — there's no schedule in the file yet.</span>
+              <button class="btn primary" type="button">Open pull request</button></li>
+            <li><b>Merge it</b><span>GitHub will only let a workflow be triggered once it's on your default branch. That's why rehearsing comes after merging, not before.</span>
+              <button class="btn" type="button" disabled>Waiting for the pull request</button></li>
+            <li><b>Rehearse once</b><span>We trigger a single run and show you what came back — the proposal, the review, and whether it would have shipped.</span>
+              <button class="btn" type="button" disabled>Merge first</button></li>
+            <li><b>Switch on the schedule</b><span>A second one-line pull request adding the monthly trigger. Offered only once a rehearsal has passed.</span>
+              <button class="btn" type="button" disabled>Rehearse first</button></li>
+          </ol>
+
+          <div class="custody" style="background:var(--accent-wash);margin-top:18px">
+            <b style="color:var(--accent-2)">In plain terms.</b> Once switched on,
+            this can change <span id="plainEdit">3 files</span> in your repository
+            once a month and open a pull request for you to merge. It can never
+            touch <span id="plainFrozen">4 protected paths</span>, can never change
+            more than 50 files at once, and can never edit its own instructions.
           </div>
         </section>
 
@@ -542,6 +608,52 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
         </div>
       </div>
     </aside>
+  </div>
+  </div>
+
+  <!-- ================= runs view ================= -->
+  <div id="viewRuns" hidden>
+    <div class="runs-head">
+      <h2>What has happened so far</h2>
+      <span class="statpill"><i></i>Active · next check 1 Sep</span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="btn" type="button">Run now</button>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><div class="n">18</div><div class="l">generations</div><div class="h">since Mar 2025</div></div>
+      <div class="tile"><div class="n">9</div><div class="l">shipped</div><div class="h">reached a pull request</div></div>
+      <div class="tile"><div class="n">1</div><div class="l">waiting on you</div><div class="h">a disputed rule, below</div></div>
+      <div class="tile"><div class="n">~$41</div><div class="l">estimated spend</div><div class="h">our estimate, not your invoice — the harness doesn't record real cost yet</div></div>
+    </div>
+
+    <div class="esc">
+      <h3>Three models say one of your rules is wrong</h3>
+      <p><b>The rule:</b> <span class="mono">package.json</span> is frozen, including its
+      <span class="mono">scripts</span> field.</p>
+      <p><b>What they argue:</b> the test command only runs the counting game's suite, so
+      every proposal touching the spelling game passes untested. They can't fix it without
+      editing <span class="mono">scripts</span>.</p>
+      <p class="who">Raised over generations 15, 16 and 17 · Opus 5, GPT-5.2 and Gemini 3 Pro · two labs</p>
+      <div class="row">
+        <button class="btn primary" type="button">Change the rule</button>
+        <button class="btn" type="button">Keep it, and say why</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="eyebrow">Every run, including the quiet ones</span></div>
+      <div class="scroll-x">
+        <table class="runs" id="runsTable"></table>
+      </div>
+    </div>
+
+    <p class="provenance">Everything on this page is read from
+    <span class="mono">docs/generations/</span> and
+    <span class="mono">docs/escalations/ledger.json</span> in your own repository, using
+    your GitHub sign-in. We store a copy only to make this list load quickly — if the two
+    ever disagree, your repository is right. Delete your account and none of this is lost,
+    because it was never ours.</p>
   </div>
 </div>
 
@@ -792,6 +904,36 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
 
     $("#yaml").innerHTML = y.join("\n");
   }
+
+  /* ---------- runs view ---------- */
+  const RUNS = [
+    { g:18, d:"1 Aug 2026",  o:"shipped", oc:"shipped", by:"Opus 5",      s:"Larger tap targets on the counting game's number pad" },
+    { g:17, d:"1 Jul 2026",  o:"blocked", oc:"review refused", by:"GPT-5.2", s:"Rewrite the scoring loop — no test covered the change" },
+    { g:16, d:"1 Jun 2026",  o:"nothing", oc:"nothing proposed", by:"Gemini 3 Pro", s:"Said the last three changes need to be played before more are added" },
+    { g:15, d:"2 May 2026",  o:"shipped", oc:"shipped", by:"Grok 4.1",    s:"Read the word aloud when a child taps it" },
+    { g:14, d:"1 Apr 2026",  o:"blocked", oc:"guard stopped it", by:"Opus 4.8", s:"Tried to edit package.json scripts — refused before anything ran" },
+    { g:13, d:"1 Mar 2026",  o:"quiet",   oc:"no new model", by:"—",      s:"Nothing new had shipped that month. Cost nothing." }
+  ];
+
+  const runsTable = $("#runsTable");
+  runsTable.innerHTML =
+    "<tr><th>Gen</th><th>When</th><th>Outcome</th><th>Proposed by</th><th>What it tried</th></tr>" +
+    RUNS.map((r) =>
+      `<tr><td class="g">${r.g}</td><td class="g">${r.d}</td>` +
+      `<td><span class="out ${r.o}">${r.oc}</span></td>` +
+      `<td>${r.by}</td><td class="sum">${r.s}</td></tr>`
+    ).join("");
+
+  const tabI = $("#tabInstall"), tabR = $("#tabRuns");
+  function view(which) {
+    const runs = which === "runs";
+    $("#viewInstall").hidden = runs;
+    $("#viewRuns").hidden = !runs;
+    tabI.setAttribute("aria-selected", String(!runs));
+    tabR.setAttribute("aria-selected", String(runs));
+  }
+  tabI.addEventListener("click", () => view("install"));
+  tabR.addEventListener("click", () => view("runs"));
 
   render();
   go(2);

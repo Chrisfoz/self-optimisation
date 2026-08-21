@@ -307,46 +307,79 @@ for recurring autonomous LLM spend deserves a number before the first run,
 not after the first invoice. This is a first-class step, not an advanced
 fold.
 
-### Step 9 — Review and rehearse
+### Step 9 — Review, merge, rehearse, then switch on
 
-A diff of every file about to be written, then two buttons:
+The rehearsal is the friction-killer and the thing that turns this from a
+form into a product. `Portable-Harness-Design.md` §6 already names its output
+as the real deliverable: a short "what did I just install, what does it need,
+how do I try it once" page. The console can *be* that page, live, with the
+run's actual output in it.
 
-- **Open a pull request** — the console never pushes to the default branch
-- **Rehearse once** — `workflow_dispatch` a dry run and stream the result
+It takes three moves rather than two, because of a GitHub constraint that is
+easy to design straight past: **`workflow_dispatch` only works for a workflow
+file that is already on the default branch.** A workflow sitting in an
+unmerged pull request cannot be dispatched at all, so "open a PR, then
+rehearse before you merge" is not a thing the platform permits.
 
-The rehearsal is the friction-killer, and the thing that turns this from a
-form into a product. `Portable-Harness-Design.md` §6 already names its
-output as the real deliverable: a short "what did I just install, what does
-it need, how do I try it once" page. The console can *be* that page, live,
-with the run's actual output in it.
+Turn that constraint into the safety property instead:
+
+1. **Open a pull request** with all four files — but the workflow is written
+   with `on: workflow_dispatch` only, no `schedule:` block. The console never
+   pushes to the default branch itself.
+2. **Merge it.** Now the workflow exists on the default branch and can be
+   dispatched, but nothing runs on its own. Merging has switched nothing on.
+3. **Rehearse once** — the console dispatches a run, polls it, and shows what
+   came back.
+4. **Switch on the schedule** — only offered once a rehearsal has actually
+   passed, as a second one-line pull request adding the `schedule:` block.
+
+This makes "the schedule stays off until a rehearsal passes" literally true
+rather than aspirational: until step 4, there is no cron in the repository to
+fire. It also means an install that is abandoned halfway leaves behind a
+workflow that does nothing until someone asks it to, which is the right
+failure mode for a tool that spends money.
 
 ---
 
 ## 5. Phasing
 
+The console is the product, not a later front end onto a CLI. Everything a
+user does — connect, configure, store keys, open the PR, rehearse, read what
+happened — happens in the browser. The phases below are ordered so that each
+one is something a person can actually use, with the CLI dropped off the
+critical path entirely.
+
 | Phase | Deliverable | Depends on |
 |---|---|---|
-| **0** | `harness/lib/install.mjs` + `templates/` + `tests/lib/install.test.mjs` | nothing — buildable today |
-| **1** | `npx self-optimisation init` (CLI over phase 0) | phase 0 |
-| **2** | Reusable workflow + published package (§3) | phase 0 |
-| **3** | Static console on GitHub Pages: auth, tree picker, sealed-box secrets, writes a branch + PR | phases 0–2 |
-| **4** | Rehearsal + run history + cost meter (needs a GitHub App and a small backend) | phase 3 |
-| **5** | Multi-repo / org view; "draft my brief for me" (§7) | phase 4 |
+| **0** | `harness/lib/install.mjs` + `templates/` + tests — the generator, as pure functions | nothing — buildable today |
+| **1** | **The console.** Sign-in, repo picker, all nine steps, sealed-box secrets, the PR, dispatch, and the run view (§8.4) | phase 0 |
+| **2** | Reusable workflow + published package (§3) — install shrinks to a four-file write | phase 0 |
+| **3** | Escalation decisions from the console (§7), and the cost meter reading real spend | phase 1 |
+| **4** | "Draft my brief for me" (§7), multi-repo view | phase 1 |
+| — | `npx self-optimisation init` — the same generator behind a CLI, for people who prefer one | phase 0, whenever |
 
-Phase 1 ships real value to the people who can already use the harness, and
-de-risks every later phase, because by then the generator is proven by use.
-Phase 3 is the milestone the idea is actually about.
+**Phase 0 stays first, and it is not front-end work.** The console needs
+something to generate `project-adapter.yml`, two briefs and a workflow from
+nine answers, and that thing belongs in `harness/lib/install.mjs` as pure
+functions with a test file — not inside a browser app where `npm test` can't
+reach it and where the invariants in §2.1 can't be checked. It is perhaps two
+days of work and everything else stands on it. Building the console first and
+the generator inside it is the one sequencing mistake worth naming twice.
 
-**Phase 3 needs almost no backend.** Everything except the OAuth handshake
-works from a static page: the GitHub REST API is CORS-enabled for
-browser-side calls, secret encryption is client-side, and file writes are
-`PUT /repos/{owner}/{repo}/contents/{path}`. The exception is real and worth
-stating: GitHub's OAuth token endpoint does not send CORS headers, so the
-code-for-token exchange needs a server. That's roughly fifty lines in a
-serverless function which holds no database and no user secret — it is not a
-backend in the sense that matters for §2.2. (A dev-preview can skip even
-that by accepting a fine-grained PAT paste, which is fine for us and wrong
-for the target user.)
+**Phase 1 needs almost no backend**, which is what makes this ordering
+affordable. The GitHub REST API is CORS-enabled for browser calls, so file
+writes (`PUT /repos/{owner}/{repo}/contents/{path}`), secret encryption
+(client-side), workflow dispatch (`POST .../actions/workflows/{file}/dispatches`)
+and run reads all happen from the page. The one thing that could not was the
+OAuth handshake — GitHub's token endpoint sends no CORS headers — and §8
+resolves that: Supabase Auth performs the exchange, so we write no auth
+backend and hold no client secret of our own.
+
+**What the user still supplies, and always will:** their own API keys. That
+is not friction to be designed away — it is the property that keeps their
+spend on their account, their code under their terms with each lab, and this
+product free of any credential worth stealing. The console's job is to make
+supplying them take one paste per lab and explain what happens to each one.
 
 ---
 
@@ -488,32 +521,63 @@ Postgres **generated columns** derived from `config_cache`, not stored
 alongside it. They stay indexable and queryable for a listing view, and they
 cannot drift from the cache they came from.
 
-### 8.4 The open question: who writes `runs`
+### 8.4 Decided: run history comes out of the repository
 
-A run happens inside the user's own GitHub Actions. For that run to appear in
-their dashboard, something has to write the row, and each option costs
-something different:
+The earlier draft of this section listed three ways to get a run into the
+dashboard and recommended the least-credentialed one. Reading the harness
+settles it more cleanly than any of them, because **the data already exists,
+already structured, already in the user's repository.**
 
-1. **Service-role key as a repository secret.** Simple, and wrong: that key is
-   unrestricted across every user's data, sitting in thousands of repos we
-   don't control. Rejected.
-2. **A per-installation scoped token**, minted by the console and exchanged at
-   an Edge Function that writes the row. Sound, but it puts a credential of
-   ours into every user's repo — the exact shape §2.2 spent its effort
-   avoiding, pointed the other way.
-3. **Don't write from the workflow at all.** The console reads run history
-   from the GitHub Actions API using the user's own session, and `runs` is
-   populated on read. No new credential exists anywhere.
+`harness/lib/orchestrator.mjs`'s `writeAttemptRecord()` writes
+`docs/generations/gen-N/attempts.json` on every run, and it already contains
+almost exactly the dashboard's row:
 
-**Recommend 3**, with 2 as the upgrade if the dashboard turns out to need
-speed more than it needs the simplicity. Note that 3 keeps the whole system
-free of any credential we issue, which is the property that makes the privacy
-policy short.
+| `attempts.json` field | Dashboard column |
+|---|---|
+| `generation`, `date` | which run, when |
+| `outcome` | shipped / blocked / nothing proposed |
+| `suggestModel`, `fanOut` | who proposed, out of how many |
+| `implementModel`, `implementedBy`, `selfImplemented` | who wrote the edits |
+| `proposalSummary` | the one-line "what it tried" |
+| `scope`, `scopeReason` | why it was allowed to be ambitious or not |
+| `attempts` | the refine loop, attempt by attempt |
+| `escalations` | what it argued was wrong |
 
-One related rule: Supabase hands back a GitHub `provider_token` on sign-in.
-Use it in the session and do not persist it — a stored provider token is a
-credential of the user's that we'd then be holding, which is the thing §2.2
-exists to prevent.
+`docs/escalations/ledger.json` (`harness/lib/escalations.mjs`) is the same
+story for §7's decision surface. Both are ordinary files the user can read
+without us.
+
+So the console reads run history with `GET /repos/{owner}/{repo}/contents/...`
+using the signed-in user's own token, exactly as it reads everything else.
+Consequences worth stating plainly:
+
+- **No credential of ours ever enters a user's repository.** Not a
+  service-role key, not a scoped token, not a webhook secret. Nothing to
+  rotate, nothing to leak, nothing to explain in the privacy policy.
+- **Supabase's `runs` table becomes a listing cache**, populated on read so a
+  dashboard with twelve installations doesn't make forty API calls to render.
+  The repository stays the source of truth, exactly as `config_cache` does
+  for configuration (§8.3). If the cache and the repo disagree, the repo
+  wins and the cache is wrong.
+- **A user who deletes their account loses nothing.** Their history was never
+  ours; it's in their repo, in git, in files they can read.
+
+Two gaps this exposes, both small and both in the harness rather than the
+console:
+
+1. **No cost is recorded.** `attempts.json` has no token counts or spend, so
+   `runs.estimated_cost_usd` can only ever hold the console's own estimate
+   from §4.8 until `writeAttemptRecord()` records what a run actually used.
+   Worth adding — a budget meter showing estimates rather than actuals is the
+   kind of number people stop trusting.
+2. **No pull request link.** The run record doesn't know what PR it became.
+   The console can find it by branch name, but having the orchestrator write
+   it down is one line and removes a guess.
+
+One related rule that does not change: Supabase hands back a GitHub
+`provider_token` on sign-in. Use it in the session and do not persist it — a
+stored provider token is a credential of the user's that we would then be
+holding, which is the thing §2.2 exists to prevent.
 
 ---
 
@@ -524,29 +588,44 @@ exists to prevent.
    and gives each its own step; if only one was meant, the other step
    shrinks or merges.
 2. **Who is the target user, precisely?** "Non-technical" spans a maintainer
-   who dislikes YAML and someone who has never opened a pull request. The
-   first is served by phase 3. The second needs phase 4's rehearsal and
-   digest pages, plus considerably more hand-holding at Step 5.
-3. **Hosted at whose expense?** Phases 0–3 cost nothing to run. Phase 4's
-   GitHub App has a real bill. Worth deciding whether this is a free adjunct
-   to an open-source harness or something else, before phase 4 rather than
-   during.
+   who dislikes YAML and someone who has never opened a pull request. Phase 1
+   serves the first well. The second is blocked on step 9 requiring them to
+   merge a pull request before they can rehearse — which is a real thing to
+   solve in the copy, not with more UI.
+3. **What is the free tier?** The bill is no longer hypothetical: the
+   Supabase project is $10/month before a single user signs in, and it grows
+   with sign-ins rather than with usage, since we run none of the compute. A
+   free tier is affordable for a long time. Deciding *whether* this is free
+   forever, and what changes if it isn't, is easier now than after people
+   depend on it.
 4. **Does the console configure one repo or many?** Everything above assumes
-   one. `project-adapter.yml` is per-repo by design, so multi-repo is a
-   listing view over N installs, not a schema change — but it changes the
-   phase-4 data model.
+   one. `project-adapter.yml` is per-repo by design and the schema already
+   supports N installations per user, so multi-repo is a listing view rather
+   than a migration — but nothing in §4 is designed for it yet.
 
 ---
 
 ## 10. Recommendation
 
-Build phase 0 next, regardless of what happens to the console. It is the top
-unbuilt item in the README's status table, it's pure functions with a test
-file, and it converts "copy this folder and hand-fill 180 lines" into one
-command. Phase 1 falls out of it in an afternoon.
+Build `harness/lib/install.mjs` next — the generator, as pure functions with
+a test file. It is the top unbuilt item in the README's status table, it is
+perhaps two days, and every screen in the console is a caller of it. Building
+the console first and letting the generator grow inside it is the one
+sequencing mistake that costs real rework, because the invariants in §2.1
+stop being testable the moment they live in a browser app.
 
-Put the console on the roadmap at phase 3, after the reusable workflow (§3)
-makes the install a three-file write instead of a forty-file vendor. Design
-it to §2.2's rule — keys go browser → GitHub, never through us — and to
-§2.3's rule — a control nothing reads is rendered as such — and it will be a
-front end this harness can stand behind rather than one that oversells it.
+Then build the console as phase 1, end to end, and skip the CLI until someone
+asks for it. Three rules make it a front end this harness can stand behind
+rather than one that oversells it:
+
+- **Keys go browser → GitHub, never through us** (§2.2). The database has a
+  `CHECK` constraint enforcing it, and the privacy policy is short because
+  of it.
+- **A control nothing reads is rendered as such** (§2.3). `cadence`,
+  `test_commands` and `approval_class` are still consumed by nothing; a
+  cheerful dropdown over a dead field is how a tool loses a user's trust in
+  one step.
+- **The repository is the truth; we hold a cache** (§8.3, §8.4). Config,
+  history and escalations all live in the user's repo as files they can read
+  without us. That is what makes deleting an account cost them nothing, and
+  it is worth more to this product than any dashboard feature.
