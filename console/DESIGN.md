@@ -239,7 +239,7 @@ standalone CLIs today, so toggling them on means the generated workflow
 gains a job that calls them, which is exactly the missing wiring the README
 names.
 
-*Open question — see §8: "the 9 modules" may mean these stages or may mean
+*Open question — see §9: "the 9 modules" may mean these stages or may mean
 the nine provider labs. The console needs both steps regardless; this
 section assumes stages and Step 2 covers labs.*
 
@@ -431,7 +431,93 @@ of that is unbuilt. The console is where it goes.
 
 ---
 
-## 8. Open questions
+## 8. The product database
+
+The repository is the open harness; the console is a product built on it, and
+a product needs to know who is asking. That's a Supabase project —
+`self-optimisation-console`, Postgres 17, ap-southeast-2 — holding identity
+and the minimum around it.
+
+### 8.1 It closes §5's one real gap
+
+§5 said everything in phase 3 works from a static page except the OAuth
+handshake, because GitHub's token endpoint sends no CORS headers, so the
+code-for-token exchange needs a server. Supabase Auth *is* that server, with
+GitHub as the provider. We write no auth backend, store no client secret of
+our own, and get session management for free.
+
+Be honest about what this changes, though. Phase 3 was "static page, no
+accounts, nothing of yours on our side." It is now "static page, hosted
+identity, a row per user." That is the first thing in this design we operate
+rather than borrow, and §6.4's warning — that a hosted product brings a
+support burden and an uptime expectation — starts applying at phase 3 rather
+than phase 4. Worth taking on. Not worth taking on silently.
+
+### 8.2 What it holds
+
+| Table | One row per | Why it exists |
+|---|---|---|
+| `profiles` | signed-in user | GitHub login, display name, avatar. Email stays in `auth.users` rather than being duplicated. |
+| `installations` | configured repository | Which repo, what state it's in, and a **cache** of its `project-adapter.yml`. |
+| `runs` | generation | Outcome, which model proposed, the PR link, estimated cost — including runs that shipped nothing. |
+| `escalations` | disputed rule | §7's decision surface: an agent argues a rule is wrong, a person decides. |
+| `config_writes` | console write | Append-only: what we wrote to a repository, and who asked. |
+
+### 8.3 What it must never hold, and how that's enforced
+
+Three things, per §2.2: **no provider API keys**, **no source code, diffs or
+prompts**, and **not the truth about a project's configuration** — that stays
+in the repo's `project-adapter.yml`; `installations.config_cache` is a render
+cache carrying the blob sha it was read from, so we can always tell when it
+went stale.
+
+Two mechanisms rather than a convention:
+
+- **Row-level security on all five tables**, scoped to the owning user, with
+  no public or shared read path anywhere in the schema. `config_writes` has
+  select and insert policies and deliberately no update or delete policy, so
+  an audit row cannot be rewritten by the person it records.
+- **A `CHECK` constraint** on `config_cache` calling `looks_like_secret()`,
+  which rejects a write whose JSON looks like it carries a credential. It
+  rejects rather than scrubs, so a console bug that starts sending keys fails
+  loudly on the first attempt instead of quietly accumulating them. A gate
+  that cannot fail is not a gate (`learning/01-principles.md`, 13).
+
+One smaller call worth recording: `cadence_cron` and `approval_class` are
+Postgres **generated columns** derived from `config_cache`, not stored
+alongside it. They stay indexable and queryable for a listing view, and they
+cannot drift from the cache they came from.
+
+### 8.4 The open question: who writes `runs`
+
+A run happens inside the user's own GitHub Actions. For that run to appear in
+their dashboard, something has to write the row, and each option costs
+something different:
+
+1. **Service-role key as a repository secret.** Simple, and wrong: that key is
+   unrestricted across every user's data, sitting in thousands of repos we
+   don't control. Rejected.
+2. **A per-installation scoped token**, minted by the console and exchanged at
+   an Edge Function that writes the row. Sound, but it puts a credential of
+   ours into every user's repo — the exact shape §2.2 spent its effort
+   avoiding, pointed the other way.
+3. **Don't write from the workflow at all.** The console reads run history
+   from the GitHub Actions API using the user's own session, and `runs` is
+   populated on read. No new credential exists anywhere.
+
+**Recommend 3**, with 2 as the upgrade if the dashboard turns out to need
+speed more than it needs the simplicity. Note that 3 keeps the whole system
+free of any credential we issue, which is the property that makes the privacy
+policy short.
+
+One related rule: Supabase hands back a GitHub `provider_token` on sign-in.
+Use it in the session and do not persist it — a stored provider token is a
+credential of the user's that we'd then be holding, which is the thing §2.2
+exists to prevent.
+
+---
+
+## 9. Open questions
 
 1. **"9 modules" — labs or stages?** There are exactly nine providers in
    `harness/providers/`, and roughly nine pipeline stages. §4 assumes both
@@ -452,7 +538,7 @@ of that is unbuilt. The console is where it goes.
 
 ---
 
-## 9. Recommendation
+## 10. Recommendation
 
 Build phase 0 next, regardless of what happens to the console. It is the top
 unbuilt item in the README's status table, it's pure functions with a test
