@@ -1,0 +1,798 @@
+<!-- Clickable wireframe for Console-Design.md §4. Authored as an Artifact body
+     fragment: no <html>/<head>/<body> wrapper — those are added at publish time.
+     Open it locally by pasting into a minimal HTML skeleton if needed. -->
+<title>Harness Install Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;450;600;700&display=swap">
+
+<style>
+:root {
+  --ground:   #EDEFF4;
+  --surface:  #FFFFFF;
+  --surface-2:#F5F6FA;
+  --line:     #D8DBE6;
+  --line-soft:#E6E8F0;
+  --ink:      #14161F;
+  --ink-2:    #3D4254;
+  --muted:    #6A7089;
+  --accent:   #3F4E9E;
+  --accent-2: #2E3B7D;
+  --accent-wash:#E7E9F6;
+  --live:     #1E7A4B;
+  --live-wash:#E2F1E8;
+  --reserved: #767C8E;
+  --frozen:   #A8302F;
+  --frozen-wash:#F7E5E4;
+  --warn:     #8A6100;
+  --warn-wash:#F8EEDA;
+  --shadow:   0 1px 2px rgba(20,22,31,.06), 0 8px 24px -12px rgba(20,22,31,.18);
+  --radius:   6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:   #101219;
+    --surface:  #181B25;
+    --surface-2:#1F222E;
+    --line:     #2E3242;
+    --line-soft:#252936;
+    --ink:      #E8EAF2;
+    --ink-2:    #BFC4D6;
+    --muted:    #8990A8;
+    --accent:   #8A97E8;
+    --accent-2: #A6B0F0;
+    --accent-wash:#232741;
+    --live:     #5FC08C;
+    --live-wash:#17301F;
+    --reserved: #7E859B;
+    --frozen:   #E88482;
+    --frozen-wash:#331D1D;
+    --warn:     #DFAE4B;
+    --warn-wash:#302713;
+    --shadow:   0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:   #101219;
+  --surface:  #181B25;
+  --surface-2:#1F222E;
+  --line:     #2E3242;
+  --line-soft:#252936;
+  --ink:      #E8EAF2;
+  --ink-2:    #BFC4D6;
+  --muted:    #8990A8;
+  --accent:   #8A97E8;
+  --accent-2: #A6B0F0;
+  --accent-wash:#232741;
+  --live:     #5FC08C;
+  --live-wash:#17301F;
+  --reserved: #7E859B;
+  --frozen:   #E88482;
+  --frozen-wash:#331D1D;
+  --warn:     #DFAE4B;
+  --warn-wash:#302713;
+  --shadow:   0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+code, .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.eyebrow {
+  font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---------- page frame ---------- */
+
+.wrap { max-width: 1240px; margin: 0 auto; padding: 24px 20px 64px; }
+
+.masthead {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px;
+  padding-bottom: 16px; margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.masthead h1 {
+  margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -.015em;
+}
+.masthead .sub { color: var(--muted); font-size: 13.5px; }
+.masthead .spacer { flex: 1 1 40px; }
+
+.wireframe-note {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: var(--warn-wash); border: 1px solid var(--line);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius); padding: 10px 14px; margin-bottom: 20px;
+  font-size: 13.5px; color: var(--ink-2);
+}
+.wireframe-note strong { color: var(--warn); }
+
+/* ---------- three-column console ---------- */
+
+.console {
+  display: grid;
+  grid-template-columns: 232px minmax(0,1fr) 340px;
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 1080px) { .console { grid-template-columns: 200px minmax(0,1fr); } .col-out { grid-column: 1 / -1; } }
+@media (max-width: 760px)  { .console { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.panel-head {
+  padding: 12px 16px; border-bottom: 1px solid var(--line-soft);
+  display: flex; align-items: center; gap: 10px;
+}
+.panel-body { padding: 16px; }
+
+/* ---------- step rail ---------- */
+
+.rail { position: sticky; top: 16px; }
+.rail ol { list-style: none; margin: 0; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.rail button {
+  width: 100%; display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: baseline;
+  background: none; border: 0; border-radius: 4px; padding: 7px 9px;
+  font: inherit; font-size: 13.5px; color: var(--ink-2); text-align: left; cursor: pointer;
+}
+.rail button:hover { background: var(--surface-2); }
+.rail button[aria-current="true"] { background: var(--accent-wash); color: var(--accent-2); font-weight: 600; }
+.rail .num {
+  font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.rail button[aria-current="true"] .num { color: var(--accent); }
+.rail .done .num::after { content: "✓"; }
+
+/* ---------- step content ---------- */
+
+.step { display: none; }
+.step.active { display: block; }
+.step h2 { margin: 2px 0 4px; font-size: 20px; font-weight: 700; letter-spacing: -.015em; text-wrap: balance; }
+.step .lede { margin: 0 0 18px; color: var(--muted); font-size: 14px; max-width: 62ch; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: "IBM Plex Sans Condensed", sans-serif; font-weight: 600;
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
+  padding: 2px 7px; border-radius: 3px; white-space: nowrap;
+}
+.badge.live     { background: var(--live-wash);   color: var(--live); }
+.badge.reserved { background: var(--surface-2);   color: var(--reserved); border: 1px dashed var(--line); }
+.badge.frozen   { background: var(--frozen-wash); color: var(--frozen); }
+
+.field-note {
+  margin-top: 10px; font-size: 12.5px; color: var(--muted);
+  display: flex; gap: 7px; align-items: baseline;
+}
+
+/* provider grid */
+.labs { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px,1fr)); gap: 10px; }
+.lab {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 11px 12px; background: var(--surface); cursor: pointer;
+  display: flex; flex-direction: column; gap: 7px; text-align: left; font: inherit; color: inherit;
+}
+.lab:hover { border-color: var(--accent); }
+.lab[data-on="true"] { border-color: var(--accent); background: var(--accent-wash); }
+.lab .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lab .name { font-weight: 600; font-size: 14px; }
+.lab .env { font-size: 11px; color: var(--muted); }
+.lab .key {
+  font-family: "IBM Plex Mono", monospace; font-size: 11.5px;
+  border: 1px solid var(--line); border-radius: 4px; padding: 5px 7px;
+  background: var(--surface-2); color: var(--muted);
+}
+.lab[data-on="true"] .key { color: var(--ink-2); }
+.tick {
+  width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--line);
+  display: grid; place-items: center; font-size: 11px; color: transparent; flex: none;
+  background: var(--surface);
+}
+.lab[data-on="true"] .tick { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.custody {
+  margin-top: 14px; padding: 11px 13px; border-radius: var(--radius);
+  background: var(--live-wash); border: 1px solid var(--line);
+  font-size: 13px; color: var(--ink-2);
+}
+.custody b { color: var(--live); }
+
+/* stage list */
+.stages { display: flex; flex-direction: column; gap: 6px; }
+.stage {
+  display: grid; grid-template-columns: 18px 1fr auto; gap: 11px; align-items: center;
+  border: 1px solid var(--line-soft); border-radius: var(--radius);
+  padding: 9px 12px; background: var(--surface); font: inherit; color: inherit;
+  text-align: left; cursor: pointer;
+}
+.stage:hover { border-color: var(--line); background: var(--surface-2); }
+.stage[data-on="true"] { border-color: var(--accent); }
+.stage[data-locked="true"] { cursor: not-allowed; background: var(--surface-2); }
+.stage .t { font-weight: 600; font-size: 13.5px; }
+.stage .d { font-size: 12.5px; color: var(--muted); }
+
+/* file tree */
+.tree { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
+.tnode {
+  display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
+  padding: 4px 8px; border-radius: 4px; border: 1px solid transparent;
+  cursor: pointer; background: none; width: 100%; text-align: left; font: inherit; color: var(--ink-2);
+}
+.tnode:hover { background: var(--surface-2); border-color: var(--line-soft); }
+.tnode .path { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tnode[data-state="edit"]   { background: var(--accent-wash); color: var(--accent-2); }
+.tnode[data-state="create"] { background: var(--live-wash);   color: var(--live); }
+.tnode[data-state="frozen"] { background: var(--frozen-wash); color: var(--frozen); }
+.tstate {
+  font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+}
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 12px; font-size: 12px; color: var(--muted); }
+.legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 5px; }
+
+/* generic form bits */
+label.fl { display: block; font-weight: 600; font-size: 13px; margin-bottom: 5px; }
+textarea, input[type="text"], input[type="number"], select {
+  width: 100%; font: inherit; font-size: 13.5px; color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 9px 11px;
+}
+textarea { min-height: 84px; resize: vertical; line-height: 1.5; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.choices { display: flex; flex-direction: column; gap: 8px; }
+.choice {
+  display: grid; grid-template-columns: 16px 1fr; gap: 11px; align-items: start;
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 11px 13px;
+  cursor: pointer; background: var(--surface); font: inherit; color: inherit; text-align: left;
+}
+.choice[data-on="true"] { border-color: var(--accent); background: var(--accent-wash); }
+.choice .t { font-weight: 600; font-size: 13.5px; }
+.choice .d { font-size: 12.5px; color: var(--muted); }
+.dot {
+  width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--surface); margin-top: 3px;
+}
+.choice[data-on="true"] .dot { border: 4px solid var(--accent); background: var(--surface); }
+
+.slider-row { display: grid; grid-template-columns: 1fr 62px; gap: 14px; align-items: center; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+.meter {
+  margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 13px 15px; background: var(--surface-2);
+}
+.meter .big {
+  font-family: "IBM Plex Mono", monospace; font-size: 26px; font-weight: 600;
+  letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--ink);
+}
+
+table.writes { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.writes th, table.writes td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+table.writes th { font-family: "IBM Plex Sans Condensed", sans-serif; text-transform: uppercase; letter-spacing: .07em; font-size: 10.5px; color: var(--muted); font-weight: 600; }
+table.writes td.p { font-family: "IBM Plex Mono", monospace; font-size: 12px; white-space: nowrap; }
+.scroll-x { overflow-x: auto; }
+
+.actions { display: flex; gap: 10px; align-items: center; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+.btn {
+  font: inherit; font-size: 13.5px; font-weight: 600; border-radius: var(--radius);
+  padding: 8px 15px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
+:root[data-theme="dark"] .btn.primary, :root:not([data-theme="light"]) .btn.primary { color: #12141C; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .btn.primary { color: #fff; } }
+.actions .grow { flex: 1; }
+
+/* ---------- output column ---------- */
+
+.col-out .panel + .panel { margin-top: 14px; }
+pre.yaml {
+  margin: 0; padding: 14px 16px; overflow-x: auto;
+  font-family: "IBM Plex Mono", monospace; font-size: 11.5px; line-height: 1.65;
+  color: var(--ink-2); background: var(--surface);
+  max-height: 460px; overflow-y: auto;
+}
+pre.yaml .k { color: var(--accent); }
+pre.yaml .c { color: var(--muted); }
+pre.yaml .r { color: var(--reserved); font-style: italic; }
+.filechip {
+  display: inline-flex; align-items: center; gap: 6px; font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px; padding: 3px 8px; border-radius: 3px; background: var(--surface-2);
+  border: 1px solid var(--line-soft); color: var(--ink-2);
+}
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <h1>Self-Optimisation · Install console</h1>
+    <span class="sub mono">Chrisfoz/carrot-games</span>
+    <span class="spacer"></span>
+    <span class="eyebrow">Wireframe · Console-Design.md §4</span>
+  </header>
+
+  <div class="wireframe-note">
+    <span><strong>Not a working product.</strong> A clickable sketch of the nine
+    steps in <span class="mono">Console-Design.md</span>. Toggles on steps 2, 3,
+    4, 6, 7 and 8 really do update the generated <span class="mono">project-adapter.yml</span>
+    on the right — that live "here is exactly what we will write to your repo"
+    panel is the point of the design, not a garnish.</span>
+  </div>
+
+  <div class="console">
+
+    <!-- ============ step rail ============ -->
+    <nav class="panel rail" aria-label="Install steps">
+      <ol id="rail"></ol>
+    </nav>
+
+    <!-- ============ main ============ -->
+    <main class="panel">
+      <div class="panel-body">
+
+        <!-- 1 -->
+        <section class="step" data-step="1">
+          <p class="eyebrow">Step 1 of 9</p>
+          <h2>Connect your repository</h2>
+          <p class="lede">We read your file tree and your existing configuration.
+          Nothing is written until you approve a pull request on the last step.</p>
+          <div class="chips" style="margin-bottom:14px">
+            <span class="filechip">✓ Chrisfoz/carrot-games</span>
+            <span class="filechip">default branch: main</span>
+            <span class="filechip">Node · 41 files</span>
+          </div>
+          <table class="writes">
+            <tr><th>Permission</th><th>Why</th></tr>
+            <tr><td class="p">contents: write</td><td>open a branch with your config on it</td></tr>
+            <tr><td class="p">secrets: write</td><td>store your API keys, encrypted in your browser</td></tr>
+            <tr><td class="p">workflows: write</td><td>add the scheduled run — requested only when you reach step 6</td></tr>
+          </table>
+          <p class="field-note">No existing <span class="mono">project-adapter.yml</span> found — starting from defaults.</p>
+        </section>
+
+        <!-- 2 -->
+        <section class="step" data-step="2">
+          <p class="eyebrow">Step 2 of 9</p>
+          <h2>Which labs get a seat <span class="badge live">live</span></h2>
+          <p class="lede">Each new frontier model gets one turn to propose an
+          improvement. Pick only the labs you hold a key for — two is a normal
+          start, nine is not required.</p>
+          <div class="labs" id="labs"></div>
+          <div class="custody">
+            <b>Your keys never reach our servers.</b> Each one is encrypted in
+            this browser tab with your repository's own public key and sent
+            straight to GitHub Actions Secrets. We can't read them, and we have
+            nothing to lose if we're breached.
+          </div>
+        </section>
+
+        <!-- 3 -->
+        <section class="step" data-step="3">
+          <p class="eyebrow">Step 3 of 9</p>
+          <h2>Which stages run</h2>
+          <p class="lede">Every stage you switch off is a job the generated
+          workflow simply doesn't contain. Two can't be switched off at all.</p>
+          <div class="stages" id="stages"></div>
+        </section>
+
+        <!-- 4 -->
+        <section class="step" data-step="4">
+          <p class="eyebrow">Step 4 of 9</p>
+          <h2>What may change, what may never <span class="badge live">live</span></h2>
+          <p class="lede">Click a row to cycle it. Anything left unmarked can't
+          be edited — this is an allowlist, so silence means no. The dangerous
+          paths are frozen for you already; you'd have to unfreeze them
+          deliberately.</p>
+          <div class="legend">
+            <span><i style="background:var(--accent)"></i>may edit</span>
+            <span><i style="background:var(--live)"></i>may create here</span>
+            <span><i style="background:var(--frozen)"></i>never touch</span>
+            <span><i style="background:var(--line)"></i>unmarked — not editable</span>
+          </div>
+          <div class="tree" id="tree"></div>
+          <p class="field-note" id="treeSummary"></p>
+        </section>
+
+        <!-- 5 -->
+        <section class="step" data-step="5">
+          <p class="eyebrow">Step 5 of 9</p>
+          <h2>What "better" means here <span class="badge live">live</span></h2>
+          <p class="lede">This becomes the agent's brief, and it is sent whole
+          as the suggestion stage's entire system prompt. It's the one thing no
+          template can guess — and the field most likely to get a two-word
+          answer, so the prompts below are deliberately specific.</p>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div>
+              <label class="fl" for="goal">Meta-goal — what is this project for, and what would make it better?</label>
+              <textarea id="goal" spellcheck="false">Two educational HTML games for a 6-year-old. Better means: more likely to be played again tomorrow. Fewer clicks to start, clearer feedback when a child gets something right, and nothing that needs a parent to explain it.</textarea>
+            </div>
+            <div>
+              <label class="fl" for="cons">Constraints — what must stay true no matter what?</label>
+              <textarea id="cons" spellcheck="false">Runs offline from a single HTML file. No build step, no dependencies, no network calls. No text a six-year-old can't read aloud. Nothing that collects data about the child.</textarea>
+            </div>
+            <div>
+              <label class="fl" for="hints">Hints — the quality bar, house style, known sharp edges</label>
+              <textarea id="hints" spellcheck="false">Prefer one clear change over three speculative ones. The scoring code has been rewritten twice and broken twice; leave it alone unless the proposal is about scoring. Touch-first: it is played on a tablet, not a laptop.</textarea>
+            </div>
+          </div>
+          <p class="field-note">Written to <span class="mono">.claude/agents/improve.md</span></p>
+        </section>
+
+        <!-- 6 -->
+        <section class="step" data-step="6">
+          <p class="eyebrow">Step 6 of 9</p>
+          <h2>How often it runs</h2>
+          <p class="lede">The design's premise is that a model release is the
+          trigger, not the calendar — the schedule is just how often we check
+          whether one has happened.</p>
+          <div class="choices" id="cadence"></div>
+          <p class="field-note">Written to <span class="mono">on.schedule.cron</span> in the
+          workflow <span class="badge live">live</span>, and mirrored into
+          <span class="mono">cadence.schedule_cron</span> <span class="badge reserved">saved, not yet wired</span></p>
+        </section>
+
+        <!-- 7 -->
+        <section class="step" data-step="7">
+          <p class="eyebrow">Step 7 of 9</p>
+          <h2>Who says yes</h2>
+          <p class="lede">Independent review and the guard run either way. This
+          decides only what happens after they both pass.</p>
+          <div class="choices" id="approval"></div>
+        </section>
+
+        <!-- 8 -->
+        <section class="step" data-step="8">
+          <p class="eyebrow">Step 8 of 9</p>
+          <h2>What it may spend <span class="badge live">live</span></h2>
+          <p class="lede">A ceiling on how many newly released models one run may
+          fan out to. You're signing up for recurring spend on your own API keys,
+          so here's the number before the first run rather than after it.</p>
+          <div class="slider-row">
+            <input type="range" id="fanout" min="1" max="9" value="4" aria-label="Maximum models per run">
+            <span class="mono" id="fanoutVal" style="font-size:20px;font-variant-numeric:tabular-nums">4</span>
+          </div>
+          <div class="meter">
+            <p class="eyebrow" style="margin:0 0 2px">Estimated ceiling per run</p>
+            <div class="big" id="cost">$4.80</div>
+            <p style="margin:6px 0 0;font-size:12.5px;color:var(--muted)" id="costNote"></p>
+          </div>
+        </section>
+
+        <!-- 9 -->
+        <section class="step" data-step="9">
+          <p class="eyebrow">Step 9 of 9</p>
+          <h2>Review, then rehearse once</h2>
+          <p class="lede">Four files, one pull request, nothing on your default
+          branch. Rehearsing before the schedule turns on is the difference
+          between believing this works and knowing it.</p>
+          <div class="scroll-x">
+            <table class="writes">
+              <tr><th>File</th><th>Change</th><th>What reads it</th></tr>
+              <tr><td class="p">project-adapter.yml</td><td>new · 96 lines</td><td>every harness script</td></tr>
+              <tr><td class="p">.github/workflows/self-improve.yml</td><td>new · 22 lines</td><td>GitHub Actions</td></tr>
+              <tr><td class="p">.claude/agents/improve.md</td><td>new · from step 5</td><td>the suggestion stage</td></tr>
+              <tr><td class="p">.claude/agents/review.md</td><td>new · from template</td><td>the independent reviewer</td></tr>
+            </table>
+          </div>
+          <div class="custody" style="background:var(--accent-wash);margin-top:16px">
+            <b style="color:var(--accent-2)">In plain terms.</b> Once a month this
+            can change <span id="plainEdit">3 files</span> in your repository and
+            open a pull request for you to merge. It can never touch
+            <span id="plainFrozen">4 protected paths</span>, can never change more
+            than 50 files at once, and can never edit its own instructions.
+          </div>
+          <div class="actions">
+            <button class="btn primary">Open pull request</button>
+            <button class="btn">Rehearse once</button>
+            <span class="grow"></span>
+            <span style="font-size:12.5px;color:var(--muted)">Schedule stays off until a rehearsal passes.</span>
+          </div>
+        </section>
+
+        <div class="actions" id="nav">
+          <button class="btn" id="back">Back</button>
+          <button class="btn primary" id="next">Next</button>
+          <span class="grow"></span>
+          <span class="eyebrow" id="progress"></span>
+        </div>
+      </div>
+    </main>
+
+    <!-- ============ output ============ -->
+    <aside class="col-out">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="eyebrow">Will be written to your repo</span>
+          <span class="spacer" style="flex:1"></span>
+          <span class="filechip">project-adapter.yml</span>
+        </div>
+        <pre class="yaml" id="yaml"></pre>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><span class="eyebrow">Honesty ledger</span></div>
+        <div class="panel-body" style="font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:9px">
+          <div><span class="badge live">live</span> a shipped script reads this today.</div>
+          <div><span class="badge reserved">saved, not yet wired</span> stored for
+          forward-compatibility; nothing consumes it. Rendered differently on
+          purpose — a control that looks on but isn't is worse than no control.</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const STEPS = [
+    "Connect", "Labs", "Stages", "Boundaries", "Meta-goal",
+    "Cadence", "Approval", "Budget", "Review"
+  ];
+
+  const LABS = [
+    { id: "anthropic", name: "Anthropic", env: "ANTHROPIC_API_KEY", on: true,  cost: 1.20 },
+    { id: "openai",    name: "OpenAI",    env: "OPENAI_API_KEY",    on: true,  cost: 1.20 },
+    { id: "google",    name: "Google",    env: "GEMINI_API_KEY",    on: true,  cost: 0.90 },
+    { id: "moonshot",  name: "Moonshot",  env: "MOONSHOT_API_KEY",  on: false, cost: 0.45 },
+    { id: "deepseek",  name: "DeepSeek",  env: "DEEPSEEK_API_KEY",  on: false, cost: 0.30 },
+    { id: "qwen",      name: "Qwen",      env: "DASHSCOPE_API_KEY", on: false, cost: 0.35 },
+    { id: "xai",       name: "xAI",       env: "XAI_API_KEY",       on: true,  cost: 1.10 },
+    { id: "meta",      name: "Meta",      env: "LLAMA_API_KEY",     on: false, cost: 0.40 },
+    { id: "zai",       name: "Z.ai",      env: "ZAI_API_KEY",       on: false, cost: 0.30 }
+  ];
+
+  const STAGES = [
+    { id: "detect",   t: "Watch for new model releases", d: "Checks each lab's catalogue against what it saw last run", on: true },
+    { id: "propose",  t: "Fan out for proposals",        d: "Every newly released model gets one turn to suggest a change", on: true },
+    { id: "rank",     t: "Rank proposals blind",         d: "Only runs when more than one lab proposed; authors withheld", on: true },
+    { id: "implement",t: "Implement the winner",         d: "Exact search-and-replace edits, applied all-or-nothing", on: true },
+    { id: "review",   t: "Independent review",           d: "Fresh context, fails closed", on: true, locked: "always on" },
+    { id: "refine",   t: "Refine on rejection",          d: "Up to 3 attempts on the pinned implementer", on: true },
+    { id: "guard",    t: "Enforce your boundaries",      d: "Checks the real diff against step 4", on: true, locked: "always on" },
+    { id: "promote",  t: "Merge and tag",                d: "Only reachable if step 7 says merge automatically", on: false },
+    { id: "notify",   t: "Email a plain-language digest",d: "What was tried, what shipped, what didn't", on: true }
+  ];
+
+  const TREE = [
+    { p: ".github/",        s: "frozen" },
+    { p: ".claude/agents/", s: "frozen" },
+    { p: "index.html",      s: "edit"   },
+    { p: "games/counting.html", s: "edit" },
+    { p: "games/spelling.html", s: "edit" },
+    { p: "styles/main.css", s: "edit"   },
+    { p: "tests/",          s: "create" },
+    { p: "package.json",    s: "frozen" },
+    { p: "package-lock.json", s: "frozen" },
+    { p: "README.md",       s: "none"   },
+    { p: "docs/",           s: "none"   }
+  ];
+  const CYCLE = ["none", "edit", "create", "frozen"];
+  const CYCLE_LABEL = { none: "—", edit: "may edit", create: "may create", frozen: "never touch" };
+
+  const CADENCE = [
+    { id: "monthly", t: "Monthly", d: "1st at 00:00 UTC — matches the design's intent", cron: "0 0 1 * *", on: true },
+    { id: "weekly",  t: "Weekly",  d: "Mondays at 00:00 UTC", cron: "0 0 * * 1", on: false },
+    { id: "manual",  t: "Only when I click run", d: "No schedule; workflow_dispatch only", cron: null, on: false }
+  ];
+
+  const APPROVAL = [
+    { id: "pr",   t: "Open a pull request — I'll merge it", d: "Recommended. Nothing reaches your default branch without you.", on: true },
+    { id: "auto", t: "Merge automatically once review and tests pass", d: "Unlocks after one green rehearsal and three clean generations.", on: false }
+  ];
+
+  const $ = (s, r) => (r || document).querySelector(s);
+  const el = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; };
+
+  let step = 2;
+
+  /* ---------- rail ---------- */
+  const rail = $("#rail");
+  STEPS.forEach((label, i) => {
+    const n = i + 1;
+    const li = el("li");
+    const b = el("button", null, `<span class="num">${n}</span><span>${label}</span>`);
+    b.type = "button";
+    b.addEventListener("click", () => go(n));
+    li.appendChild(b);
+    rail.appendChild(li);
+  });
+
+  function go(n) {
+    step = Math.min(STEPS.length, Math.max(1, n));
+    document.querySelectorAll(".step").forEach((s) => s.classList.toggle("active", +s.dataset.step === step));
+    rail.querySelectorAll("button").forEach((b, i) => b.setAttribute("aria-current", String(i + 1 === step)));
+    $("#progress").textContent = `Step ${step} of ${STEPS.length}`;
+    $("#back").disabled = step === 1;
+    $("#next").textContent = step === STEPS.length ? "Finish" : "Next";
+    $("#nav").style.display = step === STEPS.length ? "none" : "flex";
+  }
+  $("#back").addEventListener("click", () => go(step - 1));
+  $("#next").addEventListener("click", () => go(step + 1));
+
+  /* ---------- step 2: labs ---------- */
+  const labsHost = $("#labs");
+  LABS.forEach((lab) => {
+    const b = el("button", "lab", `
+      <div class="row">
+        <span class="name">${lab.name}</span>
+        <span class="tick" aria-hidden="true">✓</span>
+      </div>
+      <div class="key">${lab.on ? "sk-•••••••••••••••• stored" : "paste key to enable"}</div>
+      <div class="env">${lab.env}</div>`);
+    b.type = "button";
+    b.dataset.on = String(lab.on);
+    b.setAttribute("aria-pressed", String(lab.on));
+    b.addEventListener("click", () => {
+      lab.on = !lab.on;
+      b.dataset.on = String(lab.on);
+      b.setAttribute("aria-pressed", String(lab.on));
+      $(".key", b).textContent = lab.on ? "sk-•••••••••••••••• stored" : "paste key to enable";
+      render();
+    });
+    labsHost.appendChild(b);
+  });
+
+  /* ---------- step 3: stages ---------- */
+  const stagesHost = $("#stages");
+  STAGES.forEach((st) => {
+    const b = el("button", "stage", `
+      <span class="tick" aria-hidden="true">✓</span>
+      <span><span class="t">${st.t}</span><br><span class="d">${st.d}</span></span>
+      <span class="tstate">${st.locked ? st.locked : ""}</span>`);
+    b.type = "button";
+    b.dataset.on = String(st.on);
+    if (st.locked) b.dataset.locked = "true";
+    b.setAttribute("aria-pressed", String(st.on));
+    b.addEventListener("click", () => {
+      if (st.locked) return;
+      st.on = !st.on;
+      b.dataset.on = String(st.on);
+      b.setAttribute("aria-pressed", String(st.on));
+      render();
+    });
+    stagesHost.appendChild(b);
+  });
+
+  /* ---------- step 4: tree ---------- */
+  const treeHost = $("#tree");
+  TREE.forEach((node) => {
+    const b = el("button", "tnode", `<span class="path">${node.p}</span><span class="tstate"></span>`);
+    b.type = "button";
+    const paint = () => {
+      b.dataset.state = node.s;
+      $(".tstate", b).textContent = CYCLE_LABEL[node.s];
+    };
+    b.addEventListener("click", () => {
+      node.s = CYCLE[(CYCLE.indexOf(node.s) + 1) % CYCLE.length];
+      paint();
+      render();
+    });
+    paint();
+    treeHost.appendChild(b);
+  });
+
+  /* ---------- steps 6 & 7: radio groups ---------- */
+  function radios(host, items) {
+    items.forEach((it) => {
+      const b = el("button", "choice", `<span class="dot" aria-hidden="true"></span><span><span class="t">${it.t}</span><br><span class="d">${it.d}</span></span>`);
+      b.type = "button";
+      b.dataset.on = String(it.on);
+      b.addEventListener("click", () => {
+        items.forEach((o) => { o.on = o === it; });
+        [...host.children].forEach((c, i) => { c.dataset.on = String(items[i].on); });
+        render();
+      });
+      host.appendChild(b);
+    });
+  }
+  radios($("#cadence"), CADENCE);
+  radios($("#approval"), APPROVAL);
+
+  /* ---------- step 8: budget ---------- */
+  $("#fanout").addEventListener("input", render);
+
+  /* ---------- render ---------- */
+  function render() {
+    const watched = LABS.filter((l) => l.on);
+    const fanout = +$("#fanout").value;
+    const cadence = CADENCE.find((c) => c.on);
+    const approval = APPROVAL.find((a) => a.on);
+    const edits  = TREE.filter((t) => t.s === "edit");
+    const creates= TREE.filter((t) => t.s === "create");
+    const frozen = TREE.filter((t) => t.s === "frozen");
+
+    $("#fanoutVal").textContent = fanout;
+    const seats = Math.min(fanout, Math.max(watched.length, 1));
+    const perRun = watched.slice(0, seats).reduce((a, l) => a + l.cost, 0) + 1.4;
+    $("#cost").textContent = "$" + perRun.toFixed(2);
+    $("#costNote").textContent =
+      `Worst case: ${seats} proposal${seats === 1 ? "" : "s"}, plus one implementation, one review and up to three refinements on your pinned model. A run that finds no new release costs nothing.`;
+
+    $("#treeSummary").textContent =
+      `${edits.length} editable · ${creates.length} create-only · ${frozen.length} frozen · ${TREE.length - edits.length - creates.length - frozen.length} unmarked`;
+    $("#plainEdit").textContent = `${edits.length} file${edits.length === 1 ? "" : "s"}`;
+    $("#plainFrozen").textContent = `${frozen.length} protected path${frozen.length === 1 ? "" : "s"}`;
+
+    const glob = (p) => (p.endsWith("/") ? p + "**" : p);
+    const list = (arr) => (arr.length ? arr.map((t) => `\n    - ${glob(t.p)}`).join("") : " []");
+
+    const y = [];
+    const K = (s) => `<span class="k">${s}</span>`;
+    const C = (s) => `<span class="c">${s}</span>`;
+    const R = (s) => `<span class="r">${s}</span>`;
+
+    y.push(C("# Generated by the install console. Yours to edit — we round-trip"));
+    y.push(C("# this file and never overwrite your comments."));
+    y.push("");
+    y.push(K("project:"));
+    y.push("  " + K("id:") + " carrot-games");
+    y.push("  " + K("repository:") + " https://github.com/Chrisfoz/carrot-games");
+    y.push("  " + K("default_branch:") + " main");
+    y.push("");
+    y.push(K("providers:"));
+    y.push("  " + K("watched:") + (watched.length ? watched.map((l) => `\n    - ${l.id}`).join("") : " []"));
+    y.push("  " + K("snapshot_path:") + " .agent/model-snapshot.json");
+    y.push("  " + K("max_fanout:") + " " + fanout);
+    y.push("");
+    y.push(K("constitution:"));
+    y.push("  " + K("allowed_paths:") + list(edits));
+    y.push("  " + K("create_only_paths:") + list(creates));
+    y.push("  " + K("frozen_paths:") + list(frozen));
+    y.push("  " + K("append_only_paths:") + list(creates));
+    y.push("  " + K("frozen_fields:"));
+    y.push("    " + K("package.json:"));
+    y.push("      - scripts" + C("   # rewriting the test command defeats every other gate"));
+    y.push("  " + K("churn_ceiling:"));
+    y.push("    " + K("max_files:") + " 50");
+    y.push("    " + K("max_lines:") + " 10000");
+    y.push("");
+    y.push(K("roles:"));
+    y.push("  " + K("agent_brief_path:") + " .claude/agents/improve.md");
+    y.push("  " + K("reviewer_brief_path:") + " .claude/agents/review.md");
+    y.push("  " + K("review:"));
+    y.push("    " + K("model:") + " claude-opus-5" + C("   # pinned — this gate does not rotate"));
+    y.push("");
+    if (STAGES.find((s) => s.id === "notify").on) {
+      y.push(K("notify:"));
+      y.push("  " + K("channel:") + " email");
+      y.push("  " + K("provider:") + " sendgrid");
+      y.push("  " + K("recipient:") + " you@example.com");
+      y.push("");
+    }
+    y.push(R("# saved, not yet wired — nothing reads these today:"));
+    y.push(R("# approval_class: " + (approval.id === "pr" ? "human-approval-required" : "autonomous-merge")));
+    y.push(R("# cadence:"));
+    y.push(R("#   trigger: model-release"));
+    y.push(R(cadence.cron ? "#   schedule_cron: '" + cadence.cron + "'" : "#   schedule_cron: null   # manual dispatch only"));
+
+    $("#yaml").innerHTML = y.join("\n");
+  }
+
+  render();
+  go(2);
+})();
+</script>
