@@ -12,6 +12,10 @@ console would expose is marked LIVE (something reads it) or RESERVED
 not front-end work, it's the generator that `Portable-Harness-Design.md` §6
 already specified and nobody has written.
 
+[`mockup.html`](mockup.html) beside this file is a clickable wireframe of §4's
+nine steps — the generated `project-adapter.yml` updates live as you configure,
+which is the design's central claim rather than a garnish.
+
 ---
 
 ## 1. The idea, restated
