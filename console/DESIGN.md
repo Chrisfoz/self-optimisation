@@ -301,11 +301,16 @@ single worst decision this console could make.
 
 ### Step 8 — Budget
 
-`max_fanout` (LIVE) with an estimated per-run cost shown live from current
-per-lab pricing and `roles.suggest.max_output_tokens`. Someone signing up
-for recurring autonomous LLM spend deserves a number before the first run,
-not after the first invoice. This is a first-class step, not an advanced
-fold.
+`max_fanout` (LIVE) — a real ceiling on how many newly released models one
+run may fan out to, which is the actual blast-radius control this harness
+has. What this step deliberately does *not* do is show a dollar figure:
+per-lab pricing moves independently of this console and a guess presented
+as a number is worse than no number, the same lesson §8.4 draws from
+dropping `runs.estimated_cost_usd`. Instead the copy says plainly that the
+spend is the user's own, on their own keys, scaling with fanout × labs
+watched — and that the console will tell them the moment a key looks
+invalid or a lab reports insufficient billing (§8.4's `apiIssues`), rather
+than pretend to price the run in advance.
 
 ### Step 9 — Review, merge, rehearse, then switch on
 
@@ -492,7 +497,7 @@ than phase 4. Worth taking on. Not worth taking on silently.
 |---|---|---|
 | `profiles` | signed-in user | GitHub login, display name, avatar. Email stays in `auth.users` rather than being duplicated. |
 | `installations` | configured repository | Which repo, what state it's in, and a **cache** of its `project-adapter.yml`. |
-| `runs` | generation | Outcome, which model proposed, the PR link, estimated cost — including runs that shipped nothing. |
+| `runs` | generation | Outcome, which model proposed, the PR link, any billing/key issue flagged — including runs that shipped nothing. |
 | `escalations` | disputed rule | §7's decision surface: an agent argues a rule is wrong, a person decides. |
 | `config_writes` | console write | Append-only: what we wrote to a repository, and who asked. |
 
@@ -535,7 +540,7 @@ almost exactly the dashboard's row:
 | `attempts.json` field | Dashboard column |
 |---|---|
 | `generation`, `date` | which run, when |
-| `outcome` | shipped / blocked / nothing proposed |
+| `outcome` | `approved` / `abandoned` / `crashed` / `no-proposal` — the harness's own four values, not a paraphrase |
 | `suggestModel`, `fanOut` | who proposed, out of how many |
 | `implementModel`, `implementedBy`, `selfImplemented` | who wrote the edits |
 | `proposalSummary` | the one-line "what it tried" |
@@ -562,17 +567,30 @@ Consequences worth stating plainly:
 - **A user who deletes their account loses nothing.** Their history was never
   ours; it's in their repo, in git, in files they can read.
 
-Two gaps this exposes, both small and both in the harness rather than the
-console:
+Two gaps this exposed, both now closed in the harness — see
+`harness/lib/api-errors.mjs`, the two throw sites it touches in
+`llm-provider.mjs`, and `writeAttemptRecord()`/`recordPullRequestUrl()` in
+`orchestrator.mjs`:
 
-1. **No cost is recorded.** `attempts.json` has no token counts or spend, so
-   `runs.estimated_cost_usd` can only ever hold the console's own estimate
-   from §4.8 until `writeAttemptRecord()` records what a run actually used.
-   Worth adding — a budget meter showing estimates rather than actuals is the
-   kind of number people stop trusting.
-2. **No pull request link.** The run record doesn't know what PR it became.
-   The console can find it by branch name, but having the orchestrator write
-   it down is one line and removes a guess.
+1. **No cost was recorded, and — on reflection — shouldn't be.** The spend
+   is the user's own, on their own keys, and pricing moves independently of
+   this schema; a console-side dollar guess is a number people stop
+   trusting the first time it's wrong. What actually matters is narrower and
+   now real: `classifyStatusCode()` turns a 401, a 402, or a 403/429 whose
+   body says "insufficient credit," into a `kind` —
+   `missing_key` / `invalid_key` / `billing` — attached to the thrown
+   `ApiError` as a real field, not left for something downstream to regex
+   out of a message string. `writeAttemptRecord()` carries the actionable
+   ones forward as `apiIssues`, deduplicated by provider so nine labs
+   sharing one expired card produce one row, not nine. `runs.estimated_cost_usd`
+   is gone (migration `20260821000003`); `runs.api_issues` replaces it.
+2. **No pull request link — now written down in a second, small step.**
+   `writeAttemptRecord()` runs before the PR exists, so it can't know the
+   URL; `recordPullRequestUrl()` is the write that fills it in afterward,
+   called by `harness/scripts/record-pull-request.mjs` — a workflow step
+   dropped in right after whatever action opens the PR (e.g.
+   `peter-evans/create-pull-request`). A generation that didn't ship never
+   calls it, and the field stays `null`, honestly.
 
 One related rule that does not change: Supabase hands back a GitHub
 `provider_token` on sign-in. Use it in the session and do not persist it — a

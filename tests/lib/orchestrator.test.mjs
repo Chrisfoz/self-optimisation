@@ -9,7 +9,9 @@ import {
   buildSuggestSystemPrompt, buildSuggestUserPrompt, DEFAULT_SCOPE_TEXT,
   buildImplementSystemPrompt, rankProposals, writeAttemptRecord, writeProposal,
   recordEscalations, snapshotEditableFiles, restoreSnapshot, runGeneration,
+  recordPullRequestUrl, gatherProposals,
 } from '../../harness/lib/orchestrator.mjs';
+import { ApiError } from '../../harness/lib/api-errors.mjs';
 
 function tempRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-test-'));
@@ -173,6 +175,103 @@ test('writeAttemptRecord: selfImplemented is false when the fallback implementer
   });
   const record = JSON.parse(fs.readFileSync(path.join(repoRoot, relative), 'utf8'));
   assert.equal(record.selfImplemented, false);
+});
+
+test('writeAttemptRecord: apiIssues and pullRequestUrl default to empty/null and round-trip when given', (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+
+  const relative = writeAttemptRecord({
+    repoRoot, genNumber: '001', outcome: 'no-proposal',
+    suggestResult: null, proposal: null, attempts: [],
+    implementedBy: null, implementModel: 'claude-opus-5',
+    scope: { scope: 'focused', reason: 'default' },
+  });
+  const withoutIssues = JSON.parse(fs.readFileSync(path.join(repoRoot, relative), 'utf8'));
+  assert.deepEqual(withoutIssues.apiIssues, []);
+  assert.equal(withoutIssues.pullRequestUrl, null);
+
+  writeAttemptRecord({
+    repoRoot, genNumber: '002', outcome: 'no-proposal',
+    suggestResult: null, proposal: null, attempts: [],
+    implementedBy: null, implementModel: 'claude-opus-5',
+    scope: { scope: 'focused', reason: 'default' },
+    apiIssues: [{ provider: 'openai', kind: 'invalid_key', statusCode: 401, ids: ['gpt-5.6-luna'] }],
+  });
+  const withIssues = JSON.parse(fs.readFileSync(path.join(repoRoot, `docs/generations/gen-002/attempts.json`), 'utf8'));
+  assert.equal(withIssues.apiIssues.length, 1);
+  assert.equal(withIssues.apiIssues[0].kind, 'invalid_key');
+});
+
+test('recordPullRequestUrl: fills in the field writeAttemptRecord left null, without touching anything else', (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+
+  writeAttemptRecord({
+    repoRoot, genNumber: '003', outcome: 'approved',
+    suggestResult: { model: 'model-x', provider: 'anthropic' }, proposal: 'CHANGE: x\n',
+    attempts: [{ attempt: 1, by: 'model-x', outcome: 'approved', detail: 'x' }],
+    implementedBy: 'model-x', implementModel: 'claude-opus-5',
+    scope: { scope: 'focused', reason: 'default' },
+  });
+
+  const relative = recordPullRequestUrl({
+    repoRoot, genNumber: '003',
+    pullRequestUrl: 'https://github.com/example/example/pull/42',
+  });
+
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, relative), 'utf8'));
+  assert.equal(record.pullRequestUrl, 'https://github.com/example/example/pull/42');
+  // Untouched by the second write.
+  assert.equal(record.proposalSummary, 'x');
+  assert.equal(record.selfImplemented, true);
+});
+
+test('recordPullRequestUrl: fails loudly when the generation was never written', (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+
+  assert.throws(
+    () => recordPullRequestUrl({ repoRoot, genNumber: '999', pullRequestUrl: 'https://example.com/pr/1' }),
+    /doesn't exist or isn't valid JSON/
+  );
+});
+
+test('gatherProposals: an ApiError failure carries kind and statusCode through to the failure record', async () => {
+  const promptConfig = { agentBrief: 'be helpful', editableFiles: [], createOnlyDescription: '', context: {} };
+  const models = [
+    { id: 'gpt-5.6-luna', provider: 'openai' },
+    { id: 'claude-opus-5', provider: 'anthropic' },
+  ];
+
+  const call = async ({ model }) => {
+    if (model === 'gpt-5.6-luna') {
+      throw new ApiError('openai API error 401: {"error":"invalid api key"}', {
+        kind: 'invalid_key', provider: 'openai', statusCode: 401,
+      });
+    }
+    return { text: 'CHANGE: do a thing\n', truncated: false, provider: 'anthropic', model, sentImages: 0 };
+  };
+
+  const { proposals, failures } = await gatherProposals(promptConfig, models, { call });
+
+  assert.equal(proposals.length, 1);
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].id, 'gpt-5.6-luna');
+  assert.equal(failures[0].kind, 'invalid_key');
+  assert.equal(failures[0].statusCode, 401);
+});
+
+test('gatherProposals: an ordinary Error (not an ApiError) leaves kind/statusCode null rather than throwing', async () => {
+  const promptConfig = { agentBrief: 'be helpful', editableFiles: [], createOnlyDescription: '', context: {} };
+  const models = [{ id: 'flaky-model', provider: 'anthropic' }];
+  const call = async () => { throw new Error('socket hang up'); };
+
+  const { failures } = await gatherProposals(promptConfig, models, { call });
+
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].kind, null);
+  assert.equal(failures[0].statusCode, null);
 });
 
 test('writeProposal: writes a real markdown file with the expected sections', (t) => {

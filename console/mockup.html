@@ -527,18 +527,25 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
         <!-- 8 -->
         <section class="step" data-step="8">
           <p class="eyebrow">Step 8 of 9</p>
-          <h2>What it may spend <span class="badge live">live</span></h2>
+          <h2>How wide one run may fan out <span class="badge live">live</span></h2>
           <p class="lede">A ceiling on how many newly released models one run may
-          fan out to. You're signing up for recurring spend on your own API keys,
-          so here's the number before the first run rather than after it.</p>
+          ask. We won't guess what that costs — lab pricing moves on its own
+          schedule and a guess presented as a number is worse than no number.
+          What we will do is tell you the moment a key stops working.</p>
           <div class="slider-row">
             <input type="range" id="fanout" min="1" max="9" value="4" aria-label="Maximum models per run">
             <span class="mono" id="fanoutVal" style="font-size:20px;font-variant-numeric:tabular-nums">4</span>
           </div>
           <div class="meter">
-            <p class="eyebrow" style="margin:0 0 2px">Estimated ceiling per run</p>
-            <div class="big" id="cost">$4.80</div>
+            <p class="eyebrow" style="margin:0 0 2px">What this run could ask, this time</p>
+            <div class="big" id="cost" style="font-size:22px">4 proposals, 1 implementation, up to 3 refinements</div>
             <p style="margin:6px 0 0;font-size:12.5px;color:var(--muted)" id="costNote"></p>
+          </div>
+          <div class="custody" style="margin-top:14px">
+            <b>The spend is yours, on your own keys — we never see it.</b>
+            What we do see is whether a call succeeded. If a lab returns
+            "invalid key" or "insufficient credit," it shows up on the
+            <b>Runs</b> tab the moment it happens, not buried in a log.
           </div>
         </section>
 
@@ -624,7 +631,19 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
       <div class="tile"><div class="n">18</div><div class="l">generations</div><div class="h">since Mar 2025</div></div>
       <div class="tile"><div class="n">9</div><div class="l">shipped</div><div class="h">reached a pull request</div></div>
       <div class="tile"><div class="n">1</div><div class="l">waiting on you</div><div class="h">a disputed rule, below</div></div>
-      <div class="tile"><div class="n">~$41</div><div class="l">estimated spend</div><div class="h">our estimate, not your invoice — the harness doesn't record real cost yet</div></div>
+      <div class="tile" style="border-color:var(--warn)"><div class="n" style="color:var(--warn)">1</div><div class="l">key issue flagged</div><div class="h">a lab rejected a call — see below</div></div>
+    </div>
+
+    <div class="esc" style="border-color:var(--warn);background:var(--warn-wash)">
+      <h3 style="color:var(--warn)">OpenAI rejected the key on generation 13</h3>
+      <p><b>What happened:</b> the API returned <span class="mono">401</span> — the key GPT-5.6-luna
+      was configured with is no longer valid. Nothing else about the run failed; every other
+      lab you watch answered normally.</p>
+      <p class="who">First seen 1 Mar 2026 · has recurred on every check since</p>
+      <div class="row">
+        <button class="btn primary" type="button">Update the OpenAI key</button>
+        <button class="btn" type="button">Stop watching OpenAI</button>
+      </div>
     </div>
 
     <div class="esc">
@@ -642,7 +661,7 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
     </div>
 
     <div class="panel">
-      <div class="panel-head"><span class="eyebrow">Every run, including the quiet ones</span></div>
+      <div class="panel-head"><span class="eyebrow">Every generation this repository has recorded</span></div>
       <div class="scroll-x">
         <table class="runs" id="runsTable"></table>
       </div>
@@ -667,15 +686,15 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
   ];
 
   const LABS = [
-    { id: "anthropic", name: "Anthropic", env: "ANTHROPIC_API_KEY", on: true,  cost: 1.20 },
-    { id: "openai",    name: "OpenAI",    env: "OPENAI_API_KEY",    on: true,  cost: 1.20 },
-    { id: "google",    name: "Google",    env: "GEMINI_API_KEY",    on: true,  cost: 0.90 },
-    { id: "moonshot",  name: "Moonshot",  env: "MOONSHOT_API_KEY",  on: false, cost: 0.45 },
-    { id: "deepseek",  name: "DeepSeek",  env: "DEEPSEEK_API_KEY",  on: false, cost: 0.30 },
-    { id: "qwen",      name: "Qwen",      env: "DASHSCOPE_API_KEY", on: false, cost: 0.35 },
-    { id: "xai",       name: "xAI",       env: "XAI_API_KEY",       on: true,  cost: 1.10 },
-    { id: "meta",      name: "Meta",      env: "LLAMA_API_KEY",     on: false, cost: 0.40 },
-    { id: "zai",       name: "Z.ai",      env: "ZAI_API_KEY",       on: false, cost: 0.30 }
+    { id: "anthropic", name: "Anthropic", env: "ANTHROPIC_API_KEY", on: true  },
+    { id: "openai",    name: "OpenAI",    env: "OPENAI_API_KEY",    on: true  },
+    { id: "google",    name: "Google",    env: "GEMINI_API_KEY",    on: true  },
+    { id: "moonshot",  name: "Moonshot",  env: "MOONSHOT_API_KEY",  on: false },
+    { id: "deepseek",  name: "DeepSeek",  env: "DEEPSEEK_API_KEY",  on: false },
+    { id: "qwen",      name: "Qwen",      env: "DASHSCOPE_API_KEY", on: false },
+    { id: "xai",       name: "xAI",       env: "XAI_API_KEY",       on: true  },
+    { id: "meta",      name: "Meta",      env: "LLAMA_API_KEY",     on: false },
+    { id: "zai",       name: "Z.ai",      env: "ZAI_API_KEY",       on: false }
   ];
 
   const STAGES = [
@@ -840,10 +859,10 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
 
     $("#fanoutVal").textContent = fanout;
     const seats = Math.min(fanout, Math.max(watched.length, 1));
-    const perRun = watched.slice(0, seats).reduce((a, l) => a + l.cost, 0) + 1.4;
-    $("#cost").textContent = "$" + perRun.toFixed(2);
+    $("#cost").textContent =
+      `${seats} proposal${seats === 1 ? "" : "s"}, 1 implementation, up to 3 refinements`;
     $("#costNote").textContent =
-      `Worst case: ${seats} proposal${seats === 1 ? "" : "s"}, plus one implementation, one review and up to three refinements on your pinned model. A run that finds no new release costs nothing.`;
+      `Worst case for one run, across the ${watched.length || 0} lab${watched.length === 1 ? "" : "s"} you picked in step 2. A run that finds no new release asks nothing and costs nothing.`;
 
     $("#treeSummary").textContent =
       `${edits.length} editable · ${creates.length} create-only · ${frozen.length} frozen · ${TREE.length - edits.length - creates.length - frozen.length} unmarked`;
@@ -906,21 +925,28 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
   }
 
   /* ---------- runs view ---------- */
+  // Shaped to match what the harness actually writes: outcome is always
+  // one of approved / abandoned / crashed / no_proposal (never a stand-in
+  // for "nothing happened this month" — see console/DESIGN.md §8.4. A
+  // quiet month leaves no docs/generations/gen-N/ at all, so it leaves no
+  // row here either; there is deliberately no "quiet" outcome to render.
   const RUNS = [
-    { g:18, d:"1 Aug 2026",  o:"shipped", oc:"shipped", by:"Opus 5",      s:"Larger tap targets on the counting game's number pad" },
-    { g:17, d:"1 Jul 2026",  o:"blocked", oc:"review refused", by:"GPT-5.2", s:"Rewrite the scoring loop — no test covered the change" },
-    { g:16, d:"1 Jun 2026",  o:"nothing", oc:"nothing proposed", by:"Gemini 3 Pro", s:"Said the last three changes need to be played before more are added" },
-    { g:15, d:"2 May 2026",  o:"shipped", oc:"shipped", by:"Grok 4.1",    s:"Read the word aloud when a child taps it" },
-    { g:14, d:"1 Apr 2026",  o:"blocked", oc:"guard stopped it", by:"Opus 4.8", s:"Tried to edit package.json scripts — refused before anything ran" },
-    { g:13, d:"1 Mar 2026",  o:"quiet",   oc:"no new model", by:"—",      s:"Nothing new had shipped that month. Cost nothing." }
+    { g:18, d:"1 Aug 2026", o:"approved",  oc:"shipped",        by:"Opus 5",       s:"Larger tap targets on the counting game's number pad" },
+    { g:17, d:"1 Jul 2026", o:"abandoned", oc:"review refused", by:"GPT-5.2",      s:"Rewrite the scoring loop — no test covered the change" },
+    { g:16, d:"1 Jun 2026", o:"no_proposal", oc:"nothing proposed", by:"Gemini 3 Pro", s:"Said the last three changes need to be played before more are added" },
+    { g:15, d:"2 May 2026", o:"approved",  oc:"shipped",        by:"Grok 4.1",     s:"Read the word aloud when a child taps it" },
+    { g:14, d:"1 Apr 2026", o:"abandoned", oc:"guard stopped it", by:"Opus 4.8",   s:"Tried to edit package.json scripts — refused before anything ran" },
+    { g:13, d:"1 Mar 2026", o:"crashed",   oc:"key issue",      by:"—",            s:"OpenAI API error 401 — the key stopped the run before a proposal existed", flag:true }
   ];
+
+  const OUT_CLASS = { approved: "shipped", abandoned: "blocked", no_proposal: "nothing", crashed: "quiet" };
 
   const runsTable = $("#runsTable");
   runsTable.innerHTML =
     "<tr><th>Gen</th><th>When</th><th>Outcome</th><th>Proposed by</th><th>What it tried</th></tr>" +
     RUNS.map((r) =>
       `<tr><td class="g">${r.g}</td><td class="g">${r.d}</td>` +
-      `<td><span class="out ${r.o}">${r.oc}</span></td>` +
+      `<td><span class="out ${OUT_CLASS[r.o]}">${r.oc}${r.flag ? " ⚠" : ""}</span></td>` +
       `<td>${r.by}</td><td class="sum">${r.s}</td></tr>`
     ).join("");
 

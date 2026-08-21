@@ -45,9 +45,36 @@ rls enabled on all 5 tables            5/5
 config_writes update/delete policies   0
 generated columns on installations     approval_class, cadence_cron
 security definer fns left in public    none
+run_outcome labels                     no_proposal, approved, abandoned, crashed
+estimated_cost_usd column              gone
+api_issues default                     '[]'::jsonb
 ```
 
 `get_advisors(type: security)` returns no lints.
+
+## Migration 0003 — no dollar guesses, real billing flags
+
+0001's `runs.outcome` enum and `estimated_cost_usd` column were both written
+before anyone had checked what `harness/lib/orchestrator.mjs` actually
+produces. 0003 corrects both:
+
+- **`run_outcome`** now mirrors the harness's real four values exactly —
+  `no_proposal`, `approved`, `abandoned`, `crashed` — not an invented
+  taxonomy (`shipped`, `blocked_review`, `no_release`, ...) that could drift
+  from what the code writes. "Nothing new released this month" is
+  deliberately not a value: `runGeneration()` never runs in that case, so
+  there is no `attempts.json` and correctly no row — the console shows a
+  quiet month by absence, not by writing a row for something that didn't
+  happen.
+- **`estimated_cost_usd` is gone, replaced by `api_issues`.** The console
+  can't honestly price a run — model pricing moves independently of this
+  schema, and an estimate presented as a real number is worse than no
+  number. What it *can* do, because the harness now does it too
+  (`harness/lib/api-errors.mjs`), is tell a user a call actually failed on
+  a bad or unfunded key: a real 401, or a 402/403/429 whose body says
+  "insufficient credit." `api_issues` mirrors `attempts.json`'s field of
+  the same name — actionable failures only, deduplicated by provider and
+  kind.
 
 ## Still to do by hand
 

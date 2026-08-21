@@ -25,6 +25,7 @@
  */
 
 import https from 'https';
+import { ApiError, classifyStatusCode } from './api-errors.mjs';
 
 // ---------------------------------------------------------------------------
 // Provider registry
@@ -242,9 +243,10 @@ export async function callModel({
 
   const key = process.env[config.envKey];
   if (!key) {
-    throw new Error(
+    throw new ApiError(
       `${config.envKey} is not set, but model "${model}" is served by ${resolved}. ` +
-      `Add that secret wherever this runs so the agent can run on this lab's model.`
+      `Add that secret wherever this runs so the agent can run on this lab's model.`,
+      { kind: 'missing_key', provider: resolved }
     );
   }
 
@@ -285,7 +287,10 @@ export async function callModel({
   }
 
   if (statusCode !== 200) {
-    throw new Error(`${resolved} API error ${statusCode}: ${raw.slice(0, 600)}`);
+    const kind = classifyStatusCode(statusCode, raw);
+    throw new ApiError(`${resolved} API error ${statusCode}: ${raw.slice(0, 600)}`, {
+      kind, provider: resolved, statusCode,
+    });
   }
 
   let data;
