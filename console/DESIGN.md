@@ -12,9 +12,13 @@ console would expose is marked LIVE (something reads it) or RESERVED
 not front-end work, it's the generator that `Portable-Harness-Design.md` §6
 already specified and nobody has written.
 
-[`mockup.html`](mockup.html) beside this file is a clickable wireframe of §4's
-nine steps — the generated `project-adapter.yml` updates live as you configure,
-which is the design's central claim rather than a garnish.
+Three pages sit beside this file, each a self-contained artifact body:
+
+| File | What it is |
+|---|---|
+| [`about.html`](about.html) | The public face: the objective, one run drawn end to end, and the nine setup steps. Links to the other two. |
+| [`mockup.html`](mockup.html) | A clickable wireframe of §4's nine steps, with the generated `project-adapter.yml` updating live beside the form — the design's central claim rather than a garnish. |
+| [`privacy.html`](privacy.html) | A draft privacy policy, written now so §2.2's no-custody rule is a commitment rather than an intention. |
 
 ---
 

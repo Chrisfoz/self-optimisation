@@ -1,0 +1,214 @@
+<!-- Privacy policy for the proposed install console (console/DESIGN.md).
+     Authored as an Artifact body fragment: no <html>/<head>/<body> wrapper. -->
+<title>Console Privacy Policy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Sans:wght@400;450;600;700&display=swap">
+
+<style>
+:root {
+  --ground:#EDEFF4; --surface:#FFFFFF; --surface-2:#F5F6FA;
+  --line:#D8DBE6; --line-soft:#E6E8F0;
+  --ink:#14161F; --ink-2:#3D4254; --muted:#6A7089;
+  --accent:#3F4E9E; --accent-2:#2E3B7D; --accent-wash:#E7E9F6;
+  --live:#1E7A4B; --live-wash:#E2F1E8;
+  --warn:#8A6100; --warn-wash:#F8EEDA;
+  --shadow:0 1px 2px rgba(20,22,31,.06), 0 8px 24px -12px rgba(20,22,31,.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:#101219; --surface:#181B25; --surface-2:#1F222E;
+    --line:#2E3242; --line-soft:#252936;
+    --ink:#E8EAF2; --ink-2:#BFC4D6; --muted:#8990A8;
+    --accent:#8A97E8; --accent-2:#A6B0F0; --accent-wash:#232741;
+    --live:#5FC08C; --live-wash:#17301F;
+    --warn:#DFAE4B; --warn-wash:#302713;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#101219; --surface:#181B25; --surface-2:#1F222E;
+  --line:#2E3242; --line-soft:#252936;
+  --ink:#E8EAF2; --ink-2:#BFC4D6; --muted:#8990A8;
+  --accent:#8A97E8; --accent-2:#A6B0F0; --accent-wash:#232741;
+  --live:#5FC08C; --live-wash:#17301F;
+  --warn:#DFAE4B; --warn-wash:#302713;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+  font-size:16px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+.mono, code { font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.9em; }
+a { color:var(--accent); text-underline-offset:2px; }
+a:hover { color:var(--accent-2); }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+.wrap { max-width:720px; margin:0 auto; padding:32px 22px 72px; }
+
+.eyebrow {
+  font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif; font-weight:600;
+  text-transform:uppercase; letter-spacing:.09em; font-size:11px; color:var(--muted);
+}
+
+header.top { padding-bottom:20px; margin-bottom:24px; border-bottom:1px solid var(--line); }
+header.top h1 { margin:6px 0 6px; font-size:29px; font-weight:700; letter-spacing:-.02em; text-wrap:balance; }
+header.top p { margin:0; color:var(--muted); font-size:15px; }
+
+.draft {
+  display:flex; gap:11px; align-items:flex-start;
+  background:var(--warn-wash); border:1px solid var(--line); border-left:3px solid var(--warn);
+  border-radius:6px; padding:12px 15px; margin-bottom:28px; font-size:14.5px; color:var(--ink-2);
+}
+.draft strong { color:var(--warn); }
+
+.short {
+  background:var(--surface); border:1px solid var(--line); border-radius:6px;
+  padding:18px 20px; margin-bottom:34px; box-shadow:var(--shadow);
+}
+.short ul { margin:10px 0 0; padding-left:20px; display:flex; flex-direction:column; gap:9px; }
+.short li { font-size:15px; }
+.short li b { color:var(--live); }
+
+h2 {
+  margin:34px 0 8px; font-size:17px; font-weight:700; letter-spacing:-.01em;
+  padding-top:16px; border-top:1px solid var(--line-soft);
+}
+h2:first-of-type { border-top:0; padding-top:0; }
+p { margin:0 0 13px; color:var(--ink-2); }
+ul.plain { margin:0 0 13px; padding-left:20px; color:var(--ink-2); display:flex; flex-direction:column; gap:7px; }
+
+.callout {
+  background:var(--accent-wash); border:1px solid var(--line); border-radius:6px;
+  padding:13px 16px; margin:16px 0 18px; font-size:14.5px; color:var(--ink-2);
+}
+.callout b { color:var(--accent-2); }
+
+footer.foot {
+  margin-top:44px; padding-top:18px; border-top:1px solid var(--line);
+  display:flex; flex-wrap:wrap; gap:8px 20px; align-items:baseline;
+  font-size:13.5px; color:var(--muted);
+}
+footer.foot .spacer { flex:1 1 30px; }
+</style>
+
+<div class="wrap">
+
+  <header class="top">
+    <p class="eyebrow">Self-Optimisation · Install console</p>
+    <h1>Privacy policy</h1>
+    <p>Last updated 21 August 2026</p>
+  </header>
+
+  <div class="draft">
+    <span><strong>Draft, not yet in force.</strong> The console described here
+    isn't built. This policy is written alongside its design so that the
+    privacy decisions get made before the code does, rather than after — see
+    <span class="mono">console/DESIGN.md</span> §2.2. It becomes binding on the
+    day the console accepts its first user, and not before.</span>
+  </div>
+
+  <div class="short">
+    <p class="eyebrow">The short version</p>
+    <ul>
+      <li><b>We never receive your API keys.</b> They're encrypted in your own browser and sent straight to GitHub.</li>
+      <li><b>We run no database.</b> There's no account, no profile, and nothing of yours stored on our side.</li>
+      <li><b>Your configuration lives in your repository.</b> You can read it, change it, and delete it without us.</li>
+    </ul>
+  </div>
+
+  <h2>What the console is</h2>
+  <p>A web page that asks you some questions about your project and writes the
+  answers into your own GitHub repository as a pull request — a configuration
+  file, a scheduled workflow, and two instruction files. That's the entire
+  product. It doesn't run your code, host anything for you, or sit between you
+  and anyone else.</p>
+
+  <h2>Your API keys</h2>
+  <p>The console asks for API keys from the model labs you choose to use.
+  Those keys are worth real money, so they're handled so that we can't touch
+  them even if we wanted to.</p>
+  <p>When you paste a key, your browser fetches your repository's public
+  encryption key from GitHub, encrypts your key locally, and sends only the
+  encrypted result to GitHub's Actions Secrets. The readable key exists in your
+  browser tab and in GitHub's encrypted storage. It is never sent to us, never
+  logged by us, and never passes through a server we control.</p>
+  <div class="callout">
+    <b>What this means practically.</b> If we were breached tomorrow, your API
+    keys would not be part of it, because we don't have them. It also means we
+    can't help you recover a lost key — go to the lab that issued it.
+  </div>
+
+  <h2>Signing in with GitHub</h2>
+  <p>You authorise the console through GitHub. We ask for three permissions,
+  and only when each is first needed:</p>
+  <ul class="plain">
+    <li><span class="mono">contents: write</span> — to open a branch with your configuration on it</li>
+    <li><span class="mono">secrets: write</span> — to store the encrypted keys described above</li>
+    <li><span class="mono">workflows: write</span> — to add the scheduled run, requested only when you reach the cadence step</li>
+  </ul>
+  <p>Your access token is held in your browser for the length of the session
+  and is not stored by us. Revoking the authorisation in your GitHub settings
+  ends our access immediately and completely.</p>
+
+  <h2>What we store</h2>
+  <p>Nothing that identifies you. The console is a static page: your answers
+  live in your browser until you approve the pull request that writes them to
+  your repository, and then they live in your repository. There is no account
+  to create, no profile to maintain, and no record of your visit beyond
+  ordinary web server logs.</p>
+  <p>We don't use analytics, advertising, or third-party trackers, and we set
+  no cookies beyond what's needed to keep you signed in during the session.</p>
+
+  <h2>What your code is shared with — read this one</h2>
+  <p>The console doesn't read your source code beyond your file and folder
+  names, which it needs to show you the tree where you choose what may be
+  edited. But the harness it installs does something you should understand
+  before you turn it on.</p>
+  <div class="callout">
+    <b>Once running, the harness sends parts of your repository to the model
+    labs you selected</b> — the files you marked editable, your project's
+    instructions, and a summary of recent runs. This happens inside your own
+    GitHub Actions, using your own API keys, under each lab's terms and data
+    policy. We are not a party to it and never see any of it. If your
+    repository contains anything you wouldn't send to a third-party API, mark
+    it as never-editable, or don't install this.
+  </div>
+
+  <h2>Other people's services</h2>
+  <ul class="plain">
+    <li><b>GitHub</b> stores your repository, your encrypted secrets, and your workflow runs, under GitHub's own privacy policy.</li>
+    <li><b>The model labs you choose</b> — Anthropic, OpenAI, Google and the rest — receive whatever the harness sends them, under their own terms. You pick which ones, and you can pick none.</li>
+    <li><b>An email provider</b>, if you switch on the run digest, sends that email using a key you supply. We don't operate it and don't receive the mail.</li>
+  </ul>
+
+  <h2>Removing it</h2>
+  <p>Three steps, none of which need us: revoke the app's access in your GitHub
+  settings, delete the four files it added, and delete the secrets it stored.
+  The harness stops running the moment the workflow file is gone.</p>
+
+  <h2>Children</h2>
+  <p>The console is a developer tool for people managing their own code
+  repositories, and isn't directed at children.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes in a way that affects what's collected or who sees
+  it, the change lands in the repository's git history like everything else,
+  and the date at the top of this page moves. The history is public, so you can
+  see exactly what changed and when.</p>
+
+  <h2>Contact</h2>
+  <p>Open an issue on
+  <a href="https://github.com/Chrisfoz/self-optimisation">github.com/Chrisfoz/self-optimisation</a>.
+  Privacy questions in the open are useful to everyone reading later.</p>
+
+  <footer class="foot">
+    <a href="https://github.com/Chrisfoz/self-optimisation">Repository</a>
+    <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/console/DESIGN.md">Console design doc</a>
+    <span class="spacer"></span>
+    <span>Draft · not yet in force</span>
+  </footer>
+</div>
