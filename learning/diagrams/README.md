@@ -1,7 +1,10 @@
 # Diagrams
 
-Five diagrams, in [Mermaid](https://mermaid.js.org) source form so you can paste
-them straight into your own documents.
+Eight diagrams, in [Mermaid](https://mermaid.js.org) source form so you can paste
+them straight into your own documents. **Five describe the harness. Three
+describe a proposal** — they are prefixed `proposed-` and are indexed
+separately below, because a drawing of something that does not exist is the
+easiest way to mislead someone about a system.
 
 | File | What it shows |
 |---|---|
@@ -14,6 +17,24 @@ them straight into your own documents.
 Start with the generic three. The worked examples are useful when you want to
 see what the abstractions look like once they've hit a real system — the number
 of failure exits in `worked-example-run.mmd` is itself the lesson.
+
+### Three more, for a design that is **not built**
+
+These belong to [`../../docs/Curiosity-Engine-Design.md`](../../docs/Curiosity-Engine-Design.md)
+and describe a proposal, not the system. Everything above describes what
+exists; everything in these three that is **dashed and warm-toned is
+proposed**, and everything solid is what runs today. Do not read them as
+documentation of the harness.
+
+| File | What it shows |
+|---|---|
+| `proposed-curiosity-run.mmd` | **One lap, end to end, with curiosity woven in** — the three run modes, where questions are harvested, and the spike that produces a document instead of a diff. |
+| `proposed-curiosity-memory.mmd` | **What happens between laps** — the three memory tiers, promotion by independent re-derivation, and the forgetting rule. |
+| `proposed-curiosity-authorisation.mmd` | **What authorises what** — why looking is cheap and committing is expensive, and how silence stops being scored as rejection. |
+
+They render with the same "whiteprint" theme block as the worked examples,
+for the same reason: they are detailed enough to want a fixed plate rather
+than the reader's theme.
 
 ---
 
@@ -32,6 +53,16 @@ appear after JavaScript runs are the part of a page a reader most needs to see.
 this framework was extracted from) does exactly that with a headless
 browser; it hasn't been ported into this repository yet — see
 `Portable-Harness-Design.md` at the repo root for the porting plan.
+
+In the meantime, `@mermaid-js/mermaid-cli` renders every `.mmd` here
+directly, and is worth running before committing a change to one — a
+diagram that fails to parse looks identical to one nobody has looked at:
+
+```
+npx -y @mermaid-js/mermaid-cli -i learning/diagrams/<file>.mmd -o /tmp/out.svg
+```
+
+All eight files in this folder render clean as of the last change to them.
 
 ---
 

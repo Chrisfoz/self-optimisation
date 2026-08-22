@@ -18,6 +18,108 @@ already been burned once by exactly that failure (§2.1).
 
 ---
 
+## 0. The whole thing, end to end
+
+Three diagrams live in [`learning/diagrams/`](../learning/diagrams/), in the
+same Mermaid source form as the five that describe the harness itself.
+**Solid nodes are built today; dashed, warm-toned nodes are proposed by this
+document.** Reading the first one is the fastest way to see what actually
+changes about a run.
+
+| Diagram | What it answers |
+|---|---|
+| [`proposed-curiosity-run.mmd`](../learning/diagrams/proposed-curiosity-run.mmd) | One lap, end to end. Where the three run modes are chosen, where questions are harvested, and what a spike does differently. Embedded below. |
+| [`proposed-curiosity-memory.mmd`](../learning/diagrams/proposed-curiosity-memory.mmd) | What happens *between* laps — the three tiers of §5.5, promotion by re-derivation, and what gets forgotten. |
+| [`proposed-curiosity-authorisation.mmd`](../learning/diagrams/proposed-curiosity-authorisation.mmd) | What authorises what — §2.5 and §4.5 drawn: looking is cheap, committing is expensive, and silence stops being scored as rejection. |
+
+The thing worth noticing in the first diagram is how little is new. There is
+no second pipeline: one trigger, one context pack, one review gate, one
+guard, one merge. Curiosity adds **a third run mode**, **a harvest that was
+already happening for escalations**, and **an outcome that writes a document
+instead of a diff**. Everything else is the loop that already runs.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
+flowchart TD
+  rel["a new model is released<br/>check-model-releases.mjs"] --> pre{"preflight<br/>is the baseline already green?"}
+  pre -->|"already red"| abort(["abort — a later failure<br/>would not be attributable"])
+  pre -->|"proven"| mode
+
+  mode{"WHICH MODE IS THIS RUN?<br/>recommendScope earns the headroom;<br/>the ledgers say what is waiting"}
+  mode -->|"nothing earned, nothing queued"| foc["FOCUSED<br/>one small, localised improvement"]
+  mode -->|"2 clean merges earned it, AND<br/>an accepted escalation is queued"| amb["AMBITIOUS<br/>an assignment drawn from the queue —<br/>not 'go and pick something big'"]
+  mode -->|"a question is authorised,<br/>and no assignment is waiting"| inv["INVESTIGATE<br/>a spike — produces a document,<br/>not a diff"]
+
+  foc --> pack
+  amb --> pack
+  inv --> pack
+
+  cons[["the constitution · GOAL, allowlist, frozen paths<br/>committed once by a human;<br/>models may argue, never edit"]] -.-> pack
+  prin[("PRINCIPLES<br/>promoted by re-derivation,<br/>permanent")] -.-> pack
+  runlog[("RUNTIME EVIDENCE<br/>what the tests, the deploy check<br/>and the probes actually saw")] -.-> pack
+
+  pack["assemble the context pack"] --> s1["STAGE 1 · SUGGEST<br/>every newly released model,<br/>in parallel, on identical context"]
+
+  s1 --> harv["HARVEST — before ranking,<br/>before anything below can throw<br/>ESCALATION + OPEN QUESTION from EVERY<br/>proposal, winners and losers alike"]
+  s1 --> kind{"is this a spike?"}
+
+  kind -->|"no"| rank["STAGE 1b · RANK<br/>authors withheld"]
+  rank --> impl["STAGE 2 · IMPLEMENT<br/>pinned model, anchored edits"]
+  impl --> apply{"did the edits<br/>apply cleanly?"}
+  apply -->|"no · all-or-nothing"| reset["restore the pristine tree"]
+  apply -->|"yes"| rev
+
+  kind -->|"yes"| res["RESEARCH<br/>the repo, the runtime evidence, and<br/>sources outside it — fenced as evidence,<br/>never as instructions"]
+  res --> find["write findings-NNN.md<br/>every claim sourced, or dropped.<br/>NO edit blocks permitted at this stage"]
+  find --> rev
+
+  rev["STAGE 3 · REVIEW<br/>pinned model, fresh context, fails closed.<br/>on a spike it asks: is this real, is it sourced,<br/>is it relevant to the GOAL?"]
+  rev -->|"rejected"| reset
+  reset -->|"STAGE 4 · REFINE · attempt < 3"| impl
+  reset -->|"attempts exhausted"| rec
+
+  rev -->|"approved · a diff"| guard{"guard check<br/>ON the agent branch"}
+  rev -->|"approved · a document"| doc["commit findings-NNN.md<br/>outcome: investigated<br/>no code changed"]
+
+  guard -->|"clean"| tests{"full suites<br/>ON the agent branch"}
+  guard -->|"touched a frozen path"| held(["left unmerged,<br/>for a human to look at"])
+  tests -->|"all green"| merge["merge, tag, log"]
+  tests -->|"any check red"| held
+  merge --> live["verify the LIVE product<br/>actually carries the change"]
+
+  live --> rec
+  doc --> rec
+  held --> rec
+
+  rec["write the record<br/>attempts.json — outcome, every attempt, the fan-out,<br/>and any question id the proposal cited"]
+
+  rec --> ep[("EPISODIC<br/>every attempts.json.<br/>never pruned")]
+  rec -->|"which question was cited,<br/>and whether it survived review"| th
+  harv --> th
+  doc --> th
+
+  th[("THEMATIC<br/>themes · escalations · questions · findings<br/>decays. see proposed-curiosity-memory")]
+
+  ep -.->|"read back next run"| pack
+  th -.->|"read back next run — and it is what<br/>the NEXT mode decision reads"| pack
+
+  legendA["solid = built today"]
+  legendB["dashed = proposed by the curiosity design"]
+  legendA ~~~ legendB
+
+  classDef proposed fill:#F3E3D4,stroke:#C08552,stroke-width:2px,stroke-dasharray:5 4;
+  classDef legend fill:#F6F8F9,stroke:#9FB0BE,stroke-width:1px;
+  class cons,inv,amb,res,find,doc,prin,runlog,harv proposed;
+  class legendB proposed;
+  class legendA legend;
+```
+
+*One lap with curiosity woven in. The three modes at the top are the whole
+structural change; the spike branch on the right rejoins the ordinary review
+gate rather than routing around it.*
+
+---
+
 ## 1. The idea, restated
 
 > Stop treating curiosity as a personality trait and define it as a
