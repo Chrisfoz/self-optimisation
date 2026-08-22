@@ -143,16 +143,44 @@ footer.foot .spacer { flex:1 1 30px; }
   </div>
 
   <h2>Signing in with GitHub</h2>
-  <p>You authorise the console through GitHub. We ask for three permissions,
-  and only when each is first needed:</p>
+  <p>Signing in only tells us who you are — your username, name and avatar,
+  enough to show you your own work. It grants no access to any repository by
+  itself. That access is a separate step, described next, and you can sign
+  in without ever taking it.</p>
+
+  <h2>Installing the app on your repositories</h2>
+  <p>To let the console read or write a repository at all, you install it as
+  a <b>GitHub App</b> — the same mechanism GitHub itself provides for tools
+  like this, not a broad "log in with GitHub" grant. Installing shows you
+  GitHub's own picker: <b>all</b> of your repositories, or only the ones you
+  choose. The console can never see or touch a repository you didn't select,
+  because the access GitHub hands us is limited to exactly that list — not a
+  restriction we promise to honour, one GitHub enforces on our behalf.</p>
+  <p>The app asks for four permissions, fixed and declared up front rather
+  than requested piecemeal, so you see the whole set before you install:</p>
   <ul class="plain">
-    <li><span class="mono">contents: write</span> — to open a branch with your configuration on it</li>
-    <li><span class="mono">secrets: write</span> — to store the encrypted keys described above</li>
-    <li><span class="mono">workflows: write</span> — to add the scheduled run, requested only when you reach the cadence step</li>
+    <li><span class="mono">contents: write</span> — to read your repository and open a branch with your configuration on it</li>
+    <li><span class="mono">secrets: write</span> — to store the encrypted keys described earlier</li>
+    <li><span class="mono">actions: write</span> — to add the scheduled run, and to trigger the one-off rehearsal you ask for</li>
+    <li><span class="mono">metadata: read</span> — basic repository information GitHub requires every app to have</li>
   </ul>
-  <p>Your access token is held in your browser for the length of the session
-  and is not stored by us. Revoking the authorisation in your GitHub settings
-  ends our access immediately and completely.</p>
+  <div class="callout">
+    <b>What we hold, in plain terms.</b> A GitHub App has its own private
+    key, generated when the app is registered and kept only in our
+    server-side secret storage — never in a repository, never in a browser.
+    We use it to ask GitHub, moment to moment, for a token that works for an
+    hour and only on the repositories you've installed the app on. That's a
+    credential of <i>ours</i>, not one of yours we're holding — a materially
+    different thing from a stolen password or a leaked API key, since it
+    can't be used against any account beyond what's actually installed, and
+    it expires within the hour either way.
+  </div>
+  <p>Removing access is a single action on GitHub's side, not ours:
+  <b>Settings → Applications → Installed GitHub Apps</b>, where you can drop
+  one repository or uninstall entirely. It takes effect immediately, and
+  every token already issued for that repository stops working — there is
+  nothing further to revoke with us, because we never held a token of yours
+  to begin with.</p>
 
   <h2>Your account, and what we store</h2>
   <p>Signing in creates an account. It holds your GitHub username, display

@@ -53,6 +53,44 @@ was never shown to it") and the exact thing a generator exists to prevent.
 
 So: **yes, this makes sense.** With three corrections to the framing, below.
 
+### 1.1 Two products, not one
+
+Two different people arrive at this differently, and this document has so
+far only been designing for one of them.
+
+**Path A — the repository.** Public, cloneable, already documented in
+`README.md`'s "Getting started": copy `harness/` into a project, fill in
+`project-adapter.yml` by hand or with a coding agent, run it in your own CI.
+No account, no console, no product — just a git repository someone can read
+end to end before trusting it with write access to their own project. This
+is the path for the person who wants to see every line before it runs, and
+it is finished today in the sense that matters: it works, it's documented,
+phase 0's generator (§2.1) makes it less tedious but doesn't change its
+shape.
+
+The one open item on this path isn't build work, it's governance: as this
+repository's author, the plan is to eventually open it to outside
+contributions — issues, pull requests, other people's commits — and review
+those the way any maintainer does. Nothing about that needs deciding now
+(branch protection, a `CONTRIBUTING.md`, who else gets merge rights are all
+easy to add later and easy to get wrong by rushing), but it's worth naming
+as the second half of "the repo" so it doesn't get silently conflated with
+Path B below. They're genuinely different postures: Path A is "trust the
+code because you can read it"; Path B is "trust us because of what we
+technically cannot do."
+
+**Path B — the hosted console.** Everything else in this document. Someone
+who will not clone a repository or hand-edit YAML goes to a URL, connects a
+GitHub repository, and gets the same harness configured for them. "Connects
+a GitHub repository" is doing real work in that sentence — §8.5 is about
+making that connection the way a trustworthy product does it, not a bare
+OAuth prompt.
+
+Both paths install the *same* harness and the *same* generator (§2.1) under
+the hood — Path B is Path A with the tedium designed away, not a different
+product with different guarantees. Everything below this point is Path B
+unless it says otherwise.
+
 ---
 
 ## 2. Three corrections before any of this gets built
@@ -208,9 +246,17 @@ live today.
 
 ### Step 1 — Connect
 
-GitHub auth, then repository picker. Reads the repo's languages, top-level
+Sign in, then **Install** the GitHub App — GitHub's own installation
+picker, not this console's UI: "All repositories" or "Only select
+repositories," the same dialog every GitHub App uses (Vercel, Dependabot,
+Claude Code's own GitHub integration). Landing back in the console, the
+newly granted repository is already selected. §8.5 is why this is an App
+install rather than an OAuth prompt, and what that costs to build.
+
+For the repository selected, the console reads its languages, top-level
 tree, `package.json`/equivalent, and existing `project-adapter.yml` if one
-is there (see §6.2 on round-tripping).
+is there (see §6.2 on round-tripping) — using an installation token scoped
+to exactly that repo, never the signed-in user's own account-wide access.
 
 ### Step 2 — Labs to watch
 
@@ -359,7 +405,7 @@ critical path entirely.
 | **0** | `harness/lib/install.mjs` + `templates/` + tests — the generator, as pure functions | nothing — buildable today |
 | **1** | **The console.** Sign-in, repo picker, all nine steps, sealed-box secrets, the PR, dispatch, and the run view (§8.4) | phase 0 |
 | **2** | Reusable workflow + published package (§3) — install shrinks to a four-file write | phase 0 |
-| **3** | Escalation decisions from the console (§7), and the cost meter reading real spend | phase 1 |
+| **3** | Escalation decisions from the console (§7) | phase 1 |
 | **4** | "Draft my brief for me" (§7), multi-repo view | phase 1 |
 | — | `npx self-optimisation init` — the same generator behind a CLI, for people who prefer one | phase 0, whenever |
 
@@ -371,14 +417,25 @@ reach it and where the invariants in §2.1 can't be checked. It is perhaps two
 days of work and everything else stands on it. Building the console first and
 the generator inside it is the one sequencing mistake worth naming twice.
 
-**Phase 1 needs almost no backend**, which is what makes this ordering
-affordable. The GitHub REST API is CORS-enabled for browser calls, so file
-writes (`PUT /repos/{owner}/{repo}/contents/{path}`), secret encryption
-(client-side), workflow dispatch (`POST .../actions/workflows/{file}/dispatches`)
-and run reads all happen from the page. The one thing that could not was the
-OAuth handshake — GitHub's token endpoint sends no CORS headers — and §8
-resolves that: Supabase Auth performs the exchange, so we write no auth
-backend and hold no client secret of our own.
+**Phase 1 needs a small backend, and that's a real revision, not a rounding
+error.** The original version of this section said "almost no backend,"
+reasoning from a plain OAuth connection: the GitHub REST API is
+CORS-enabled, so file writes, workflow dispatch and run reads could all
+happen straight from the page once Supabase Auth handled the one step that
+genuinely couldn't (§8.1, the OAuth handshake — GitHub's token endpoint
+sends no CORS headers).
+
+§8.5 changes the connection itself to a GitHub App — "connect your
+repository" becomes a real installation picker, the same one every GitHub
+App uses, rather than a broad OAuth grant — and that is worth the cost it
+adds: every privileged call now needs a short-lived installation token
+minted server-side from the App's own private key, which must never reach
+the browser. That minting step is the backend. It's small (one function,
+holds one secret, mints a token, proxies the one call it was asked for) and
+it does not change who runs the loop or who holds a model-lab key — §2.2 and
+§8.4's closing rule are untouched — but "almost no backend" stops being an
+accurate description of phase 1 the moment §8.5 is adopted, and the plan
+should say so rather than quietly outgrow its own claim.
 
 **What the user still supplies, and always will:** their own API keys. That
 is not friction to be designed away — it is the property that keeps their
@@ -419,10 +476,17 @@ discover in phase 3.
 ### 6.3 Permission scope
 
 Writing `.github/workflows/*` requires the `workflows` permission, which is
-a high-trust ask and will make some users pause. Two things help: request it
-at the moment it's needed rather than at sign-in, and open a pull request
-rather than pushing — a PR the user merges is a permission they can audit
-before it takes effect.
+a high-trust ask and will make some users pause. Under a GitHub App (§8.5)
+this is requested once, as part of the App's fixed permission set, at
+install time — a GitHub App doesn't support asking for one permission at
+sign-in and another later the way this section originally proposed, so that
+plan is corrected here rather than left standing. What *is* incremental, and
+does the same trust-building work: **which repositories** the permissions
+apply to. Nothing is granted org-wide by default; a user installs on one
+repository to try it and adds more only when they mean to. The other half of
+the mitigation is unchanged and still does real work — the console opens a
+pull request rather than pushing, so a permission that's been granted is
+still an action the user reviews and approves before it takes effect.
 
 ### 6.4 We become the thing we're describing
 
@@ -483,6 +547,14 @@ handshake, because GitHub's token endpoint sends no CORS headers, so the
 code-for-token exchange needs a server. Supabase Auth *is* that server, with
 GitHub as the provider. We write no auth backend, store no client secret of
 our own, and get session management for free.
+
+Keep this distinct from §8.5's GitHub App: this section is about **who is
+signed in** — establishing a `profiles` row and a session, nothing more.
+Which repositories that person's console can touch is a completely separate
+grant, made by installing the App, with its own token type and its own
+server-side piece. A user can sign in without ever installing the App
+(there's simply nothing to configure yet), and the App's installation
+outlives any one sign-in session.
 
 Be honest about what this changes, though. Phase 3 was "static page, no
 accounts, nothing of yours on our side." It is now "static page, hosted
@@ -597,6 +669,106 @@ One related rule that does not change: Supabase hands back a GitHub
 stored provider token is a credential of the user's that we would then be
 holding, which is the thing §2.2 exists to prevent.
 
+### 8.5 Connecting like Claude Code does: a real GitHub App
+
+"Connect your repository" has been standing in for a plain OAuth prompt so
+far — sign in, get a token scoped to whatever the OAuth App requests, use it
+for everything. That's the ordinary shape of "log in with GitHub," and it's
+also the wrong shape for this product: an OAuth token like that is
+account-wide (or as close to it as the requested scope allows), it's issued
+*to the browser*, and there is no way for a user to say "only this one repo,
+not the forty others in my org" without the console building that
+restriction itself, by convention, with nothing on GitHub's side enforcing
+it.
+
+A **GitHub App** is the mechanism built for exactly this, and it's what
+"like Claude Code" actually names: install the app, pick "All repositories"
+or specific ones in GitHub's own dialog, and the grant that results is
+scoped by GitHub itself to those repositories — the console literally cannot
+touch a repo the user didn't select, because the token it's handed only
+works on those repos. This is the right upgrade, and it changes real things
+about the architecture in §8.1–§8.4, worth working through rather than
+waving at.
+
+**Two tokens, two purposes, easy to conflate:**
+
+| | OAuth (§8.1) | GitHub App installation |
+|---|---|---|
+| Answers | "who is this person?" | "which repos may this app touch?" |
+| Scope | the signed-in user's account | exactly the repos granted at install |
+| Lifetime | the session | until uninstalled |
+| Who mints it | Supabase Auth, browser-side exchange | **us**, server-side, from the App's private key |
+
+The sign-in flow in §8.1 doesn't change — it still answers "who is this,"
+nothing more. Every privileged action against a repository (reading its
+tree, writing the four config files, storing a secret, dispatching a
+rehearsal, listing runs) now goes through the installation instead.
+
+**What this requires that didn't exist before:**
+
+- **The App's own private key**, generated once when the App is registered
+  on GitHub, held only in server-side secret storage (a Supabase Edge
+  Function's environment, never in a repository, never in the browser). This
+  is a real credential we hold — say so plainly rather than let §2.2's "we
+  hold nothing" become inaccurate by omission. It is categorically different
+  from what §2.2 and §8.4 promise never to hold, though: it is *our own
+  identity as an application*, not a user's secret or a model-lab key. Every
+  GitHub App works this way — this isn't a compromise specific to this
+  design, it's the mechanism GitHub built for third-party tools to act on a
+  user's repos without impersonating the user. Its blast radius is also
+  bounded in a way a stolen OAuth token's isn't: the key can only mint
+  tokens for repositories where the App is installed, those tokens expire in
+  an hour, and the permissions on them are fixed to what the App declared —
+  contents, secrets, actions, metadata, nothing else.
+- **A token-minting endpoint.** Given an installation ID, sign a short-lived
+  JWT with the App's private key, exchange it with GitHub for an
+  installation access token (∼1 hour), and either hand back that token for
+  the one call the console needs or make the call server-side and return
+  the result. Small, stateless, and — per §5's revised claim — the one piece
+  of real backend phase 1 now needs.
+- **A webhook receiver**, for the events GitHub sends when an installation
+  changes: `installation` (created/deleted) and
+  `installation_repositories` (added/removed). This is what keeps
+  `installations` accurate without depending on the user ever reopening the
+  console — someone can remove a repo from the App's access entirely inside
+  GitHub's own settings, and the row updates because GitHub told us, not
+  because we polled. `installations` gains one column for this,
+  `gh_installation_id`, and its RLS/ownership model is unchanged — the
+  webhook writes are the one place a service-role-equivalent write is
+  actually correct, because the event is GitHub's own authoritative record
+  of what changed, not user input.
+
+**What does not change:** the loop still runs in the user's own GitHub
+Actions, on their own model-lab keys, per the decision this session settled
+before writing this section. The App changes how the console *connects* —
+reads the tree, writes the config PR, dispatches a rehearsal, lists run
+history — not who executes the harness once it's configured. §2.2's promise
+about lab API keys is untouched by any of this; those still go browser →
+GitHub secrets, encrypted, never through us, exactly as before. The App's
+own private key is a new thing this design holds, and the honest framing is
+"we now hold one credential, ours, revocable per-repo by the user, with a
+tightly bounded blast radius" — not "we hold nothing," which stopped being
+true the moment this section was adopted.
+
+**Revocation gets better, not worse.** Uninstalling the App — from GitHub's
+own **Settings → Applications → Installed GitHub Apps**, or per-repository
+from that same screen — is a single, GitHub-native action that immediately
+invalidates every installation token for that repo. Compare this to an
+OAuth grant, which a user revokes from a different settings page and which,
+depending on scope, may have covered repos they'd forgotten were included.
+The App model gives a cleaner story for `privacy.html`'s "Removing it"
+section: the state a user needs to inspect and undo is exactly the
+repository list GitHub itself shows them, not something to trust the
+console's own account settings to represent accurately.
+
+**Still to register by hand, the same way Supabase's GitHub OAuth provider
+was called out in `console/supabase/README.md`:** creating the App itself
+on GitHub (name, homepage, permissions: `contents:write`,
+`secrets:write`, `actions:write`, `metadata:read`; webhook URL and secret;
+generate and download the private key) is a manual, one-time step only the
+account owner can do. Nothing in this repository can do it for you — this
+section documents the shape so that step is informed, not blind.
+
 ---
 
 ## 9. Open questions
@@ -619,7 +791,18 @@ holding, which is the thing §2.2 exists to prevent.
 4. **Does the console configure one repo or many?** Everything above assumes
    one. `project-adapter.yml` is per-repo by design and the schema already
    supports N installations per user, so multi-repo is a listing view rather
-   than a migration — but nothing in §4 is designed for it yet.
+   than a migration — but nothing in §4 is designed for it yet. §8.5's App
+   install already supports granting several repos at once, which makes this
+   question more pressing, not less: the console needs a "which of your
+   installed repos are you configuring right now" step the day multi-repo
+   grants become possible, or step 1 gets ambiguous the first time someone
+   installs on three repos and only means to set up one.
+5. **Who does the GitHub App belong to?** A personal GitHub account or an
+   organisation — this decides who can rotate the private key, who GitHub
+   shows as the App's publisher on every install screen, and what happens to
+   every existing installation if that account is ever unavailable. Worth
+   deciding once, deliberately, before the first real install exists to be
+   disrupted by changing it.
 
 ---
 

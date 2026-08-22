@@ -76,10 +76,46 @@ produces. 0003 corrects both:
   the same name — actionable failures only, deduplicated by provider and
   kind.
 
+## Migration 0004 — GitHub App identifiers
+
+`console/DESIGN.md` §8.5 replaces a plain OAuth connection with a GitHub
+App install — "which repos may this app touch" becomes a real, GitHub-
+enforced grant instead of a broad account-wide token. That needs two stable
+identifiers the OAuth-only design never did:
+
+- **`profiles.github_id`** — GitHub's numeric user id
+  (`raw_user_meta_data ->> 'provider_id'`), not the `github_login` string
+  already stored. A username can be renamed; this can't. It's the join key
+  a webhook payload's `installation.account.id` needs to find the right
+  `profiles` row.
+- **`installations.gh_installation_id`** — which App installation a repo
+  was granted under, needed to mint a scoped installation access token and
+  to resolve `installation_repositories` webhook events (a repo added to or
+  removed from an existing installation). Indexed, not unique — one
+  installation can cover several repos.
+
+`handle_new_user()` (in the `private` schema — see migration 0002) now
+populates `github_id` at signup, the same way it already populated
+`github_login`. Verified live: both columns are `bigint`, the unique
+constraint on `github_id` and the index on `gh_installation_id` both exist,
+and the function is still where migration 0002 put it (`private`, not
+`public` — `create or replace function` preserves an object's schema, it
+doesn't move it back).
+
+What this migration deliberately leaves alone: nothing here lets a webhook
+*create* an `installations` row for a user it doesn't recognise. That row is
+created by the console itself, right after a signed-in user returns from
+GitHub's install flow — the webhook's job is narrower, keeping an
+already-owned row's repo list current afterward.
+
 ## Still to do by hand
 
-Enabling GitHub sign-in needs credentials only the project owner can create,
-so it isn't in a migration:
+Two separate GitHub connections, per `console/DESIGN.md` §8.1: **sign-in**
+(who is this person) and the **GitHub App install** (which repos can the
+console touch). Neither is in a migration — both need credentials only the
+account owner can create.
+
+**Sign-in:**
 
 1. Create a GitHub OAuth app (**Settings → Developer settings → OAuth Apps**)
    with the callback URL
@@ -91,6 +127,29 @@ so it isn't in a migration:
 
 Until step 2, `auth.users` stays empty and the `handle_new_user` trigger never
 fires — the schema is ready, sign-in is not.
+
+**The GitHub App** (§8.5 — needed before Step 1's install picker or any
+repository-scoped write can work):
+
+1. Register a new GitHub App (**Settings → Developer settings → GitHub
+   Apps → New GitHub App**) — a name, a homepage URL, and permissions
+   `contents:write`, `secrets:write`, `actions:write`, `metadata:read`.
+   Decide who it belongs to first (§9, open question 5) — a personal
+   account or an organisation — since every install screen shows that owner
+   as the App's publisher.
+2. Generate a private key and store it only in server-side secret storage
+   (a Supabase Edge Function's environment, once §8.5's token-minting
+   endpoint exists) — never in this repository, never anywhere the browser
+   can reach.
+3. Set a webhook URL and secret, pointed at the receiver from §8.5, for the
+   `installation` and `installation_repositories` events.
+4. Record the App's client ID (and, once minted, its installation-token
+   endpoint) wherever the console's server-side code reads its own
+   configuration from.
+
+Until this exists, "Connect your repository" in the console has nothing to
+install — the schema is ready for it (`installations.gh_installation_id`),
+the mechanism is designed (§8.5), but the App itself doesn't exist yet.
 
 ## Applying migrations
 

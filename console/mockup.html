@@ -417,21 +417,39 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
         <!-- 1 -->
         <section class="step" data-step="1">
           <p class="eyebrow">Step 1 of 9</p>
-          <h2>Connect your repository</h2>
-          <p class="lede">We read your file tree and your existing configuration.
-          Nothing is written until you approve a pull request on the last step.</p>
+          <h2>Install on your repository</h2>
+          <p class="lede">This is GitHub's own installation picker, not ours —
+          "All repositories" or "Only select repositories," the same dialog every
+          GitHub App uses. The console can't see or touch anything outside what
+          you choose here; that's enforced by GitHub, not promised by us.</p>
+
+          <div class="panel" style="margin-bottom:16px">
+            <div class="panel-body" style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+              <div>
+                <div style="font-weight:600;font-size:14px">Installed on 1 repository</div>
+                <div style="font-size:12.5px;color:var(--muted);margin-top:2px">as chrisfoz · via GitHub's installation picker</div>
+              </div>
+              <button class="btn" type="button">Manage on GitHub ↗</button>
+            </div>
+          </div>
+
           <div class="chips" style="margin-bottom:14px">
             <span class="filechip">✓ Chrisfoz/carrot-games</span>
             <span class="filechip">default branch: main</span>
             <span class="filechip">Node · 41 files</span>
           </div>
+
+          <p class="field-note" style="margin-top:18px;margin-bottom:6px">
+            Fixed permissions, shown once at install — not requested piecemeal as you go:
+          </p>
           <table class="writes">
             <tr><th>Permission</th><th>Why</th></tr>
-            <tr><td class="p">contents: write</td><td>open a branch with your config on it</td></tr>
-            <tr><td class="p">secrets: write</td><td>store your API keys, encrypted in your browser</td></tr>
-            <tr><td class="p">workflows: write</td><td>add the scheduled run — requested only when you reach step 6</td></tr>
+            <tr><td class="p">contents: write</td><td>read your file tree, open a branch with your config on it</td></tr>
+            <tr><td class="p">secrets: write</td><td>store your API keys, encrypted in your browser before they arrive</td></tr>
+            <tr><td class="p">actions: write</td><td>add the scheduled run, and trigger the rehearsal in step 9</td></tr>
+            <tr><td class="p">metadata: read</td><td>basic repo info GitHub requires every app to have</td></tr>
           </table>
-          <p class="field-note">No existing <span class="mono">project-adapter.yml</span> found — starting from defaults.</p>
+          <p class="field-note">No existing <span class="mono">project-adapter.yml</span> found in this repository — starting from defaults.</p>
         </section>
 
         <!-- 2 -->
