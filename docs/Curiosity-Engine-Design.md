@@ -56,7 +56,7 @@ Three properties, none of which are typical:
 
 ---
 
-## 2. Four corrections before any of this gets built
+## 2. Five corrections before any of this gets built
 
 ### 2.1 The six-term score is one term wearing five hats
 
@@ -206,6 +206,58 @@ If a later version wants an agent that *executes* experiments to reduce its
 own uncertainty, that is a materially different safety proposition, needs
 its own gate, and does not belong in the same document as this one.
 
+### 2.5 The consensus gate selects for obviousness, and silence is its veto
+
+The natural instinct is to gate a research spike behind the escalation
+ledger's existing bar — three distinct models across two labs. Two reasons
+that is wrong as stated, and one of them is a finding about the code rather
+than about the idea.
+
+**There is no veto today, and the real blocker is worse than one.**
+`consensusOf()` ([`escalations.mjs:194`](../harness/lib/escalations.mjs))
+counts `supporters` only. Dissenters are recorded, rendered into the next
+model's brief, and included in the owner notification — but they do not
+subtract and they do not block. An entry two models argued against can
+still reach the bar.
+
+What actually blocks a lone idea is that **the other models never mention
+it**, and the mechanism scores that identically to rejection. Silence is
+not disagreement — a model that did not back an escalation may never have
+considered it. Today, inattention and judgement are the same number.
+
+**And a consensus bar is a majority filter, so it selects for
+obviousness.** The most valuable ambitious idea is close to definitionally
+the one fewest models thought of. Requiring 3-of-N agreement filters out
+exactly the originality the ambitious track exists to capture. This is the
+argument novelty search (Lehman & Stanley) makes against pure
+objective-based selection: the objective kills the stepping stones.
+
+Four corrections, in value order:
+
+1. **Split "look" from "commit."** A spike is cheap; an implementation is
+   expensive. **One model with a high-conviction question earns an
+   investigation; three models agreeing earns an implementation.** This
+   dissolves most of the problem: the lone ambitious model gets its hunch
+   documented and grounded, and the *findings* are what the other models
+   then react to. It converts "do you agree with this hunch?" — a bad
+   question for a consensus gate — into "do you agree with this evidence?"
+2. **Ask explicitly rather than waiting for volunteers.** An entry stuck
+   below the bar for N generations should be re-surfaced to the next
+   fan-out with a direct question: *one model raised this, nobody has
+   engaged with it — agree, disagree, or irrelevant?* That converts
+   silence into a judgement, and makes "nobody backed it" mean something.
+3. **Set the bar by reversibility, not by size.** One global threshold
+   treats "add a flag" and "change the data model" alike. Additive,
+   flagged or new-file changes should clear lower than structural ones.
+4. **Send the minority report to the owner.** The digest notifies on
+   consensus only. High-conviction unbacked items are precisely what a
+   human spots faster than three models will.
+
+One free by-product: a recorded dissent that later proves wrong is a
+retrospective calibration label on that model. *"Two models said this would
+break; it shipped and did not"* is a real signal about the dissenters, and
+the ledger already stores everything needed to compute it.
+
 ---
 
 ## 3. The signal this harness already has and currently discards
@@ -283,6 +335,28 @@ proposals are four different reads of the same repository**, and where they
 diverge is precisely where the repository is ambiguous. Harvesting one
 curiosity field from every proposal costs nothing extra — the fan-out has
 already been paid for.
+
+### 3.5 Runtime evidence — the one thing worth borrowing from SIA
+
+[hexo-ai/sia](https://github.com/hexo-ai/sia) runs a meta agent → task
+agent → task environment → improvement agent loop, and the edge it holds
+over this harness is not the meta agent (this project deliberately keeps
+the brief human-written and frozen, and that trade is defensible). It is
+`agent_execution_log.json`: the improvement agent reads **what actually
+happened at runtime**, not a diff and a verdict.
+
+This harness's improvement signal is "review approved, tests green" — a
+judgement about code, made by reading code. The analogue worth borrowing is
+not an agent trace (the suggesting model here is one-shot); it is **runtime
+evidence about the product**: what the tests actually exercised, what
+`verify-deployment.mjs` saw, the scorecard probe's raw output rather than
+its score.
+
+This is the same gap the webfont incident exposed — 239 checks green, a
+thirteen-second first paint. A curiosity engine reading only source will
+ask questions about source. Curiosity grounded in a runtime log asks about
+behaviour, which is where the defects that survive every gate actually
+live.
 
 ---
 
@@ -413,9 +487,127 @@ Four differences from the escalation ledger, each load-bearing:
 `writeAttemptRecord()` stores it. That is the label §5 needs, and it costs
 one field.
 
+### Stage C — the spike: a generation that produces a document instead of a diff
+
+The originating notes propose a cycle of *generate questions (3) → estimate
+information gain → investigate → document learnings → suggest*, and note
+that investigation needs to reach outside the repository rather than only
+reasoning over its own source. Both are right. The realisation that makes
+them cheap is that **this is not a second pipeline — it is one new outcome
+type on the pipeline that already exists.**
+
+`runGeneration()` returns `approved`, `abandoned`, `no-proposal` or
+`crashed`. Add:
+
+```
+outcome: 'investigated'   // wrote docs/curiosity/findings-NNN.md, changed no code
+```
+
+Everything else is unchanged: same cost, same reviewer, same
+`attempts.json` record, same PR. The reviewer's question differs but its
+posture does not — *is this a real finding, is it sourced, is it relevant
+to the stated goal?* — and it still
+[fails closed](../learning/01-principles.md#14-the-safety-gate-fails-closed-helpers-fail-safe).
+
+The suggestion a spike produces does **not** ship from the spike. It goes
+into the next ordinary generation and is implemented, reviewed and tested
+like anything else. Curiosity never bypasses a gate; it only decides what
+the gates are pointed at.
+
+**Three questions, capped.** Forced scarcity, for the reason the themes
+parser already caps at four: an open list produces padding, and padding is
+indistinguishable from insight until it wastes a generation.
+
+**Reaching outside the repository, and the one hard rule.** A question like
+*"is there a better architectural pattern for this"* is answerable from the
+literature and not from `buildSourceBundle()`'s output, so a spike that
+cannot search is crippled. But search results are text a stranger wrote,
+entering a pipeline that ends in a commit —
+[principle 19](../learning/01-principles.md#19-anything-a-stranger-typed-is-data-not-instructions)
+exactly, with a higher stake than player feedback ever had. So:
+
+- The research pass writes `findings-NNN.md` with **sources cited**, and
+  produces no diff. It is not permitted to emit edit blocks; the edit-format
+  parser should reject them outright at this stage rather than ignore them.
+- A **separate, later call** reads that file as context, fenced in the same
+  hostile-input envelope player feedback already gets.
+- **Uncited findings are dropped, not summarised.** Grounding is the entire
+  point of reaching outside; an unverifiable claim is worse than silence,
+  and [principle 18](../learning/01-principles.md#18-never-claim-data-you-did-not-supply)
+  says the section disappears rather than describing data that is not there.
+- Fetch, strip, truncate and cap exactly as the feedback path does. The
+  downstream gates are the real backstop; this is the cheap first one.
+
+---
+
+## 4.5 What authorises a spike
+
+§2.5's first correction, stated as a rule:
+
+| Action | Bar |
+|---|---|
+| Open a question | Any model, any run. Free. |
+| **Run a spike** (spend a generation on `investigated`) | One model's high-conviction question, **or** any question with corroboration ≥ 2. Not the full consensus bar. |
+| Implement an ambitious change | The existing bar — 3 distinct models, 2 labs — **plus** a human accepting it. |
+| Change a frozen rule | Unchanged. Human only, forever. |
+
+The asymmetry is the design. Looking is cheap and should be easy to
+authorise; committing is expensive and should stay hard.
+
 ---
 
 ## 5. Scoring, honestly
+
+### 5.1 The product form, and what survives of it
+
+A later revision of the originating notes restates the objective as a
+**product** rather than a sum:
+
+```
+Curiosity(x) = Novelty · Uncertainty · InformationGain · Surprise · Usefulness
+               ─────────────────────────────────────────────────────────────
+                                        Cost
+```
+
+That change is not cosmetic, and it buys one genuinely correct property the
+sum did not have: **any zero term zeroes the result.** Under the sum, a
+fascinating, novel, surprising question about something that does not matter
+still scored mid-table, because high novelty could paper over zero
+usefulness. Under the product it scores zero, which is the right answer.
+
+It also makes the correlation problem worse. Multiplying four terms that
+measure roughly the same latent quantity (§2.1) compounds the correlation
+rather than averaging it out, and the dynamic range collapses — four terms
+at 0.5 give 0.06. The ranking then turns on whichever term happened to be
+scored lowest, which is the least reliable number in the set.
+
+**The reduction that keeps the product's semantics and drops its
+arithmetic: filter, then rank.**
+
+| Term | Role |
+|---|---|
+| `Usefulness` | **Filter.** Is this question relevant to the stated goal at all? Zero is allowed and means "drop it." |
+| `Cost` | **Filter.** Can one generation afford to answer it? Zero is allowed. |
+| `Novelty · Uncertainty · InformationGain · Surprise` | **One ranked dimension.** Not four numbers. Cross-model corroboration (§3.1) is what measures it. |
+
+### 5.2 `Usefulness` only became definable when the goal did
+
+Worth stating explicitly, because it is the hinge between this document and
+the goal-setting work it depends on. In the original formulation
+`ε·Usefulness` had no referent: useful *toward what*? A harness whose
+success signal is "tests pass and a reviewer approved" cannot answer that,
+which is why §2.1 could not rescue the term.
+
+Once the user commits to a goal at install time — and once that goal is
+frozen in the constitution rather than written into the brief — usefulness
+becomes **proximity to the stated goal**, which a reviewer can judge and a
+retrospective pass can score. The goal-setting feature and the missing
+fitness function are the same feature, and this is the term that proves it.
+
+This is the strongest argument for sequencing the goal first. Without it,
+two of the six terms are undefinable and the other four are one term.
+
+### 5.3 The three scores
 
 Do not ship the six-term formula. Ship this:
 
@@ -449,6 +641,55 @@ the score is worthless, and a score nothing checks will be believed.
 
 `λ·Cost` survives from the original formula unchanged. It is the term that
 was always measurable.
+
+---
+
+## 5.5 Memory: three tiers, and a rule for forgetting
+
+The engine's real requirement is not *more* memory. It is a memory that
+**keeps what mattered and lets the rest fall away** — trial and error
+consolidated, noise discarded incrementally. That is a third tier this
+project does not have, plus the rule that moves things between tiers.
+
+| Tier | What it holds | Today |
+|---|---|---|
+| **Episodic** | `docs/generations/gen-NNN/attempts.json` — every attempt, every rejection, every crash | **Built.** Never pruned; `buildGenerationIndex()` keeps all of it compactly, and nothing is ever dropped. |
+| **Thematic** | Themes reviews, escalation ledger, (proposed) curiosity ledger | **Partial.** Accumulates. Only the *latest* themes review is loaded — forgetting by accident rather than by rule. Escalations never expire. |
+| **Principled** | The handful of things that keep turning out to be true | **Missing as a tier.** `learning/01-principles.md` is hand-written by a human. |
+
+**The promotion rule: independent re-derivation.**
+
+- A theme that a *later* review — reading a *different* window of
+  generations — arrives at again has been confirmed from a fresh vantage.
+  Promote it: permanent standing context, in the tier that never decays.
+- A theme no subsequent review restates falls out. It was an observation
+  about ten generations, not a truth about the project.
+- An escalation nobody backs after being explicitly re-surfaced (§2.5,
+  correction 2) is retired with a reason.
+- A curiosity question nothing cites within N generations is retired.
+
+Note what that criterion is: **the escalation consensus logic, applied
+across time instead of across models.** Consensus asks *do several
+independent models agree now?* Promotion asks *does the same conclusion
+keep being reached by different readers of different evidence?* This
+project already trusts the first; the second is the same argument with the
+axis rotated, and it is cheap because the corroboration counting already
+exists.
+
+Two consequences worth stating:
+
+**This is the mechanism [principle 21](../learning/01-principles.md#21-constraints-never-expire-hints-should)
+has been missing.** "Constraints never expire, hints should" is currently an
+intention — nothing in the harness decays anything. Promotion-by-re-derivation
+makes decay automatic and evidence-driven rather than a human periodically
+deciding a hint has gone stale.
+
+**Failures are the densest input to it.** `abandoned`, `rejected-by-review`
+and `crashed` records are the least-read files in the repository and the
+most informative for this pass. A rejection that recurs for the same
+underlying reason across unrelated generations is a principle waiting to be
+named — and naming it is exactly what stops the eleventh model rediscovering
+it.
 
 ---
 
@@ -491,7 +732,7 @@ failure and §6's mortality metric is the detector. Accept "none" as a
 first-class answer in the prompt, exactly as the escalation field already
 does.
 
-**7.3 It does not fix the thing that actually limits this project.**
+**7.3 It does not fix the thing that actually limits this project — and the sequencing decision now reflects that.**
 `07-whats-actually-new.md` §3 is blunt: the loop is a loop rather than a
 search because **nothing selects on a score.** A curiosity engine changes
 *which questions get asked*; it does not change *what gets selected*. The
@@ -505,6 +746,13 @@ fitness function in priority. If anything, curiosity is best justified as
 *the thing that finds out what the fitness function should measure* — which
 is exactly what three models independently escalating the `readingLevel`
 blind spot already did once, by hand.
+
+*Resolved, in part:* the goal-setting work this document leans on in §5.2 is
+that fitness function arriving by another route, and §8 now sequences it
+first rather than treating it as parallel. The risk that remains is
+building the engine **before** the goal lands — at which point `Usefulness`
+is undefinable, the spike has nothing to be relevant to, and the
+retrospective pass has no destination to measure progress toward.
 
 **7.4 Related-work overclaim.** Intrinsic motivation and curiosity-driven RL
 — Schmidhuber's compression progress, Pathak's ICM, RND — define curiosity
@@ -533,16 +781,30 @@ be refused in v1.
 
 | Phase | What | Depends on |
 |---|---|---|
+| **−1** | **The committed goal.** Frozen in `constitution`, argued against only through the ledger ([principle 10b](../learning/01-principles.md#10b-a-frozen-rule-still-needs-a-way-to-be-wrong)), judged by the reviewer rather than scored by a metric ([principle 22b](../learning/01-principles.md#22b-a-fitness-function-measures-what-it-can-reach-not-what-matters--and-the-loop-will-optimise-the-gap)). Not this document's work, but every phase below leans on it and §5.2 is undefinable without it. | — |
 | **0** | Write `generate-themes-review.mjs` — the CLI that calls a model with the existing prompt and parser and writes `review-NNN.json`. Honour `memory.themes_review.cadence_generations`, which is parsed, tested and RESERVED today. | Real `docs/generations/` records |
 | **A** | Add `UNKNOWN` to the themes prompt, parser and brief; one new `section()` in the suggestion prompt. | Phase 0 |
 | **A′** | Retrospective check only: a script that reads the ledger-less questions out of themes reviews and reports whether any subsequent generation went near them. Cheap, and it is the go/no-go for phase B. | A, plus ~2 cadence boundaries |
 | **B** | `OPEN QUESTION` / `QUESTION SUPPORT` / `QUESTION ANSWER` fields, `docs/curiosity/ledger.json`, harvest at the pre-ranking seam, corroboration counting, retirement. | A′ showing the questions are not inert |
-| **C** | Metrics from §6 into the digest and the paper. | B |
+| **C** | The spike: `outcome: 'investigated'`, `findings-NNN.md`, external research behind §4 stage C's envelope, authorised per §4.5. | B, and a committed goal |
+| **D** | Memory consolidation: the principles tier and the promotion/retirement rule (§5.5). | Several themes reviews on record |
+| **E** | Metrics from §6 into the digest and the paper. | C |
 
-Phase A′ is the one to protect. It is the cheapest possible experiment that
-can kill the idea, and this document's central argument is that a curiosity
-mechanism which nobody checks retrospectively is indistinguishable from one
-that works.
+Two phases carry the weight. **Phase −1** because everything downstream
+resolves against the goal, and **phase A′** because it is the cheapest
+possible experiment that can kill the idea — this document's central
+argument being that a curiosity mechanism nobody checks retrospectively is
+indistinguishable from one that works.
+
+One gap this phasing exposes and does not close: today an escalation that
+reaches consensus and is **accepted** by the owner changes a `status` field
+and is rendered into future briefs — and nothing schedules work for it. No
+generation is assigned it, no scope is unlocked by it. Acceptance is a
+status change, not a work order. Wiring *accepted escalation → assignment
+for the next ambitious-scope generation → outcome written back onto the
+entry* is small, sits outside this document's scope, and would produce this
+project's first genuine outcome label: **did the thing three models agreed
+on actually work?**
 
 ---
 
@@ -558,3 +820,11 @@ that works.
 | `docs/curiosity/ledger.json` | **PROPOSED** — §4 stage B |
 | `OPEN QUESTION` suggestion field | **PROPOSED** — §4 stage B |
 | Question citation in `attempts.json` | **PROPOSED** — §4, needed for §5's labels |
+| `outcome: 'investigated'` + `findings-NNN.md` | **PROPOSED** — §4 stage C |
+| Spike authorisation below the consensus bar | **PROPOSED** — §4.5 |
+| Re-surfacing a stuck escalation to the next fan-out | **PROPOSED** — §2.5, correction 2 |
+| Promotion of a re-derived theme to a principle | **PROPOSED** — §5.5 |
+| Committed goal in `constitution` | **PROPOSED, and a prerequisite** — §5.2. Not part of this design; this design depends on it |
+| External research fetch + hostile-input envelope | **PROPOSED** — §4 stage C. `feedback` already models the envelope and is wired to `null` |
+| Runtime/execution evidence in the context pack | **PROPOSED** — §3.5 |
+| Sampling controls (temperature/top-p) per call | **ABSENT** — `llm-provider.mjs` exposes `maxTokens` only |
