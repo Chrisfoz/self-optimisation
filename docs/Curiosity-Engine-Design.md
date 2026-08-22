@@ -26,11 +26,37 @@ same Mermaid source form as the five that describe the harness itself.
 document.** Reading the first one is the fastest way to see what actually
 changes about a run.
 
-| Diagram | What it answers |
-|---|---|
-| [`proposed-curiosity-run.mmd`](../learning/diagrams/proposed-curiosity-run.mmd) | One lap, end to end. Where the three run modes are chosen, where questions are harvested, and what a spike does differently. Embedded below. |
-| [`proposed-curiosity-memory.mmd`](../learning/diagrams/proposed-curiosity-memory.mmd) | What happens *between* laps — the three tiers of §5.5, promotion by re-derivation, and what gets forgotten. |
-| [`proposed-curiosity-authorisation.mmd`](../learning/diagrams/proposed-curiosity-authorisation.mmd) | What authorises what — §2.5 and §4.5 drawn: looking is cheap, committing is expensive, and silence stops being scored as rejection. |
+| # | Diagram | What it answers |
+|---|---|---|
+| **D1** | [`proposed-curiosity-run.mmd`](../learning/diagrams/proposed-curiosity-run.mmd) | One lap, end to end. Where the three run modes are chosen, where questions are harvested, and what a spike does differently. Embedded below. |
+| **D2** | [`proposed-curiosity-memory.mmd`](../learning/diagrams/proposed-curiosity-memory.mmd) | What happens *between* laps — the three tiers of §5.5, promotion by re-derivation, and what gets forgotten. |
+| **D3** | [`proposed-curiosity-authorisation.mmd`](../learning/diagrams/proposed-curiosity-authorisation.mmd) | What authorises what — §2.5 and §4.5 drawn: looking is cheap, committing is expensive, and silence stops being scored as rejection. |
+
+### The components, and where each is specified
+
+Every node in those diagrams carries a **`C n`** prefix naming its
+implementation spec in [`curiosity/`](curiosity/) — build instructions, not
+argument: the file it touches, the data shape, the interface, how it fails,
+and the tests to write. The full index with dependencies and phases is
+[`curiosity/README.md`](curiosity/README.md).
+
+| # | Component | This document | Spec |
+|---|---|---|---|
+| C1 | Committed goal | §5.2 | [C1-committed-goal.md](curiosity/C1-committed-goal.md) |
+| C2 | Themes review CLI + `UNKNOWN` | §4 stage A | [C2-themes-review-cli.md](curiosity/C2-themes-review-cli.md) |
+| C3 | Curiosity ledger | §4 stage B, §3.1 | [C3-curiosity-ledger.md](curiosity/C3-curiosity-ledger.md) |
+| C4 | Run-mode selector | §2.3, §4.5 | [C4-run-mode-selector.md](curiosity/C4-run-mode-selector.md) |
+| C5 | The spike | §4 stage C, §2.4 | [C5-the-spike.md](curiosity/C5-the-spike.md) |
+| C6 | External research | §4 stage C | [C6-external-research.md](curiosity/C6-external-research.md) |
+| C7 | Memory consolidation | §5.5 | [C7-memory-consolidation.md](curiosity/C7-memory-consolidation.md) |
+| C8 | Escalation follow-through | §2.5, §8 | [C8-escalation-follow-through.md](curiosity/C8-escalation-follow-through.md) |
+| C9 | Retrospective scoring | §5.3, §6 | [C9-retrospective-scoring.md](curiosity/C9-retrospective-scoring.md) |
+| C10 | Runtime evidence | §3.5 | [C10-runtime-evidence.md](curiosity/C10-runtime-evidence.md) |
+
+**Two can be built today**, against the harness as it stands, independent of
+everything else: **C8** (the smallest and highest-value — an accepted
+escalation currently schedules no work) and **C10** (pure context-pack work
+that improves every proposal, curiosity or not).
 
 The thing worth noticing in the first diagram is how little is new. There is
 no second pipeline: one trigger, one context pack, one review gate, one
@@ -45,22 +71,22 @@ flowchart TD
   pre -->|"already red"| abort(["abort — a later failure<br/>would not be attributable"])
   pre -->|"proven"| mode
 
-  mode{"WHICH MODE IS THIS RUN?<br/>recommendScope earns the headroom;<br/>the ledgers say what is waiting"}
+  mode{"C4 · WHICH MODE IS THIS RUN?<br/>recommendScope earns the headroom;<br/>the ledgers say what is waiting"}
   mode -->|"nothing earned, nothing queued"| foc["FOCUSED<br/>one small, localised improvement"]
-  mode -->|"2 clean merges earned it, AND<br/>an accepted escalation is queued"| amb["AMBITIOUS<br/>an assignment drawn from the queue —<br/>not 'go and pick something big'"]
-  mode -->|"a question is authorised,<br/>and no assignment is waiting"| inv["INVESTIGATE<br/>a spike — produces a document,<br/>not a diff"]
+  mode -->|"2 clean merges earned it, AND<br/>an accepted escalation is queued"| amb["C4 · AMBITIOUS<br/>an assignment drawn from the queue —<br/>not 'go and pick something big'"]
+  mode -->|"a question is authorised,<br/>and no assignment is waiting"| inv["C5 · INVESTIGATE<br/>a spike — produces a document,<br/>not a diff"]
 
   foc --> pack
   amb --> pack
   inv --> pack
 
-  cons[["the constitution · GOAL, allowlist, frozen paths<br/>committed once by a human;<br/>models may argue, never edit"]] -.-> pack
-  prin[("PRINCIPLES<br/>promoted by re-derivation,<br/>permanent")] -.-> pack
-  runlog[("RUNTIME EVIDENCE<br/>what the tests, the deploy check<br/>and the probes actually saw")] -.-> pack
+  cons[["C1 · the constitution — GOAL, allowlist, frozen paths<br/>committed once by a human;<br/>models may argue, never edit"]] -.-> pack
+  prin[("C7 · PRINCIPLES<br/>promoted by re-derivation,<br/>permanent")] -.-> pack
+  runlog[("C10 · RUNTIME EVIDENCE<br/>what the tests, the deploy check<br/>and the probes actually saw")] -.-> pack
 
   pack["assemble the context pack"] --> s1["STAGE 1 · SUGGEST<br/>every newly released model,<br/>in parallel, on identical context"]
 
-  s1 --> harv["HARVEST — before ranking,<br/>before anything below can throw<br/>ESCALATION + OPEN QUESTION from EVERY<br/>proposal, winners and losers alike"]
+  s1 --> harv["C3 · HARVEST — before ranking,<br/>before anything below can throw<br/>ESCALATION + OPEN QUESTION from EVERY<br/>proposal, winners and losers alike"]
   s1 --> kind{"is this a spike?"}
 
   kind -->|"no"| rank["STAGE 1b · RANK<br/>authors withheld"]
@@ -69,8 +95,8 @@ flowchart TD
   apply -->|"no · all-or-nothing"| reset["restore the pristine tree"]
   apply -->|"yes"| rev
 
-  kind -->|"yes"| res["RESEARCH<br/>the repo, the runtime evidence, and<br/>sources outside it — fenced as evidence,<br/>never as instructions"]
-  res --> find["write findings-NNN.md<br/>every claim sourced, or dropped.<br/>NO edit blocks permitted at this stage"]
+  kind -->|"yes"| res["C6 · RESEARCH<br/>the repo, the runtime evidence, and<br/>sources outside it — fenced as evidence,<br/>never as instructions"]
+  res --> find["C5 · write findings-NNN.md<br/>every claim sourced, or dropped.<br/>NO edit blocks permitted at this stage"]
   find --> rev
 
   rev["STAGE 3 · REVIEW<br/>pinned model, fresh context, fails closed.<br/>on a spike it asks: is this real, is it sourced,<br/>is it relevant to the GOAL?"]
@@ -79,7 +105,7 @@ flowchart TD
   reset -->|"attempts exhausted"| rec
 
   rev -->|"approved · a diff"| guard{"guard check<br/>ON the agent branch"}
-  rev -->|"approved · a document"| doc["commit findings-NNN.md<br/>outcome: investigated<br/>no code changed"]
+  rev -->|"approved · a document"| doc["C5 · commit findings-NNN.md<br/>outcome: investigated<br/>no code changed"]
 
   guard -->|"clean"| tests{"full suites<br/>ON the agent branch"}
   guard -->|"touched a frozen path"| held(["left unmerged,<br/>for a human to look at"])
@@ -91,19 +117,19 @@ flowchart TD
   doc --> rec
   held --> rec
 
-  rec["write the record<br/>attempts.json — outcome, every attempt, the fan-out,<br/>and any question id the proposal cited"]
+  rec["write the record<br/>attempts.json — outcome, every attempt, the fan-out,<br/>and any question id the proposal cited  · C9"]
 
   rec --> ep[("EPISODIC<br/>every attempts.json.<br/>never pruned")]
   rec -->|"which question was cited,<br/>and whether it survived review"| th
   harv --> th
   doc --> th
 
-  th[("THEMATIC<br/>themes · escalations · questions · findings<br/>decays. see proposed-curiosity-memory")]
+  th[("C2 · C3 · THEMATIC<br/>themes · escalations · questions · findings<br/>decays. see proposed-curiosity-memory")]
 
   ep -.->|"read back next run"| pack
   th -.->|"read back next run — and it is what<br/>the NEXT mode decision reads"| pack
 
-  legendA["solid = built today"]
+  legendA["solid = built today<br/>C n = the spec in docs/curiosity/"]
   legendB["dashed = proposed by the curiosity design"]
   legendA ~~~ legendB
 

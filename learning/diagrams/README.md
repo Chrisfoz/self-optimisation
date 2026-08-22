@@ -26,11 +26,17 @@ exists; everything in these three that is **dashed and warm-toned is
 proposed**, and everything solid is what runs today. Do not read them as
 documentation of the harness.
 
-| File | What it shows |
-|---|---|
-| `proposed-curiosity-run.mmd` | **One lap, end to end, with curiosity woven in** — the three run modes, where questions are harvested, and the spike that produces a document instead of a diff. |
-| `proposed-curiosity-memory.mmd` | **What happens between laps** — the three memory tiers, promotion by independent re-derivation, and the forgetting rule. |
-| `proposed-curiosity-authorisation.mmd` | **What authorises what** — why looking is cheap and committing is expensive, and how silence stops being scored as rejection. |
+| # | File | What it shows |
+|---|---|---|
+| **D1** | `proposed-curiosity-run.mmd` | **One lap, end to end, with curiosity woven in** — the three run modes, where questions are harvested, and the spike that produces a document instead of a diff. |
+| **D2** | `proposed-curiosity-memory.mmd` | **What happens between laps** — the three memory tiers, promotion by independent re-derivation, and the forgetting rule. |
+| **D3** | `proposed-curiosity-authorisation.mmd` | **What authorises what** — why looking is cheap and committing is expensive, and how silence stops being scored as rejection. |
+
+Nodes in these three carry a **`C n`** prefix. That is the component's
+implementation spec in [`../../docs/curiosity/`](../../docs/curiosity/) — a
+node in a picture and a document on that page are the same thing, so an
+engineer can point at a box and open the build instructions for it. The index
+is [`docs/curiosity/README.md`](../../docs/curiosity/README.md).
 
 They render with the same "whiteprint" theme block as the worked examples,
 for the same reason: they are detailed enough to want a fixed plate rather

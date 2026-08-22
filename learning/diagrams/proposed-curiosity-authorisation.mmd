@@ -2,28 +2,28 @@
 flowchart TD
   raise["a model raises something<br/>during an ordinary run"] --> what{"what kind of thing?"}
 
-  what -->|"an OPEN QUESTION —<br/>something it could not determine<br/>from the context it was given"| free["opening it is FREE<br/>any model, any run, no gate"]
+  what -->|"an OPEN QUESTION —<br/>something it could not determine<br/>from the context it was given"| free["C3 · opening it is FREE<br/>any model, any run, no gate"]
   what -->|"an ESCALATION —<br/>change something it may not edit"| bar
   what -->|"a change to a frozen rule"| never(["human only. forever.<br/>no amount of consensus unlocks this"])
 
-  free --> look{"authorised to LOOK?<br/>spend one generation investigating"}
-  look -->|"ONE model, high conviction —<br/>OR corroboration ≥ 2"| spike["SPIKE<br/>outcome: investigated<br/>writes a sourced findings-NNN.md"]
+  free --> look{"C5 · authorised to LOOK?<br/>spend one generation investigating"}
+  look -->|"ONE model, high conviction —<br/>OR corroboration ≥ 2"| spike["C5 · SPIKE<br/>outcome: investigated<br/>writes a sourced findings-NNN.md"]
   look -->|"below that"| open["stays open,<br/>re-ranked at each cadence"]
-  open --> inert{"cited by nothing<br/>within N generations?"}
+  open --> inert{"C3 · C9 · cited by nothing<br/>within N generations?"}
   inert -->|"yes"| retired(["retired with a reason"])
   inert -->|"no, still live"| open
 
   spike ==>|"the other models now react to<br/>EVIDENCE rather than to a hunch"| bar
 
-  bar{"3 distinct models<br/>across 2 labs?"}
-  bar -->|"not yet"| silent{"stuck below the bar<br/>for N generations?"}
+  bar{"C8 · 3 distinct models<br/>across 2 labs?"}
+  bar -->|"not yet"| silent{"C8 · stuck below the bar<br/>for N generations?"}
   silent -->|"no, still accumulating"| accum(["waits. more runs, more models"])
-  silent -->|"yes"| ask["re-surface explicitly to the next fan-out:<br/>agree · disagree · irrelevant?<br/>silence stops being scored as rejection"]
+  silent -->|"yes"| ask["C8 · re-surface explicitly to the next fan-out:<br/>agree · disagree · irrelevant?<br/>silence stops being scored as rejection"]
   ask --> bar
 
   bar -->|"reached"| owner{"THE OWNER DECIDES<br/>shown the case, the backers, the dissenters —<br/>and the minority report of<br/>high-conviction items nobody backed"}
   owner -->|"declined"| settled(["settled. shown to future models<br/>with the reason, never re-argued"])
-  owner -->|"accepted"| order[("WORK ORDER<br/>assigned to the next<br/>ambitious-scope generation")]
+  owner -->|"accepted"| order[("C8 · WORK ORDER<br/>assigned to the next<br/>ambitious-scope generation")]
 
   order --> ship["implemented, reviewed, guarded and tested<br/>exactly like any other change.<br/>curiosity never bypasses a gate —<br/>it only decides what they point at"]
 

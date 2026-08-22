@@ -4,18 +4,18 @@ flowchart TB
     gens[("docs/generations/gen-NNN/attempts.json<br/>approved · abandoned · rejected-by-review · crashed<br/>the failures are the densest material here")]
   end
 
-  fan["every run's fan-out<br/>ESCALATION + OPEN QUESTION,<br/>harvested from winners and losers"]
+  fan["C3 · C8 · every run's fan-out<br/>ESCALATION + OPEN QUESTION,<br/>harvested from winners and losers"]
 
-  gens -->|"every N generations,<br/>read N at once — not one at a time"| trev["THE REVIEW PASS<br/>a fresh model reads the whole window<br/>and is asked what no single record can answer"]
+  gens -->|"every N generations,<br/>read N at once — not one at a time"| trev["C2 · THE REVIEW PASS<br/>a fresh model reads the whole window<br/>and is asked what no single record can answer"]
 
   trev --> noticed["NOTICED<br/>the association —<br/>what keeps co-occurring"]
   trev --> means["MEANS<br/>the abstraction —<br/>the principle that explains why"]
-  trev --> unknown["UNKNOWN<br/>the frontier of the abstraction —<br/>what the principle exposes<br/>and does not answer"]
+  trev --> unknown["C2 · UNKNOWN<br/>the frontier of the abstraction —<br/>what the principle exposes<br/>and does not answer"]
 
   subgraph t2["TIER 2 · THEMATIC — accumulates, and is meant to decay"]
     themes[("themes/review-NNN.json")]
     esc[("escalations/ledger.json")]
-    ques[("curiosity/ledger.json")]
+    ques[("C3 · curiosity/ledger.json")]
   end
 
   noticed --> themes
@@ -24,21 +24,21 @@ flowchart TB
   fan --> ques
   fan --> esc
 
-  themes --> rederived{"did a LATER review,<br/>reading a DIFFERENT window,<br/>arrive at this again?"}
+  themes --> rederived{"C7 · did a LATER review,<br/>reading a DIFFERENT window,<br/>arrive at this again?"}
   rederived -->|"yes — independent re-derivation"| prin
   rederived -->|"no review ever restated it"| drop(["falls out. it was an observation<br/>about ten generations,<br/>not a truth about the project"])
 
-  ques --> cited{"did any generation<br/>cite it within N?"}
+  ques --> cited{"C9 · did any generation<br/>cite it within N?"}
   cited -->|"yes, and the proposal survived review"| paid["retrospective label:<br/>this question paid off"]
   cited -->|"never touched"| retire(["retired with a reason —<br/>plausible, and inert"])
   paid -->|"counts toward promoting<br/>the theme it came from"| rederived
 
-  esc --> stuck{"below the consensus bar<br/>for N generations?"}
+  esc --> stuck{"C8 · below the consensus bar<br/>for N generations?"}
   stuck -->|"yes"| resurf["re-surface it explicitly:<br/>agree · disagree · irrelevant?<br/>so silence stops counting as a no"]
   resurf --> esc
 
   subgraph t3["TIER 3 · PRINCIPLES — permanent standing context"]
-    prin[("the handful of things that keep<br/>turning out to be true.<br/>promotion criterion = the consensus logic,<br/>with the axis rotated from models to time")]
+    prin[("C7 · the handful of things that keep<br/>turning out to be true.<br/>promotion criterion = the consensus logic,<br/>with the axis rotated from models to time")]
   end
 
   prin -.-> out
