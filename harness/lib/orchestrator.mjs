@@ -55,6 +55,7 @@ import { setOutput, oneLine } from './gh-output.mjs';
 import { buildEditFormatSpec, parseResponse, applyEdits, renderForReview } from './edit-format.mjs';
 import { reviewChanges } from './review.mjs';
 import { parseEscalation, recordRound, loadLedger, saveLedger, renderForNotification } from './escalations.mjs';
+import { summarizeApiIssues } from './api-errors.mjs';
 
 // ---------------------------------------------------------------------------
 // Pure text-processing helpers — ported verbatim, no genericisation needed.
@@ -328,7 +329,12 @@ export async function gatherProposals(promptConfig, models, deps = {}) {
       for (const ref of escalation.supports) log(`   ${asked.id} backs ${ref.id}`);
       if (directEdits) log(`   ${asked.id} also offered ${directEdits.edits.length} edit(s) and ${directEdits.creates.length} new file(s)`);
     } else {
-      failures.push({ ...asked, reason: oneLine(outcome.reason?.message ?? String(outcome.reason), 200) });
+      failures.push({
+        ...asked,
+        reason: oneLine(outcome.reason?.message ?? String(outcome.reason), 200),
+        kind: outcome.reason?.kind ?? null,
+        statusCode: outcome.reason?.statusCode ?? null,
+      });
       log(`   ⚠️  ${asked.id} produced nothing — ${outcome.reason?.message ?? outcome.reason}`);
     }
   });
@@ -516,7 +522,7 @@ Implement the proposal above using the required edit format.`,
  * since the next generation reads this back and can see which ideas
  * already died and why.
  */
-export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize }) {
+export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize, apiIssues = [], pullRequestUrl = null }) {
   const dir = path.join(repoRoot, generationsDir, `gen-${genNumber}`);
   fs.mkdirSync(dir, { recursive: true });
   const relative = `${generationsDir}/gen-${genNumber}/attempts.json`;
@@ -545,6 +551,15 @@ export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generation
         escalations: escalations ?? null,
         contextSize: contextSize ?? null,
         attempts,
+        // Actionable API failures only — "you need to fix a key or your
+        // billing" — deduplicated by provider+kind. See api-errors.mjs.
+        // Everything else a call failed with is still in `attempts`' own
+        // detail text; this is a filtered pointer into it, not a replacement.
+        apiIssues: apiIssues ?? [],
+        // Set later, by recordPullRequestUrl(), once the workflow step
+        // downstream of this run has actually opened the PR — this
+        // function runs before that exists and cannot know the URL yet.
+        pullRequestUrl: pullRequestUrl ?? null,
       },
       null,
       2
@@ -552,6 +567,43 @@ export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generation
     'utf8'
   );
 
+  return relative;
+}
+
+/**
+ * Fill in the one field writeAttemptRecord() cannot know at the time it
+ * runs: the pull request. Opening the PR happens in a workflow step
+ * downstream of run-generation.mjs (typically an action like
+ * peter-evans/create-pull-request, pushing the branch this run left
+ * behind) — by the time that step has a URL, attempts.json already exists
+ * and this run's process has already exited. So this is a second, tiny
+ * write: read the record back, set one field, save it. See
+ * harness/scripts/record-pull-request.mjs for the CLI a workflow calls
+ * this from.
+ *
+ * @param {object} opts
+ * @param {string} opts.repoRoot
+ * @param {string} [opts.generationsDir]
+ * @param {string|number} opts.genNumber
+ * @param {string} opts.pullRequestUrl
+ * @returns {string} the relative path written
+ */
+export function recordPullRequestUrl({ repoRoot, generationsDir = 'docs/generations', genNumber, pullRequestUrl }) {
+  const relative = `${generationsDir}/gen-${genNumber}/attempts.json`;
+  const absolute = path.join(repoRoot, relative);
+
+  let record;
+  try {
+    record = JSON.parse(fs.readFileSync(absolute, 'utf8'));
+  } catch (err) {
+    throw new Error(
+      `Cannot record a pull request URL for generation ${genNumber}: ${relative} doesn't exist or isn't valid JSON. ` +
+      `This step runs after run-generation.mjs, which should have written it. (${err.message})`
+    );
+  }
+
+  record.pullRequestUrl = pullRequestUrl;
+  fs.writeFileSync(absolute, JSON.stringify(record, null, 2) + '\n', 'utf8');
   return relative;
 }
 
@@ -777,6 +829,7 @@ export async function runGeneration(config, deps = {}) {
       implementedBy: null,
       implementModel,
       scope,
+      apiIssues: summarizeApiIssues(failures),
     });
 
     return {
@@ -904,6 +957,7 @@ export async function runGeneration(config, deps = {}) {
         repoRoot, generationsDir, genNumber,
         outcome: 'approved', suggestResult, proposal, attempts: attemptLog,
         fanOut, implementedBy, implementModel, scope, escalations: escalationRound,
+        apiIssues: summarizeApiIssues(failures),
       });
 
       log(`\n✅ Approved on attempt ${attempt}: ${review.reason}`);
@@ -937,6 +991,7 @@ export async function runGeneration(config, deps = {}) {
       repoRoot, generationsDir, genNumber,
       outcome: 'abandoned', suggestResult, proposal, attempts: attemptLog,
       fanOut, implementedBy: null, implementModel, scope, escalations: escalationRound,
+      apiIssues: summarizeApiIssues(failures),
     });
 
     return {
@@ -973,6 +1028,14 @@ export async function runGeneration(config, deps = {}) {
       implementModel,
       scope,
       escalations: escalationRound,
+      // The crash itself, alongside any suggestion-stage failures that
+      // happened before it — a bad implement-model key crashes the whole
+      // run, but a bad key on one of several suggesting labs doesn't, so
+      // both sources matter here.
+      apiIssues: summarizeApiIssues([
+        ...failures,
+        { id: crashState.by, provider: err?.provider, kind: err?.kind, statusCode: err?.statusCode },
+      ]),
     });
     log(`📓 Recorded the crash in ${attemptRecordPath}`);
     err.attemptRecordPath = attemptRecordPath;

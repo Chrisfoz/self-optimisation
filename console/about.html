@@ -1,0 +1,366 @@
+<!-- About page for the proposed install console (console/DESIGN.md).
+     Authored as an Artifact body fragment: no <html>/<head>/<body> wrapper. -->
+<title>What Self-Optimisation Does</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Sans:wght@400;450;600;700&display=swap">
+
+<style>
+:root {
+  --ground:#EDEFF4; --surface:#FFFFFF; --surface-2:#F5F6FA;
+  --line:#D8DBE6; --line-soft:#E6E8F0;
+  --ink:#14161F; --ink-2:#3D4254; --muted:#6A7089;
+  --accent:#3F4E9E; --accent-2:#2E3B7D; --accent-wash:#E7E9F6;
+  --live:#1E7A4B; --live-wash:#E2F1E8;
+  --warn:#8A6100; --warn-wash:#F8EEDA;
+  --shadow:0 1px 2px rgba(20,22,31,.06), 0 8px 24px -12px rgba(20,22,31,.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:#101219; --surface:#181B25; --surface-2:#1F222E;
+    --line:#2E3242; --line-soft:#252936;
+    --ink:#E8EAF2; --ink-2:#BFC4D6; --muted:#8990A8;
+    --accent:#8A97E8; --accent-2:#A6B0F0; --accent-wash:#232741;
+    --live:#5FC08C; --live-wash:#17301F;
+    --warn:#DFAE4B; --warn-wash:#302713;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#101219; --surface:#181B25; --surface-2:#1F222E;
+  --line:#2E3242; --line-soft:#252936;
+  --ink:#E8EAF2; --ink-2:#BFC4D6; --muted:#8990A8;
+  --accent:#8A97E8; --accent-2:#A6B0F0; --accent-wash:#232741;
+  --live:#5FC08C; --live-wash:#17301F;
+  --warn:#DFAE4B; --warn-wash:#302713;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+  font-size:16px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+.mono, code { font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.9em; }
+a { color:var(--accent); text-underline-offset:2px; }
+a:hover { color:var(--accent-2); }
+:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+
+.wrap { max-width:880px; margin:0 auto; padding:32px 22px 76px; }
+.narrow { max-width:66ch; }
+
+.eyebrow {
+  font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif; font-weight:600;
+  text-transform:uppercase; letter-spacing:.09em; font-size:11px; color:var(--muted);
+  margin:0 0 8px;
+}
+
+/* ---- hero ---- */
+header.top { padding-bottom:26px; margin-bottom:30px; border-bottom:1px solid var(--line); }
+header.top h1 {
+  margin:0 0 12px; font-size:clamp(28px,4.4vw,40px); font-weight:700;
+  letter-spacing:-.028em; line-height:1.14; text-wrap:balance; max-width:19ch;
+}
+header.top .thesis { margin:0; font-size:18px; color:var(--ink-2); max-width:60ch; }
+header.top .thesis b { color:var(--ink); font-weight:600; }
+
+/* ---- sections ---- */
+section { margin-bottom:44px; }
+h2 { margin:0 0 10px; font-size:21px; font-weight:700; letter-spacing:-.018em; text-wrap:balance; }
+p { margin:0 0 14px; color:var(--ink-2); }
+
+/* ---- principle cards ---- */
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; margin-top:22px; }
+.card {
+  background:var(--surface); border:1px solid var(--line); border-radius:6px;
+  padding:16px 17px; box-shadow:var(--shadow);
+}
+.card h3 { margin:0 0 7px; font-size:14.5px; font-weight:600; letter-spacing:-.008em; line-height:1.35; }
+.card p { margin:0; font-size:13.5px; color:var(--muted); line-height:1.55; }
+
+/* ---- figure ---- */
+figure { margin:0; }
+.figframe {
+  background:var(--surface); border:1px solid var(--line); border-radius:6px;
+  padding:18px 14px 8px; box-shadow:var(--shadow); overflow-x:auto;
+}
+figcaption { margin-top:12px; font-size:13.5px; color:var(--muted); max-width:66ch; }
+
+.dg { font-family:"IBM Plex Sans", sans-serif; display:block; max-width:100%; height:auto; min-width:660px; margin:0 auto; }
+.dg .bx { fill:var(--surface-2); stroke:var(--line); stroke-width:1; }
+.dg .bx-ghost { fill:var(--surface-2); stroke:var(--line); stroke-width:1; opacity:.55; }
+.dg .bx-accent { fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.4; }
+.dg .t { fill:var(--ink); font-size:13px; font-weight:600; }
+.dg .s { fill:var(--muted); font-size:10.5px; }
+.dg .edge { stroke:var(--muted); stroke-width:1.4; fill:none; }
+.dg .edge-soft { stroke:var(--muted); stroke-width:1.2; fill:none; opacity:.65; }
+.dg .lbl { fill:var(--muted); font-size:10.5px; }
+.dg .gatebox { fill:none; stroke:var(--warn); stroke-width:1.2; stroke-dasharray:5 4; opacity:.9; }
+.dg .gatelbl { fill:var(--warn); font-size:11px; font-weight:600; letter-spacing:.05em; }
+.dg marker path { fill:var(--muted); }
+
+/* ---- steps ---- */
+ol.steps { margin:18px 0 0; padding:0; list-style:none; counter-reset:s; display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:2px 26px; }
+ol.steps li {
+  counter-increment:s; display:grid; grid-template-columns:26px 1fr; gap:10px;
+  padding:8px 0; border-bottom:1px solid var(--line-soft); font-size:14.5px; align-items:baseline;
+}
+ol.steps li::before {
+  content:counter(s); font-family:"IBM Plex Mono",monospace; font-size:11.5px;
+  color:var(--muted); font-variant-numeric:tabular-nums;
+}
+ol.steps li span { color:var(--muted); font-size:13px; display:block; }
+
+.cta {
+  display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:24px;
+}
+.btn {
+  display:inline-block; font-size:14.5px; font-weight:600; border-radius:6px;
+  padding:10px 18px; text-decoration:none; border:1px solid var(--line);
+  background:var(--surface); color:var(--ink);
+}
+.btn:hover { border-color:var(--muted); color:var(--ink); }
+.btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+.btn.primary:hover { background:var(--accent-2); border-color:var(--accent-2); color:#fff; }
+:root[data-theme="dark"] .btn.primary { color:#12141C; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.primary { color:#12141C; } }
+.cta .aside { font-size:13px; color:var(--muted); }
+
+/* ---- status ---- */
+.scroll-x { overflow-x:auto; }
+table.status { width:100%; border-collapse:collapse; font-size:14px; }
+table.status th, table.status td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line-soft); vertical-align:top; }
+table.status th {
+  font-family:"IBM Plex Sans Condensed",sans-serif; text-transform:uppercase;
+  letter-spacing:.07em; font-size:10.5px; color:var(--muted); font-weight:600;
+}
+table.status td:first-child { color:var(--ink); }
+.pill {
+  display:inline-block; font-family:"IBM Plex Sans Condensed",sans-serif; font-weight:600;
+  font-size:10.5px; text-transform:uppercase; letter-spacing:.07em;
+  padding:2px 8px; border-radius:3px; white-space:nowrap;
+}
+.pill.yes { background:var(--live-wash); color:var(--live); }
+.pill.part { background:var(--warn-wash); color:var(--warn); }
+.pill.no { background:var(--surface-2); color:var(--muted); border:1px dashed var(--line); }
+
+footer.foot {
+  margin-top:8px; padding-top:20px; border-top:1px solid var(--line);
+  display:flex; flex-wrap:wrap; gap:10px 22px; align-items:baseline;
+  font-size:13.5px; color:var(--muted);
+}
+footer.foot .spacer { flex:1 1 30px; }
+</style>
+
+<div class="wrap">
+
+  <header class="top">
+    <p class="eyebrow">Self-Optimisation</p>
+    <h1>Your repository gets a second opinion every time the field moves.</h1>
+    <p class="thesis">When a lab ships a new frontier model, it gets exactly one
+    turn to propose one improvement to your project — and <b>four independent
+    gates it has to pass</b> before a single line reaches you.</p>
+  </header>
+
+  <section class="narrow">
+    <h2>The objective</h2>
+    <p>Software gets better when someone with fresh eyes reads it. Frontier
+    models now arrive every few weeks, each with genuinely different judgement
+    — and every one of them is a reader who has never seen your code before.
+    The problem has never been asking them. It's that acting on the answer
+    unsupervised is reckless, and reviewing every answer by hand is work you
+    won't keep doing.</p>
+    <p>So this is a governed loop rather than an assistant. The trigger is a
+    model release, not a calendar tick. The proposing seat rotates to whoever
+    shipped most recently, while the reviewing seat stays pinned to a model you
+    already trust. Changes arrive as exact edits to files you explicitly
+    allowed, applied all-or-nothing, checked by an independent reviewer, a
+    guard, and your own test suite. What reaches you is a pull request and a
+    short email explaining it.</p>
+
+    <div class="cards">
+      <div class="card">
+        <h3>The trigger is a release, not the calendar</h3>
+        <p>A run happens because there is a new mind to ask. Nothing new shipped this month? Then nothing runs, and nothing is spent.</p>
+      </div>
+      <div class="card">
+        <h3>An agent can argue with a rule, never change it</h3>
+        <p>Protected paths are enforced against the real diff. A model that thinks a rule is wrong can say so — and it takes three models across two labs agreeing before that reaches you as a decision.</p>
+      </div>
+      <div class="card">
+        <h3>Every run writes down what it tried</h3>
+        <p>Including the ones that shipped nothing. The next run reads it back, so the same dead end doesn't get proposed twice.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>One run, end to end</h2>
+    <p class="narrow">Everything between the release and the pull request is
+    automatic. The four boxed stages are the reason that's safe to say.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg class="dg" viewBox="0 0 980 760" role="img"
+             aria-label="A new model release triggers one proposal per newly released model. The winning proposal is implemented as exact edits, then passes four gates — implementation allowlist, independent review, the guard, and your own tests — before a pull request opens and a digest is emailed. Every run's record feeds the next run's context, and a disputed rule escalates to a human decision.">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9.2" refY="5"
+                    markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z"></path>
+            </marker>
+          </defs>
+
+          <!-- gate grouping -->
+          <rect class="gatebox" x="284" y="290" width="372" height="282" rx="8"></rect>
+          <text class="gatelbl" transform="rotate(-90 272 431)" x="272" y="431" text-anchor="middle">FOUR GATES · ANY ONE STOPS THE RUN</text>
+
+          <!-- edges down the spine -->
+          <line class="edge" x1="470" y1="70"  x2="470" y2="88"  marker-end="url(#ar)"></line>
+          <line class="edge" x1="470" y1="140" x2="470" y2="158" marker-end="url(#ar)"></line>
+          <line class="edge" x1="470" y1="210" x2="470" y2="228" marker-end="url(#ar)"></line>
+          <line class="edge" x1="470" y1="280" x2="470" y2="298" marker-end="url(#ar)"></line>
+          <line class="edge" x1="470" y1="350" x2="470" y2="368" marker-end="url(#ar)"></line>
+          <line class="edge" x1="470" y1="420" x2="470" y2="438" marker-end="url(#ar)"></line>
+          <line class="edge" x1="470" y1="490" x2="470" y2="508" marker-end="url(#ar)"></line>
+          <line class="edge" x1="470" y1="560" x2="470" y2="578" marker-end="url(#ar)"></line>
+          <line class="edge" x1="470" y1="630" x2="470" y2="648" marker-end="url(#ar)"></line>
+
+          <!-- 1 trigger -->
+          <rect class="bx-accent" x="300" y="24" width="340" height="44" rx="5"></rect>
+          <text class="t" x="320" y="43">A lab ships a new model</text>
+          <text class="s" x="320" y="59">checked on your schedule — monthly by default</text>
+
+          <!-- 2 context -->
+          <rect class="bx" x="300" y="94" width="340" height="44" rx="5"></rect>
+          <text class="t" x="320" y="113">Context is compiled</text>
+          <text class="s" x="320" y="129">your brief, the file tree, the last three runs</text>
+
+          <!-- 3 fan-out (stacked) -->
+          <rect class="bx-ghost" x="316" y="164" width="340" height="44" rx="5"></rect>
+          <rect class="bx-ghost" x="308" y="164" width="340" height="44" rx="5"></rect>
+          <rect class="bx" x="300" y="164" width="340" height="44" rx="5"></rect>
+          <text class="t" x="320" y="183">Each new model proposes one change</text>
+          <text class="s" x="320" y="199">in parallel, on its own lab's API</text>
+
+          <!-- 4 rank -->
+          <rect class="bx" x="300" y="234" width="340" height="44" rx="5"></rect>
+          <text class="t" x="320" y="253">Proposals are ranked blind</text>
+          <text class="s" x="320" y="269">authors withheld — only runs if more than one</text>
+
+          <!-- 5 implement -->
+          <rect class="bx" x="300" y="304" width="340" height="44" rx="5"></rect>
+          <text class="t" x="320" y="323">Written as exact edits</text>
+          <text class="s" x="320" y="339">all-or-nothing, only on paths you allowed</text>
+
+          <!-- 6 review -->
+          <rect class="bx" x="300" y="374" width="340" height="44" rx="5"></rect>
+          <text class="t" x="320" y="393">Independent review</text>
+          <text class="s" x="320" y="409">fresh context, pinned model, fails closed</text>
+
+          <!-- 7 guard -->
+          <rect class="bx" x="300" y="444" width="340" height="44" rx="5"></rect>
+          <text class="t" x="320" y="463">The guard checks the real diff</text>
+          <text class="s" x="320" y="479">protected paths, protected fields, size ceiling</text>
+
+          <!-- 8 tests -->
+          <rect class="bx" x="300" y="514" width="340" height="44" rx="5"></rect>
+          <text class="t" x="320" y="533">Your own tests run</text>
+          <text class="s" x="320" y="549">the project's existing suite, unchanged</text>
+
+          <!-- 9 PR -->
+          <rect class="bx" x="300" y="584" width="340" height="44" rx="5"></rect>
+          <text class="t" x="320" y="603">A pull request opens</text>
+          <text class="s" x="320" y="619">or merges itself, if that's what you chose</text>
+
+          <!-- 10 digest -->
+          <rect class="bx" x="300" y="654" width="340" height="44" rx="5"></rect>
+          <text class="t" x="320" y="673">A plain-language digest arrives</text>
+          <text class="s" x="320" y="689">what was tried, what shipped, what didn't</text>
+
+          <!-- memory feedback -->
+          <path class="edge-soft" d="M 300 676 H 186 Q 170 676 170 660 V 132 Q 170 116 186 116 H 290"
+                marker-end="url(#ar)"></path>
+          <text class="lbl" transform="rotate(-90 152 400)" x="152" y="400" text-anchor="middle">every run's record — including the ones that shipped nothing</text>
+
+          <!-- escalation branch -->
+          <line class="edge-soft" x1="640" y1="466" x2="736" y2="466" marker-end="url(#ar)"></line>
+          <text class="lbl" x="688" y="454" text-anchor="middle">a rule is disputed</text>
+          <text class="lbl" x="688" y="484" text-anchor="middle">3 models · 2 labs</text>
+          <rect class="bx-accent" x="744" y="432" width="226" height="68" rx="5"></rect>
+          <text class="t" x="762" y="458">You decide</text>
+          <text class="s" x="762" y="474">the only way a protected</text>
+          <text class="s" x="762" y="488">rule ever changes</text>
+        </svg>
+      </div>
+      <figcaption>One generation. The run stops dead at any of the four boxed
+      stages, and a stopped run still writes down what it tried — that record is
+      the arrow running back up to context. The branch on the right is the only
+      path by which a rule you set can change, and it ends at a person.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>What you set up, once</h2>
+    <p class="narrow">The console asks nine questions and writes four files to
+    your repository as a pull request. There's no terminal, no YAML to
+    hand-write, and no step where an API key of yours reaches anyone but
+    GitHub.</p>
+    <ol class="steps">
+      <li>Install on your repository <span>GitHub's own picker — one repo or several, nothing granted beyond what you select</span></li>
+      <li>Choose which labs get a seat <span>pick two, or all nine</span></li>
+      <li>Choose which stages run <span>review and the guard can't be switched off</span></li>
+      <li>Mark what may change <span>and what must never be touched</span></li>
+      <li>Say what "better" means here <span>the one thing no template can guess</span></li>
+      <li>Set how often it checks <span>monthly by default</span></li>
+      <li>Decide who says yes <span>a pull request, or automatic merge</span></li>
+      <li>Set how wide it may fan out <span>and see the moment a key stops working</span></li>
+      <li>Review the diff, then rehearse once <span>the schedule stays off until it passes</span></li>
+    </ol>
+    <div class="cta">
+      <a class="btn primary" href="https://claude.ai/code/artifact/00efd905-19bd-4d79-a613-e63182556742">Walk through the console</a>
+      <a class="btn" href="https://claude.ai/code/artifact/476e81da-9930-46fb-bfb8-08b0c5a4911d">Privacy policy</a>
+      <span class="aside">The console is a clickable wireframe — it writes nothing yet.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>What's real today</h2>
+    <p class="narrow">This project's habit is to say which parts are running
+    code and which are still a person doing it by hand. The page you're reading
+    inherits that.</p>
+    <div class="scroll-x">
+      <table class="status">
+        <tr><th>Part</th><th>State</th><th></th></tr>
+        <tr>
+          <td>Propose → implement → review → refine</td>
+          <td><span class="pill yes">runs today</span></td>
+          <td>End to end, against your own config and brief files.</td>
+        </tr>
+        <tr>
+          <td>The guard, the memory, promotion, the digest</td>
+          <td><span class="pill part">built, wired by hand</span></td>
+          <td>Real tested code, each invoked as its own step rather than chained automatically.</td>
+        </tr>
+        <tr>
+          <td>One workflow that chains all of it</td>
+          <td><span class="pill no">not built</span></td>
+          <td>The gap between "the loop is real" and "the loop is one command".</td>
+        </tr>
+        <tr>
+          <td>The console on this page</td>
+          <td><span class="pill no">a proposal</span></td>
+          <td>Designed, wireframed, not written. Today, installing means copying a folder and filling in a config file.</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <a href="https://github.com/Chrisfoz/self-optimisation">Repository</a>
+    <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/console/DESIGN.md">Console design</a>
+    <a href="https://claude.ai/code/artifact/476e81da-9930-46fb-bfb8-08b0c5a4911d">Privacy</a>
+    <span class="spacer"></span>
+    <span>A portable harness for model-release-driven software improvement.</span>
+  </footer>
+</div>
