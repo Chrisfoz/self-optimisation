@@ -61,6 +61,90 @@ be built.
 
 ---
 
+## Cold start: the first runs must work with none of this
+
+**A repository with no history has no curiosity, and that is correct
+behaviour, not a degraded mode.** Every component here is additive to a loop
+that already runs, and every one of them renders *nothing* when its input is
+absent. Verified against the code as it stands today:
+
+| Call, on a repo with no records | Returns |
+|---|---|
+| `loadLatestThemesReview()` | `null` |
+| `buildThemesBrief(null)` | `null` — section dropped |
+| `buildEscalationBrief(loadLedger())` | `null` — section dropped |
+| `buildGenerationIndex()` | `null` — section dropped |
+| `buildGenerationHistory()` | `"- None yet; this is the first generation."` |
+| `recommendScope()` | `focused`, "only 0 generation(s) on record" |
+
+The run-1 suggestion prompt is therefore the repository map, the source, and
+the task — **and no heading for anything that does not exist.** That is
+[principle 18](../../learning/01-principles.md#18-never-claim-data-you-did-not-supply)
+working: there is no state in which the prompt describes a question list, a
+themes review or an escalation queue that is not there.
+
+### What actually happens, generation by generation
+
+Assuming the example cadence (themes every 10, ambitious needs 2 clean
+merges, questions retire after 15, escalations re-surface after 5):
+
+| Gen | Curiosity's contribution |
+|---|---|
+| **1** | Asks `OPEN QUESTION`; `"none"` is a fine answer. Nothing renders. Run is `focused` — `recommendScope()` forces it. |
+| **2–3** | Questions begin accumulating in the ledger. Still nothing rendered: the brief is capped and ranked by corroboration, and one uncorroborated question is not worth the prompt space. |
+| **~5** | First escalations become old enough to re-surface ([C8](C8-escalation-follow-through.md)). Still no spikes, no assignments. |
+| **10** | **First themes review.** First `UNKNOWN` fields. The first time an *"Open questions"* section appears in a prompt at all. |
+| **~11–15** | Corroboration can now cross 2. First spike becomes *possible* — but only if ambitious headroom is earned and no accepted escalation is queued ([C4](C4-run-mode-selector.md) rule ordering). |
+| **~15+** | First retirements. The ledger starts shrinking as well as growing. |
+| **20** | **Second themes review** — the earliest a principle can be promoted, and only if it is re-derived from a non-overlapping window ([C7](C7-memory-consolidation.md)). |
+| **any** | Work orders, whenever a human accepts an escalation. That clock is the owner's, not the loop's. |
+
+So the honest answer to *"when does curiosity start doing anything?"* is
+**generation 10 for questions, and around generation 20 for principles** —
+and everything before that is the ordinary loop, unchanged, quietly filling
+the ledgers that make generation 10 worth having.
+
+### The two things that are NOT deferred
+
+Be clear about these rather than claiming the whole design sleeps:
+
+**1. `OPEN QUESTION` is asked from run 1.** It is a required response field
+from the first generation, costing a few hundred tokens per proposal. This is
+deliberate and it is the same bargain `ESCALATION` already makes — required
+from run 1, `"none"` accepted, and the ledger it fills is worthless unless it
+started filling early. Nothing *renders* until there is something
+corroborated to render.
+
+**2. The goal ([C1](C1-committed-goal.md)) changes run 1 materially.** It is
+in every prompt and the reviewer judges against it from the first generation.
+That is the intended behaviour — a goal that only takes effect at generation
+10 would have let nine generations drift first.
+
+[C8](C8-escalation-follow-through.md) and [C10](C10-runtime-evidence.md) are
+also live from run 1, but neither is curiosity: one is finishing a mechanism
+that already exists, the other is context every proposal benefits from.
+
+### The test this requires
+
+**Every component in this folder owes a cold-start test**, and "it returns
+null on empty input" is not sufficient on its own. The one that matters is
+the byte-identity test:
+
+> With no goal, no questions, no principles and no runtime evidence, the
+> assembled suggestion prompt is **byte-identical** to the prompt the harness
+> produces today.
+
+That is the only assertion that proves the whole design is additive rather
+than merely intended to be. Write it once, at the `buildSuggestSystemPrompt`
+/ `buildSuggestUserPrompt` level, against a fixture of today's output — and
+run it on every one of the ten components, not just the first.
+
+Its failure mode is the reason it is worth the effort: a stray `\n` or an
+empty heading is invisible in review, costs nothing measurable, and silently
+changes the prompt every model in the rotation has been answering.
+
+---
+
 ## Conventions every spec follows
 
 **Fail closed on model output, fail safe on helpers.** A malformed themes

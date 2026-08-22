@@ -58,6 +58,14 @@ everything else: **C8** (the smallest and highest-value — an accepted
 escalation currently schedules no work) and **C10** (pure context-pack work
 that improves every proposal, curiosity or not).
 
+**And none of it is required for a run to happen.** A repository with no
+history has no curiosity: every section drops when its input is absent, the
+first ten generations are the ordinary loop unchanged, and the first
+`UNKNOWN` question cannot exist before the first themes review. The
+generation-by-generation timeline — including the two things that are *not*
+deferred — is in
+[`curiosity/README.md` §"Cold start"](curiosity/README.md#cold-start-the-first-runs-must-work-with-none-of-this).
+
 The thing worth noticing in the first diagram is how little is new. There is
 no second pipeline: one trigger, one context pack, one review gate, one
 guard, one merge. Curiosity adds **a third run mode**, **a harvest that was
