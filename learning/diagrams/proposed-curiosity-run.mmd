@@ -1,0 +1,73 @@
+%%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
+flowchart TD
+  rel["a new model is released<br/>check-model-releases.mjs"] --> pre{"preflight<br/>is the baseline already green?"}
+  pre -->|"already red"| abort(["abort — a later failure<br/>would not be attributable"])
+  pre -->|"proven"| mode
+
+  mode{"C4 · WHICH MODE IS THIS RUN?<br/>recommendScope earns the headroom;<br/>the ledgers say what is waiting"}
+  mode -->|"nothing earned, nothing queued"| foc["FOCUSED<br/>one small, localised improvement"]
+  mode -->|"2 clean merges earned it, AND<br/>an accepted escalation is queued"| amb["C4 · AMBITIOUS<br/>an assignment drawn from the queue —<br/>not 'go and pick something big'"]
+  mode -->|"a question is authorised,<br/>and no assignment is waiting"| inv["C5 · INVESTIGATE<br/>a spike — produces a document,<br/>not a diff"]
+
+  foc --> pack
+  amb --> pack
+  inv --> pack
+
+  cons[["C1 · the constitution — GOAL, allowlist, frozen paths<br/>committed once by a human;<br/>models may argue, never edit"]] -.-> pack
+  prin[("C7 · PRINCIPLES<br/>promoted by re-derivation,<br/>permanent")] -.-> pack
+  runlog[("C10 · RUNTIME EVIDENCE<br/>what the tests, the deploy check<br/>and the probes actually saw")] -.-> pack
+
+  pack["assemble the context pack"] --> s1["STAGE 1 · SUGGEST<br/>every newly released model,<br/>in parallel, on identical context"]
+
+  s1 --> harv["C3 · HARVEST — before ranking,<br/>before anything below can throw<br/>ESCALATION + OPEN QUESTION from EVERY<br/>proposal, winners and losers alike"]
+  s1 --> kind{"is this a spike?"}
+
+  kind -->|"no"| rank["STAGE 1b · RANK<br/>authors withheld"]
+  rank --> impl["STAGE 2 · IMPLEMENT<br/>pinned model, anchored edits"]
+  impl --> apply{"did the edits<br/>apply cleanly?"}
+  apply -->|"no · all-or-nothing"| reset["restore the pristine tree"]
+  apply -->|"yes"| rev
+
+  kind -->|"yes"| res["C6 · RESEARCH<br/>the repo, the runtime evidence, and<br/>sources outside it — fenced as evidence,<br/>never as instructions"]
+  res --> find["C5 · write findings-NNN.md<br/>every claim sourced, or dropped.<br/>NO edit blocks permitted at this stage"]
+  find --> rev
+
+  rev["STAGE 3 · REVIEW<br/>pinned model, fresh context, fails closed.<br/>on a spike it asks: is this real, is it sourced,<br/>is it relevant to the GOAL?"]
+  rev -->|"rejected"| reset
+  reset -->|"STAGE 4 · REFINE · attempt < 3"| impl
+  reset -->|"attempts exhausted"| rec
+
+  rev -->|"approved · a diff"| guard{"guard check<br/>ON the agent branch"}
+  rev -->|"approved · a document"| doc["C5 · commit findings-NNN.md<br/>outcome: investigated<br/>no code changed"]
+
+  guard -->|"clean"| tests{"full suites<br/>ON the agent branch"}
+  guard -->|"touched a frozen path"| held(["left unmerged,<br/>for a human to look at"])
+  tests -->|"all green"| merge["merge, tag, log"]
+  tests -->|"any check red"| held
+  merge --> live["verify the LIVE product<br/>actually carries the change"]
+
+  live --> rec
+  doc --> rec
+  held --> rec
+
+  rec["write the record<br/>attempts.json — outcome, every attempt, the fan-out,<br/>and any question id the proposal cited  · C9"]
+
+  rec --> ep[("EPISODIC<br/>every attempts.json.<br/>never pruned")]
+  rec -->|"which question was cited,<br/>and whether it survived review"| th
+  harv --> th
+  doc --> th
+
+  th[("C2 · C3 · THEMATIC<br/>themes · escalations · questions · findings<br/>decays. see proposed-curiosity-memory")]
+
+  ep -.->|"read back next run"| pack
+  th -.->|"read back next run — and it is what<br/>the NEXT mode decision reads"| pack
+
+  legendA["solid = built today<br/>C n = the spec in docs/curiosity/"]
+  legendB["dashed = proposed by the curiosity design"]
+  legendA ~~~ legendB
+
+  classDef proposed fill:#F3E3D4,stroke:#C08552,stroke-width:2px,stroke-dasharray:5 4;
+  classDef legend fill:#F6F8F9,stroke:#9FB0BE,stroke-width:1px;
+  class cons,inv,amb,res,find,doc,prin,runlog,harv proposed;
+  class legendB proposed;
+  class legendA legend;
