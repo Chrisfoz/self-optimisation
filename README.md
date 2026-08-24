@@ -369,7 +369,8 @@ what comes next and why.
 | A real project's configuration written out in the adapter schema, and what that exercise found | [`examples/carrotgame/`](examples/carrotgame/) — for a blank template to actually copy, use [`harness/project-adapter.example.yml`](harness/project-adapter.example.yml) instead |
 | The academic framing — the ten-component kernel, research questions, threat model, related work | [`Model-Release-Driven-Software-Improvement-Paper-Outline.md`](Model-Release-Driven-Software-Improvement-Paper-Outline.md) |
 | The research corpus this draws on (AlphaEvolve, Darwin Gödel Machine, self-rewarding/self-adapting LMs, harness engineering) | [`docs/`](docs/), indexed in [`docs/SOURCES.md`](docs/SOURCES.md) |
-| A proposal for a second longitudinal pass — one that asks what the project still doesn't understand about itself, rather than what pattern is repeating | [`docs/Curiosity-Engine-Design.md`](docs/Curiosity-Engine-Design.md) |
+| A proposal for a second longitudinal pass — one that asks what the project still doesn't understand about itself, rather than what pattern is repeating | [`docs/Curiosity-Engine-Design.md`](docs/Curiosity-Engine-Design.md), with a build spec per component in [`docs/curiosity/`](docs/curiosity/) |
+| A proposal for a browser-based install flow — connect, configure, store keys, open the PR, rehearse — instead of running `init.mjs` by hand | [`console/DESIGN.md`](console/DESIGN.md) |
 
 ## The shape of it, in one paragraph
 
@@ -393,7 +394,10 @@ self_optimisation/
 ├── Portable-Harness-Design.md       # what ports, what's generic, what's next
 ├── Model-Release-Driven-Software-Improvement-Paper-Outline.md
 ├── package.json                     # zero dependencies; `npm test` runs harness/'s own suite
-├── docs/                            # research corpus
+├── docs/                            # research corpus, plus curiosity/ — a proposed
+│                                     # second longitudinal pass, design only, not built
+├── console/                         # a proposed browser-based install flow — design,
+│                                     # wireframe and Supabase schema only, not built
 ├── tests/                           # tests for the harness's OWN code (see above)
 │   └── lib/
 ├── learning/                        # principles, blueprint, failure modes,
@@ -433,7 +437,8 @@ self_optimisation/
 This tree omits several real, tested `harness/lib/` files for brevity
 (`orchestrator.mjs`, `adapter.mjs`, `guard.mjs`, `context-pack.mjs`,
 `review.mjs`, `promote.mjs`, `verify-deployment.mjs`, `notify.mjs`,
-`escalations.mjs`, `themes.mjs`, `scaffold.mjs`) — see
+`escalations.mjs`, `themes.mjs`, `scaffold.mjs`, `api-errors.mjs`) and one
+`harness/scripts/` file (`record-pull-request.mjs`) — see
 [Status in detail](#status-in-detail) or `ls harness/lib/` for the complete,
 current list rather than trusting this diagram to stay exhaustive.
 `Portable-Harness-Design.md` §10 has the build order; provider router,

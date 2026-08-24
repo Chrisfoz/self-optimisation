@@ -108,6 +108,20 @@ created by the console itself, right after a signed-in user returns from
 GitHub's install flow — the webhook's job is narrower, keeping an
 already-owned row's repo list current afterward.
 
+## Migration 0005 — index the foreign keys the performance advisor flagged
+
+`get_advisors(type: performance)` named three foreign keys with no covering
+index: `config_writes.actor_id`, `escalations.decided_by`,
+`escalations.first_seen_run`. All three are real join paths the console
+will actually use (whose config write was this, who decided this
+escalation, which run first raised it) — indexed now rather than waiting
+for a slow query to notice, since adding an index later means a schema
+change against live rows instead of an empty table.
+
+Verified live: `get_advisors(type: performance)` no longer lists any of the
+three; the three new indexes show up as `unused_index` instead, the same
+expected state as every other index on a table with zero rows.
+
 ## Still to do by hand
 
 Two separate GitHub connections, per `console/DESIGN.md` §8.1: **sign-in**

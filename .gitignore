@@ -27,3 +27,9 @@ $RECYCLE.BIN/
 # Runtime state a local rehearsal writes (which models have been seen before)
 .agent/
 node_modules/
+
+# Local Claude Code agent definitions — steward this repo (code review,
+# diagram alignment, doc/repo accuracy) but are personal tooling, not part
+# of the portable harness this repository ships. Kept local, same as
+# carrotgame's are project-local to that repo rather than this one.
+.claude/agents/
