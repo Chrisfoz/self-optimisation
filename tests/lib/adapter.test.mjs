@@ -253,6 +253,52 @@ test('deploymentConfig defaults strategy to "none" (not null) and runner to ubun
   assert.equal(config.siteUrl, null);
   assert.equal(config.watchedFiles, null);
   assert.equal(config.runner, 'ubuntu-latest');
+  assert.deepEqual(config.registry, { ecosystem: null, package: null, groupId: null, artifactId: null, version: null, versionFile: null, registryUrl: null });
+  assert.deepEqual(config.artifact, { buildCommand: null, path: null, smokeCommand: null });
+});
+
+test('deploymentConfig reads a registry strategy section', async () => {
+  await withTempFile(
+    `
+deployment:
+  verify_strategy: registry
+  registry:
+    ecosystem: npm
+    package: my-cli
+    version: 2.3.0
+    version_file: package.json
+    registry_url: https://registry.npmjs.org
+`,
+    async (file) => {
+      const config = deploymentConfig(await loadAdapter(file));
+      assert.equal(config.strategy, 'registry');
+      assert.equal(config.registry.ecosystem, 'npm');
+      assert.equal(config.registry.package, 'my-cli');
+      assert.equal(config.registry.version, '2.3.0');
+      assert.equal(config.registry.versionFile, 'package.json');
+      assert.equal(config.registry.registryUrl, 'https://registry.npmjs.org');
+    }
+  );
+});
+
+test('deploymentConfig reads an artifact strategy section', async () => {
+  await withTempFile(
+    `
+deployment:
+  verify_strategy: artifact
+  artifact:
+    build_command: npm run build
+    path: dist/cli.js
+    smoke_command: node dist/cli.js --version
+`,
+    async (file) => {
+      const config = deploymentConfig(await loadAdapter(file));
+      assert.equal(config.strategy, 'artifact');
+      assert.equal(config.artifact.buildCommand, 'npm run build');
+      assert.equal(config.artifact.path, 'dist/cli.js');
+      assert.equal(config.artifact.smokeCommand, 'node dist/cli.js --version');
+    }
+  );
 });
 
 test('notifyConfig reads a fully populated notify section', async () => {

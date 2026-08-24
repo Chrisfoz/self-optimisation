@@ -20,10 +20,12 @@ portable pattern you'd lift into another project. Read
 **The core loop is real as of this diagram's last edit.** Suggest →
 implement → review → refine runs end to end via
 `harness/scripts/run-generation.mjs`, against your own project's adapter
-and brief files. Staging & promotion and the notifier are real too, each a
-standalone tested CLI — what's missing now is the CI wiring that would
-chain the loop, the guard, the tests, promotion and notification into one
-generated workflow, not any of those pieces themselves.
+and brief files. Staging & promotion, deployment verification (all four
+strategies now), and the notifier are real too, each a standalone tested
+CLI — and now `harness/cli/init.mjs` + `harness/templates/workflow.yml.tmpl`
+chain the loop, the guard, the tests, promotion, verification and
+notification into one generated workflow for a new project, so nothing
+below is a human running each script by hand anymore.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
@@ -63,48 +65,65 @@ flowchart TD
   reviewer -->|"approved"| approved(["✅ change on disk,<br/>attempts.json + proposal.md written"])
   refine -->|"attempts exhausted"| abandoned(["✅ tree restored to pristine,<br/>attempts.json written — real data,<br/>not a wasted run"])
 
-  subgraph missing["NOT built yet"]
-    guardstep["🔧 Guard as a CI step<br/>harness/lib/guard.mjs already works —<br/>no workflow step calls it against<br/>the orchestrator's own branch yet"]
-    teststep["🔧 The project's own tests, as a CI step<br/>needs no new harness code —<br/>evaluation.test_commands become<br/>workflow steps directly"]
-    promote["✅ Merge + tag<br/>harness/lib/promote.mjs<br/>ready, but no workflow step calls it yet"]
-    verify["✅ Live-deploy check<br/>harness/lib/verify-deployment.mjs<br/>url strategy only — registry/artifact still ❌"]
-    notify["✅ Notifier — plain-language digest<br/>harness/lib/notify.mjs<br/>pluggable sender, ready, but no<br/>workflow step calls it yet"]
-    workflow["❌ templates/workflow.yml.tmpl<br/>+ the init CLI that generates it"]
+  subgraph wired["Chained by the generated workflow"]
+    guardstep["✅ Guard as a CI step<br/>harness/lib/guard.mjs, called against<br/>the orchestrator's own branch"]
+    teststep["✅ The project's own tests, as CI steps<br/>evaluation.test_commands rendered<br/>straight into the workflow"]
+    promote["✅ Merge + tag<br/>harness/lib/promote.mjs"]
+    verify["✅ Deploy verification<br/>harness/lib/verify-deployment.mjs<br/>url + registry + artifact + none"]
+    notify["✅ Notifier — plain-language digest<br/>harness/lib/notify.mjs<br/>pluggable sender"]
+    workflow["✅ harness/templates/workflow.yml.tmpl<br/>+ harness/cli/init.mjs, the scaffolder<br/>that generates it"]
   end
 
-  approved -.->|"still needs"| guardstep --> teststep --> promote --> verify --> notify
-  workflow -.->|"would generate all of the above,<br/>chained, for a new project"| loop
+  approved -.->|"chained by"| guardstep --> teststep --> promote --> verify --> notify
+  workflow -.->|"generates all of the above,<br/>chained, for a new project"| loop
 
   style detect fill:#DCE7F0,stroke:#4A5C6A
   style loop fill:#DCE7F0,stroke:#4A5C6A
-  style missing fill:#F3E3D4,stroke:#9FB0BE
+  style wired fill:#DCE7F0,stroke:#4A5C6A
 ```
 
-**Read this diagram as an honest gap, not a roadmap with checkboxes filled
-in.** Both blue boxes are real: the detector via
+**Read this diagram as what's real, not a roadmap with checkboxes filled
+in.** Every box is real: the detector via
 `examples/workflows/watch-releases.yml`, and the loop via
 `harness/scripts/run-generation.mjs` run directly — 29 tests against fake
 model responses, plus one real end-to-end run against a temp project with a
 real adapter and real brief files (no API key configured, which correctly
 produced a `no-proposal` outcome rather than crashing on a wiring bug — see
 `Portable-Harness-Design.md`'s Bucket B table for that verification in
-detail). What's left is real too, but it's smaller than it looks: the guard
-and the project's own tests need no new harness *code*, only a workflow
-step that calls what already exists — `check-guarded-paths.mjs` already
-runs standalone against a real git diff. `promote.mjs` (merge + tag,
-verified against a real two-repo git setup including an actual merge
-conflict), `verify-deployment.mjs` (the `url` strategy — poll a live site,
-compare canonicalised content, timeout), and `notify.mjs` (plain-language
-digest with a reliable terse fallback, delivery behind a `registerSender()`
-registry so SendGrid is one registered sender, not a hardcoded dependency)
-are all built and tested too now, ready the same way the guard is: nothing
-calls them yet, only because nothing chains them together. The genuinely
-unbuilt pieces have narrowed to two: the `registry`/`artifact` verify
-strategies (real per-ecosystem work — npm/PyPI/NuGet/Maven Central APIs
-differ too much to fake a shared shape), and the
-`templates/workflow.yml.tmpl` + `init` CLI that would chain everything
-above into one file for a new project instead of someone running each
-script by hand.
+detail). `check-guarded-paths.mjs` runs standalone against a real git diff;
+`promote.mjs` (merge + tag) was verified against a real two-repo git setup
+including an actual merge conflict; `verify-deployment.mjs` now implements
+all four `deployment.verify_strategy` values — `url` (poll a live site,
+compare canonicalised content, timeout), `registry` (poll npm/PyPI/NuGet/
+Maven Central for the tagged version — four real, differently-shaped APIs,
+not one faked shared shape), `artifact` (build, confirm the output path
+exists, optionally smoke-run it), and `none`; `notify.mjs` sends a
+plain-language digest with a reliable terse fallback, delivery behind a
+`registerSender()` registry so SendGrid is one registered sender, not a
+hardcoded dependency. What used to be "each piece real but nothing chains
+them" is now chained: `harness/templates/workflow.yml.tmpl` renders detect
+-> probe -> preflight -> improve -> guard -> test -> promote -> verify ->
+notify as one sequential-steps GitHub Actions job (Actions can't loop or
+dynamically branch jobs — see the reference-implementation diagram below
+for what that constrains), and `harness/cli/init.mjs` asks the
+Portable-Harness-Design.md §6 questions and writes that workflow plus a
+filled `project-adapter.yml`, brief-template copies, and a short install
+README for a new project — verified against a real, fresh git repo end to
+end, and via `tests/lib/scaffold.test.mjs` parsing every strategy
+combination's generated YAML back with `js-yaml` to confirm it's valid.
+
+**Known gap, landed at the same time from a parallel stream of work:**
+`harness/templates/workflow.yml.tmpl` only ever does autonomous merge
+(`promote.mjs`) — no pull request, no `approval_class`, cron baked in
+immediately. `console/DESIGN.md` (the install-console proposal, merged
+into `main` the same day) makes a different, more conservative call for
+this exact file: pull-request-by-default, autonomous merge as an advanced
+opt-in, and a two-phase onboarding that ships the workflow with
+`workflow_dispatch` only until a rehearsal has passed. `orchestrator.mjs`'s
+`recordPullRequestUrl()` and `harness/scripts/record-pull-request.mjs`
+already exist to support a PR-opening step here; the template just doesn't
+call them yet. See the template's own header comment for the fuller note —
+reconcile before the console generates (or points a user at) this file.
 
 `Portable-Harness-Design.md`'s Status table has the same information as
 prose, kept in sync by hand — if the two ever disagree, trust whichever was

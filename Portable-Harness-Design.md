@@ -271,7 +271,7 @@ rather than for someone reading harness source.
 | 3.7 Independent Reviewer | `scripts/invoke-code-review.mjs`, fresh context, fails closed | ✅ `harness/lib/review.mjs` |
 | 3.8 Automated Evaluator | test suites (project-supplied) + `check-guarded-paths.mjs` + `readiness-scorecard.mjs` (measured, not gating) | test-command runner (adapter-driven) + optional scorecard plugin |
 | 3.9 Failure and Proposal Memory | `docs/generations/gen-NNN/attempts.json` + `docs/escalations/ledger.json` + `buildGenerationIndex()` | `harness/lib/escalations.mjs` + a `record/` writer |
-| 3.10 Staging and Promotion Layer | merge job + git tag per generation + `verify-production.mjs` | ✅ `harness/lib/promote.mjs` (merge + tag) + `harness/lib/verify-deployment.mjs` (`url` strategy only — `registry`/`artifact` still ❌) |
+| 3.10 Staging and Promotion Layer | merge job + git tag per generation + `verify-production.mjs` | ✅ `harness/lib/promote.mjs` (merge + tag) + `harness/lib/verify-deployment.mjs` (all four `verify_strategy` values: `url`, `registry`, `artifact`, `none`) |
 
 Real gaps this exposes, worth stating rather than hiding: the paper's §2.6
 table claims "independent review" and carrotgame delivers it (Claude, fresh
@@ -488,9 +488,7 @@ history as input, which now genuinely exists once a project has run
 
 **Revised again, after staging & promotion and the notifier:** both are now
 ✅ — `harness/lib/promote.mjs` + `harness/lib/verify-deployment.mjs` (the
-`url` strategy; `registry`/`artifact` are named in the schema but
-unimplemented — real per-ecosystem work, not a port, since npm/PyPI/NuGet/Maven
-Central APIs don't share a fetchable shape to fake), and `harness/lib/notify.mjs`
+`url` strategy at the time), and `harness/lib/notify.mjs`
 together with its two CLI wrappers (`send-digest.mjs`, `send-escalation-notice.mjs`).
 See the Bucket B table (§3) for what each actually does; the design choice
 worth restating here is the same "harness owns mechanism, project owns
@@ -516,17 +514,55 @@ straight into `send-digest.mjs`'s `ESC_OPENED`/`ESC_FLAGGED` and
 in between — that wiring itself still lives only in
 `templates/workflow.yml.tmpl`, unbuilt.
 
-What's left, now that eleven of the paper's kernel components plus the
-notifier are real: the **`registry`/`artifact` verify strategies** (real,
-per-ecosystem work, not blocked on anything else in the harness), the
-**test-command runner** as an actual CI step (needs no new harness *code*
-at all — see the note in `ARCHITECTURE.md`, it's a workflow-template
-concern, not a missing component), and the **`init` CLI** +
-`templates/workflow.yml.tmpl` that would chain everything above into one
-generated, working end-to-end workflow for a new project. The
-orchestrator's existence makes the full workflow template genuinely close
-now — `examples/workflows/watch-releases.yml`'s "detector only" scope was
-never a design ceiling, just the honest limit of what existed to call.
+**Revised a third time, after the registry/artifact verify strategies and
+the workflow template + init CLI:** all of what the previous revision
+called "what's left" is now built. `harness/lib/verify-deployment.mjs`
+gained `verifyRegistry()` (npm, PyPI, NuGet, Maven Central — four real,
+differently-shaped registry APIs, each polled the same way `verifyUrl()`
+already polled a live site: check, retry within a timeout, report) and
+`verifyArtifact()` (build command, confirm the output path exists,
+optional smoke-run — three independent, all-optional checks). Neither had
+a reference implementation to port from, since carrotgame ships no package
+and no build step; both are genuinely new code, tested the same way the
+`url` strategy was (fake `fetchImpl`/`exec` injected, no real registry or
+shell command touched in the suite).
+
+`harness/templates/workflow.yml.tmpl` is the workflow template §6
+proposed: one job, sequential steps (GitHub Actions can't loop or
+dynamically branch jobs — see ARCHITECTURE.md's reference-implementation
+diagram for what that constrains), chaining detect -> probe -> preflight
+-> improve -> guard -> test -> promote -> verify -> notify, with every
+model-generated or otherwise untrusted step output (a proposal summary,
+brief feedback) routed through `env:` rather than interpolated directly
+into a `run:` script — the difference between a safe workflow and a
+script-injection bug. `harness/cli/init.mjs` asks the questions this
+section listed above, then writes `project-adapter.yml`, that workflow,
+brief-template copies (never overwriting a project's real, already-filled
+brief), and a short install README. Its rendering logic lives in
+`harness/lib/scaffold.mjs` as pure functions — no filesystem or stdin
+access of their own — so `tests/lib/scaffold.test.mjs` can parse every
+strategy combination's generated adapter YAML and workflow YAML back with
+`js-yaml` and assert they're valid, the same "generate the record, verify
+it structurally" approach the rest of this harness already uses. Verified
+a second way too: a real, fresh `git init` repo, `init.mjs --yes` run
+against it, and the two generated files parsed back successfully — see
+this section's own git history for that session's exact commands if you
+want to reproduce it.
+
+The **test-command runner** as an actual CI step needed no new harness
+*code*, as this document already predicted — `init.mjs` renders a
+project's answered test commands directly into the generated workflow's
+preflight and post-guard steps, and (new) echoes them into the generated
+`project-adapter.yml`'s `evaluation.test_commands` too, for the record,
+even though nothing reads that field back out of the adapter file yet.
+
+Every kernel component the paper's §3 table names, plus the notifier, plus
+the workflow template and scaffolder that chain all of it together, is now
+real. What's left is exactly §10 step 6: rehearsing this on a second,
+genuinely different project, and running the generated workflow for real
+in GitHub Actions rather than only against a local git repo and unit
+tests — the one kind of verification a repository working on itself can't
+provide from inside itself.
 
 Wiring the orchestrator's new adapter fields (`roles.*`, `context.*`) into
 `harness/project-adapter.example.yml` surfaced one more real bug the same

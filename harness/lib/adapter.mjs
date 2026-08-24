@@ -216,6 +216,11 @@ export function contextConfig(adapter) {
  * defaults to 'none' (not null) since verifyDeployment() treats an unset
  * strategy the same as an explicit 'none' — a project that hasn't
  * configured this yet gets the honest no-op, not a crash.
+ *
+ * `registry` and `artifact` are only meaningful when `strategy` selects
+ * them; each sub-object is returned with every field present (null where
+ * unset) rather than omitted, so a caller can spread it straight into
+ * verifyRegistry()/verifyArtifact() without an extra existence check.
  */
 export function deploymentConfig(adapter) {
   return {
@@ -226,6 +231,20 @@ export function deploymentConfig(adapter) {
     siteUrl: adapter?.deployment?.production_url ?? null,
     watchedFiles: adapter?.deployment?.watched_files ?? null,
     runner: adapter?.deployment?.ci?.runner ?? 'ubuntu-latest',
+    registry: {
+      ecosystem: adapter?.deployment?.registry?.ecosystem ?? null,
+      package: adapter?.deployment?.registry?.package ?? null,
+      groupId: adapter?.deployment?.registry?.group_id ?? null,
+      artifactId: adapter?.deployment?.registry?.artifact_id ?? null,
+      version: adapter?.deployment?.registry?.version ?? null,
+      versionFile: adapter?.deployment?.registry?.version_file ?? null,
+      registryUrl: adapter?.deployment?.registry?.registry_url ?? null,
+    },
+    artifact: {
+      buildCommand: adapter?.deployment?.artifact?.build_command ?? null,
+      path: adapter?.deployment?.artifact?.path ?? null,
+      smokeCommand: adapter?.deployment?.artifact?.smoke_command ?? null,
+    },
   };
 }
 

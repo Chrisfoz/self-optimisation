@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { canonicalize, compareFile, verifyUrl, verifyDeployment } from '../../harness/lib/verify-deployment.mjs';
+import {
+  canonicalize, compareFile, verifyUrl, verifyDeployment,
+  checkNpm, checkPypi, checkNuget, checkMaven, verifyRegistry, verifyArtifact,
+} from '../../harness/lib/verify-deployment.mjs';
 
 function tempRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'verify-deploy-test-'));
@@ -172,7 +175,224 @@ test('verifyDeployment: strategy "url" delegates to verifyUrl', async (t) => {
   assert.equal(result.ok, true);
 });
 
-test('verifyDeployment: an unimplemented strategy fails loudly rather than silently passing', async () => {
-  await assert.rejects(() => verifyDeployment({ strategy: 'registry' }), /not implemented yet/);
-  await assert.rejects(() => verifyDeployment({ strategy: 'artifact' }), /not implemented yet/);
+test('verifyDeployment: an unrecognised strategy fails loudly rather than silently passing', async () => {
+  await assert.rejects(() => verifyDeployment({ strategy: 'carrier-pigeon' }), /not recognised/);
+});
+
+// --- registry checkers -------------------------------------------------------
+
+test('checkNpm: ok when the registry 200s the exact version', async () => {
+  const fetchImpl = async (url) => ({ ok: url.endsWith('/my-cli/2.3.0'), status: 200 });
+  const result = await checkNpm({ package: 'my-cli', version: '2.3.0', fetchImpl });
+  assert.equal(result.ok, true);
+});
+
+test('checkNpm: not ok on a 404, reported not thrown', async () => {
+  const fetchImpl = async () => ({ ok: false, status: 404 });
+  const result = await checkNpm({ package: 'my-cli', version: '9.9.9', fetchImpl });
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /HTTP 404/);
+});
+
+test('checkNpm: a network failure is reported, not thrown', async () => {
+  const fetchImpl = async () => { throw new Error('ENOTFOUND'); };
+  const result = await checkNpm({ package: 'my-cli', version: '1.0.0', fetchImpl });
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /fetch failed: ENOTFOUND/);
+});
+
+test('checkPypi: ok when the registry 200s the exact version', async () => {
+  const fetchImpl = async (url) => ({ ok: url.includes('/my-pkg/1.2.3/json'), status: 200 });
+  const result = await checkPypi({ package: 'my-pkg', version: '1.2.3', fetchImpl });
+  assert.equal(result.ok, true);
+});
+
+test('checkPypi: not ok when the version is absent', async () => {
+  const fetchImpl = async () => ({ ok: false, status: 404 });
+  const result = await checkPypi({ package: 'my-pkg', version: '9.9.9', fetchImpl });
+  assert.equal(result.ok, false);
+});
+
+test('checkNuget: ok when the version is a member of the flat-container index', async () => {
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ versions: ['1.0.0', '1.1.0', '2.0.0'] }) });
+  const result = await checkNuget({ package: 'My.Package', version: '2.0.0', fetchImpl });
+  assert.equal(result.ok, true);
+});
+
+test('checkNuget: not ok when the version is missing from the index', async () => {
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ versions: ['1.0.0'] }) });
+  const result = await checkNuget({ package: 'My.Package', version: '9.9.9', fetchImpl });
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /1 version\(s\)/);
+});
+
+test('checkNuget: not ok on a non-OK index response', async () => {
+  const fetchImpl = async () => ({ ok: false, status: 404 });
+  const result = await checkNuget({ package: 'nope', version: '1.0.0', fetchImpl });
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /HTTP 404/);
+});
+
+test('checkMaven: ok when solrsearch reports a hit', async () => {
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ response: { numFound: 1 } }) });
+  const result = await checkMaven({ groupId: 'com.example', artifactId: 'lib', version: '1.0.0', fetchImpl });
+  assert.equal(result.ok, true);
+});
+
+test('checkMaven: not ok when solrsearch reports zero hits', async () => {
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ response: { numFound: 0 } }) });
+  const result = await checkMaven({ groupId: 'com.example', artifactId: 'lib', version: '9.9.9', fetchImpl });
+  assert.equal(result.ok, false);
+});
+
+// --- verifyRegistry ----------------------------------------------------------
+
+test('verifyRegistry: succeeds on the first check when the version is already published', async () => {
+  let sleepCalls = 0;
+  const result = await verifyRegistry({
+    ecosystem: 'npm',
+    package: 'my-cli',
+    version: '2.3.0',
+    fetchImpl: async () => ({ ok: true, status: 200 }),
+    sleep: async () => { sleepCalls++; },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.attempts, 1);
+  assert.equal(result.ecosystem, 'npm');
+  assert.equal(sleepCalls, 0);
+});
+
+test('verifyRegistry: retries until the version shows up, within the timeout', async () => {
+  let call = 0;
+  const result = await verifyRegistry({
+    ecosystem: 'pypi',
+    package: 'my-pkg',
+    version: '1.2.3',
+    timeoutMs: 10_000,
+    intervalMs: 50,
+    fetchImpl: async () => { call++; return { ok: call >= 3, status: call >= 3 ? 200 : 404 }; },
+    sleep: async () => {},
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.attempts, 3);
+});
+
+test('verifyRegistry: reports failure once the timeout elapses, without hanging', async () => {
+  let now = 0;
+  const realDateNow = Date.now;
+  Date.now = () => now;
+  try {
+    const result = await verifyRegistry({
+      ecosystem: 'npm',
+      package: 'never-published',
+      version: '0.0.1',
+      timeoutMs: 100,
+      intervalMs: 40,
+      fetchImpl: async () => ({ ok: false, status: 404 }),
+      sleep: async (ms) => { now += ms; },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.attempts >= 2);
+  } finally {
+    Date.now = realDateNow;
+  }
+});
+
+test('verifyRegistry: rejects an unsupported ecosystem loudly', async () => {
+  await assert.rejects(() => verifyRegistry({ ecosystem: 'cargo', package: 'x', version: '1.0.0' }), /not supported/);
+});
+
+test('verifyRegistry: rejects when maven is missing groupId/artifactId', async () => {
+  await assert.rejects(() => verifyRegistry({ ecosystem: 'maven', version: '1.0.0' }), /group_id and .artifact_id/);
+});
+
+test('verifyRegistry: rejects when version is missing', async () => {
+  await assert.rejects(() => verifyRegistry({ ecosystem: 'npm', package: 'x' }), /version is required/);
+});
+
+// --- verifyArtifact ------------------------------------------------------------
+
+test('verifyArtifact: passes when build, path and smoke check all succeed', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(repoRoot, 'dist'));
+  fs.writeFileSync(path.join(repoRoot, 'dist', 'cli.js'), '// built');
+
+  const calls = [];
+  const exec = (cmd) => { calls.push(cmd); return ''; };
+
+  const result = await verifyArtifact({
+    repoRoot,
+    buildCommand: 'npm run build',
+    path: 'dist/cli.js',
+    smokeCommand: 'node dist/cli.js --version',
+    exec,
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, ['npm run build', 'node dist/cli.js --version']);
+});
+
+test('verifyArtifact: fails when the build command throws', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+
+  const exec = () => { throw new Error('exit code 1'); };
+  const result = await verifyArtifact({ repoRoot, buildCommand: 'npm run build', exec });
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /build command failed/);
+});
+
+test('verifyArtifact: fails when the expected path is missing after the build', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+
+  const exec = () => '';
+  const result = await verifyArtifact({ repoRoot, buildCommand: 'npm run build', path: 'dist/cli.js', exec });
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /not found after the build/);
+});
+
+test('verifyArtifact: fails when the smoke command throws', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'cli.js'), '// built');
+
+  const exec = (cmd) => { if (cmd.startsWith('node')) throw new Error('exit code 1'); return ''; };
+  const result = await verifyArtifact({ repoRoot, path: 'cli.js', smokeCommand: 'node cli.js --version', exec });
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /smoke command failed/);
+});
+
+test('verifyArtifact: a project with no build/smoke commands, only a path check, still passes', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'cli.js'), '// built');
+
+  const result = await verifyArtifact({ repoRoot, path: 'cli.js', exec: () => { throw new Error('should not be called'); } });
+  assert.equal(result.ok, true);
+});
+
+// --- verifyDeployment dispatcher: registry/artifact --------------------------
+
+test('verifyDeployment: strategy "registry" delegates to verifyRegistry', async () => {
+  const result = await verifyDeployment(
+    { strategy: 'registry', registry: { ecosystem: 'npm', package: 'my-cli', version: '2.3.0' } },
+    { fetchImpl: async () => ({ ok: true, status: 200 }) }
+  );
+  assert.equal(result.strategy, 'registry');
+  assert.equal(result.ok, true);
+});
+
+test('verifyDeployment: strategy "artifact" delegates to verifyArtifact', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'cli.js'), '// built');
+
+  const result = await verifyDeployment(
+    { strategy: 'artifact', repoRoot, artifact: { path: 'cli.js' } },
+    {}
+  );
+  assert.equal(result.strategy, 'artifact');
+  assert.equal(result.ok, true);
 });

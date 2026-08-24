@@ -1,20 +1,31 @@
 #!/usr/bin/env node
 
 /**
- * CLI entry point for harness/lib/verify-deployment.mjs. Fetches the live
- * product and fails loudly if it does not carry what was just merged.
- * Every other gate tests a branch; this one tests what a user actually
- * opens — see verify-deployment.mjs's own doc comment for the incident
- * that made this worth having.
+ * CLI entry point for harness/lib/verify-deployment.mjs. Confirms the thing
+ * that was just merged actually shipped, however "shipped" means for this
+ * project — a live site (`url`), a package registry (`registry`), or a
+ * built output (`artifact`) — and fails loudly if it does not. Every other
+ * gate tests a branch; this one tests the real, external result — see
+ * verify-deployment.mjs's own doc comment for the incident that made this
+ * worth having.
  *
- * Usage: node harness/scripts/verify-deployment.mjs [--adapter <path>]
+ * Usage: node harness/scripts/verify-deployment.mjs [--adapter <path>] [--version <v>]
  *
- * Reads deployment.verify_strategy / production_url / watched_files from
- * project-adapter.yml. A project with verify_strategy unset or "none"
- * exits 0 immediately — this is a deliberate no-op, not a skipped check
- * pretending to have run.
+ * Reads deployment.verify_strategy and its strategy-specific fields from
+ * project-adapter.yml (via harness/lib/adapter.mjs's deploymentConfig()). A
+ * project with verify_strategy unset or "none" exits 0 immediately — this
+ * is a deliberate no-op, not a skipped check pretending to have run.
+ *
+ * The `registry` strategy needs a version to look for. In order of
+ * precedence: --version, the VERSION env var, deployment.registry.version
+ * in the adapter, then — only for the npm ecosystem, since it's the one
+ * case a sensible default exists — the "version" field of
+ * deployment.registry.version_file (package.json by convention) read off
+ * disk. Every other ecosystem must be given one explicitly, since there is
+ * no equivalent file this script can assume.
  */
 
+import fs from 'fs';
 import path from 'path';
 import { loadAdapter, deploymentConfig } from '../lib/adapter.mjs';
 import { verifyDeployment } from '../lib/verify-deployment.mjs';
@@ -23,6 +34,7 @@ function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--adapter') out.adapter = argv[++i];
+    else if (argv[i] === '--version') out.version = argv[++i];
   }
   return out;
 }
@@ -44,11 +56,39 @@ if (config.strategy === 'url' && (!config.siteUrl || !config.watchedFiles?.lengt
   process.exit(1);
 }
 
+if (config.strategy === 'registry') {
+  if (!config.registry.ecosystem) {
+    console.error('deployment.verify_strategy is "registry" but deployment.registry.ecosystem is not set in project-adapter.yml.');
+    process.exit(1);
+  }
+
+  config.registry.version = args.version || process.env.VERSION || config.registry.version;
+  if (!config.registry.version && config.registry.ecosystem === 'npm') {
+    const versionFile = path.join(repoRoot, config.registry.versionFile || 'package.json');
+    try {
+      config.registry.version = JSON.parse(fs.readFileSync(versionFile, 'utf8')).version;
+      console.error(`No version given — read "${config.registry.version}" from ${versionFile}.`);
+    } catch (err) {
+      console.error(`No version given, and could not read one from ${versionFile}: ${err.message}`);
+      process.exit(1);
+    }
+  }
+  if (!config.registry.version) {
+    console.error('deployment.verify_strategy is "registry" but no version was given (--version, VERSION, deployment.registry.version) and none could be inferred.');
+    process.exit(1);
+  }
+}
+
+if (config.strategy === 'artifact' && !config.artifact.buildCommand && !config.artifact.path && !config.artifact.smokeCommand) {
+  console.error('deployment.verify_strategy is "artifact" but none of build_command / path / smoke_command is set in project-adapter.yml — nothing to check.');
+  process.exit(1);
+}
+
 console.error(`Verifying deployment (${config.strategy})${config.siteUrl ? ` at ${config.siteUrl}` : ''}...\n`);
 
 try {
   const result = await verifyDeployment(
-    { strategy: config.strategy, repoRoot, siteUrl: config.siteUrl, watchedFiles: config.watchedFiles },
+    { strategy: config.strategy, repoRoot, siteUrl: config.siteUrl, watchedFiles: config.watchedFiles, registry: config.registry, artifact: config.artifact },
     { log: (msg) => console.error(msg) }
   );
   process.exit(result.ok ? 0 : 1);

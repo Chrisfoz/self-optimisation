@@ -153,14 +153,43 @@ context:
 # --- LIVE: harness/scripts/verify-deployment.mjs and promote.mjs read this
 # section (via harness/lib/adapter.mjs's deploymentConfig()). Neither is
 # wired to run automatically after run-generation.mjs yet — each is a
-# standalone CLI a workflow's own job calls — but both are real, tested
-# code today, not a stub. Leave verify_strategy at "none" (the default) if
-# you don't have a deployment to check.
+# standalone CLI a workflow's own job calls — but all four strategies below
+# are real, tested code today, not a stub. Leave verify_strategy at "none"
+# (the default) if you don't have a deployment to check.
 deployment:
-  verify_strategy: none     # url | registry | artifact | none — only "url" and "none" are implemented
+  verify_strategy: none     # url | registry | artifact | none — all four implemented
+
+  # --- "url": fetch the live site, compare canonicalised content to what's
+  # committed. See harness/lib/verify-deployment.mjs's verifyUrl().
   # production_url: https://your-project.example.com
   # watched_files: []
   #   - index.html
+
+  # --- "registry": poll a package registry until it carries the version
+  # that was just tagged. ecosystem selects the API shape: npm, pypi,
+  # nuget, or maven (maven needs group_id/artifact_id instead of package).
+  # version is usually left unset here — harness/scripts/verify-deployment.mjs
+  # resolves it at run time (--version / VERSION env var / this field / for
+  # npm only, read from version_file's "version" field, package.json by
+  # default) since it changes every release rather than living in this file.
+  # registry:
+  #   ecosystem: npm
+  #   package: your-package-name
+  #   # group_id: com.example        # maven only
+  #   # artifact_id: your-artifact   # maven only
+  #   # version: 1.2.3               # usually resolved at run time instead — see above
+  #   # version_file: package.json   # npm only; default shown
+  #   # registry_url: https://registry.npmjs.org   # override for a private/mirrored registry
+
+  # --- "artifact": build the project, confirm the expected output exists,
+  # optionally run it (or a smoke-test wrapper) and require a clean exit.
+  # Any of the three may be omitted; each omitted check is simply skipped.
+  # See harness/lib/verify-deployment.mjs's verifyArtifact().
+  # artifact:
+  #   build_command: npm run build
+  #   path: dist/cli.js
+  #   smoke_command: node dist/cli.js --version
+
   ci:
     runner: ubuntu-latest
 
