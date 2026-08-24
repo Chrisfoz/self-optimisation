@@ -7,13 +7,58 @@ usually wants. Read this page for that. Read `learning/diagrams/` for the
 portable pattern you'd lift into another project. Read
 `Portable-Harness-Design.md` §7 for the prose mapping between the two.
 
-## The three diagram layers, and which one you want
+## The five diagram layers, and which one you want
 
 | Layer | Where | Shows |
 |---|---|---|
-| **This repo's real status** | Below, on this page | What's actually built in `self_optimisation`, annotated ✅/🚧/❌ — new, drawn for this question specifically |
+| **The whole project, today** | Below, on this page — new, added to answer "how do console/harness/curiosity relate" | Console + harness + curiosity as one picture, solid where built, dashed where proposed — the only diagram that spans all three |
+| **This repo's real status (the harness alone)** | Below, on this page | What's actually built in the harness specifically, annotated ✅/🚧/❌ |
 | **Portable pattern** | [`learning/diagrams/generic-loop.mmd`](learning/diagrams/generic-loop.mmd), `generic-guardrails.mmd`, `generic-context.mmd` — embedded and viewable in [`learning/02-blueprint.md`](learning/02-blueprint.md) and [`learning/05-guardrails-and-trust.md`](learning/05-guardrails-and-trust.md) | The abstract loop and guardrail layers, project-neutral — what you'd draw for *any* installation, including one that isn't this harness at all |
-| **Reference implementation, concretely** | [`learning/diagrams/worked-example-run.mmd`](learning/diagrams/worked-example-run.mmd), `worked-example-harness.mmd` — embedded below since GitHub doesn't render a bare `.mmd` file as a picture | The same pattern as it actually runs in the reference implementation (real job names, real check counts, real token costs) — useful for seeing what the abstraction looks like once it's hit a real, live system |
+| **Reference implementation, concretely** | [`learning/diagrams/worked-example-run.mmd`](learning/diagrams/worked-example-run.mmd), `worked-example-harness.mmd` — both embedded below since GitHub doesn't render a bare `.mmd` file as a picture | The same pattern as it actually runs in the reference implementation (real job names, real check counts, real token costs) — useful for seeing what the abstraction looks like once it's hit a real, live system |
+| **Proposed, not built** | [`learning/diagrams/proposed-curiosity-run.mmd`](learning/diagrams/proposed-curiosity-run.mmd), `proposed-curiosity-memory.mmd`, `proposed-curiosity-authorisation.mmd`, indexed at [`docs/curiosity/README.md`](docs/curiosity/README.md) | The curiosity design's own three diagrams — a second longitudinal pass, none of it built. Do not read as documentation of the harness. |
+
+## The whole project, in one picture
+
+Console, harness, and curiosity live at three different maturity levels, and
+no other diagram in this repository shows them on the same page. Solid boxes
+are real and running; dashed, warm-toned boxes are proposed and do not exist
+yet — the same convention [`learning/diagrams/README.md`](learning/diagrams/README.md)
+uses for the curiosity diagrams, applied here to the console too.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
+flowchart TD
+  subgraph console["PROPOSED · console/ — install flow"]
+    connect["connect a GitHub repo,<br/>fill in a form"]
+    scaffold["generate project-adapter.yml<br/>+ workflow YAML"]
+    connect --> scaffold
+  end
+  style console fill:#F3E3D4,stroke:#9FB0BE,stroke-dasharray: 5 5
+
+  scaffoldReal["harness/lib/scaffold.mjs<br/>+ harness/cli/init.mjs<br/>— the generator ALREADY EXISTS,<br/>console would be a browser front end for it"]
+  scaffold -.-> scaffoldReal
+  scaffoldReal ==>|"writes"| adapter["project-adapter.yml +<br/>.github/workflows/self-improve.yml"]
+
+  subgraph harnessloop["BUILT · the harness loop — detailed below"]
+    adapter --> loop["suggest -> implement -> review -> refine<br/>-> guard -> test -> promote -> verify -> notify"]
+  end
+
+  loop -->|"today, always"| merge["autonomous merge<br/>promote.mjs"]
+  loop -.->|"proposed by console/DESIGN.md,<br/>NOT wired into workflow.yml.tmpl yet"| pr["open a PR instead —<br/>recordPullRequestUrl() exists,<br/>nothing calls it"]
+  style pr fill:#F3E3D4,stroke:#9FB0BE,stroke-dasharray: 5 5
+
+  loop -.->|"every proposal's<br/>OPEN QUESTION field"| curiosity["PROPOSED · docs/curiosity/<br/>ledger, themes review, spikes —<br/>attaches onto escalations.mjs,<br/>themes.mjs, context-pack.mjs"]
+  curiosity -.->|"read back<br/>next run, once built"| loop
+  style curiosity fill:#F3E3D4,stroke:#9FB0BE,stroke-dasharray: 5 5
+```
+
+Two things this picture makes visible that no prose paragraph had said in
+one place before: the console's real prerequisite (the generator) already
+exists under a different name than its own design doc guessed
+(`harness/lib/scaffold.mjs`, not a new `install.mjs`) — see console/DESIGN.md
+§2.1 for the now-superseded original argument; and curiosity has exactly
+three attachment points onto the loop, all additive, none of them requiring
+the loop itself to change shape.
 
 ## What's actually built here, today
 
@@ -85,12 +130,20 @@ flowchart TD
 **Read this diagram as what's real, not a roadmap with checkboxes filled
 in.** Every box is real: the detector via
 `examples/workflows/watch-releases.yml`, and the loop via
-`harness/scripts/run-generation.mjs` run directly — 29 tests against fake
-model responses, plus one real end-to-end run against a temp project with a
-real adapter and real brief files (no API key configured, which correctly
+`harness/scripts/run-generation.mjs` run directly — 34 tests against fake
+model responses, plus `tests/e2e/full-loop.test.mjs`: two automated tests
+that drive the whole chain — suggest → implement → review → guard → test →
+promote (autonomous merge) → verify → notify — in the generated workflow's
+real order, against a real git remote and a real child-process test run,
+faking only the three model calls. One proves the happy path merges and the
+digest correctly says so; the other proves an exhausted-attempts run merges
+nothing and the digest correctly says that too. This automates what used to
+be a one-off manual run: a real end-to-end pass against a temp project with
+a real adapter and real brief files (no API key configured, which correctly
 produced a `no-proposal` outcome rather than crashing on a wiring bug — see
 `Portable-Harness-Design.md`'s Bucket B table for that verification in
-detail). `check-guarded-paths.mjs` runs standalone against a real git diff;
+detail) — the manual run stays true as a record of what was checked before
+the automated version existed. `check-guarded-paths.mjs` runs standalone against a real git diff;
 `promote.mjs` (merge + tag) was verified against a real two-repo git setup
 including an actual merge conflict; `verify-deployment.mjs` now implements
 all four `deployment.verify_strategy` values — `url` (poll a live site,
@@ -135,7 +188,10 @@ The abstract loop above, as it actually runs in the reference implementation
 — real job names, real check counts. Two diagrams, embedded here because a
 bare `.mmd` file renders as plain text on GitHub, not a picture (see
 [`learning/diagrams/README.md`](learning/diagrams/README.md)'s "three
-mechanical traps" for why sidecar files still exist despite that).
+mechanical traps" for why sidecar files still exist despite that). Both are
+byte-for-byte the same structure as their `learning/diagrams/` sidecars —
+keep it that way; a hand-edited copy here that quietly drifts from the
+sidecar is the exact mistake this note exists to prevent.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
@@ -153,36 +209,82 @@ flowchart TD
   pre["job 2 · preflight<br/>3 suites already green"] -->|"baseline proven"| br["job 3 · improve<br/>branch agent/gen-NNN"]
 
   subgraph proc["one Node process · Actions cannot loop jobs"]
-    br --> pack["context-pack.mjs<br/>repo map, test index,<br/>failure history, screenshots"]
-    pack --> s1["STAGE 1 · SUGGEST<br/>the NEW model,<br/>own lab's API"]
-    s1 --> s2["STAGE 2 · IMPLEMENT<br/>new model's own edits,<br/>else claude-opus-5"]
-    s2 --> chk{"each SEARCH<br/>matches once?"}
-    chk -->|"no"| rev["restore pristine tree"]
-    chk -->|"yes"| s3["STAGE 3 · REVIEW<br/>claude-opus-5, fresh context,<br/>diff AND pixels"]
-    s3 -->|"rejected"| rev
-    rev -->|"STAGE 4 · REFINE<br/>attempt < 3"| s2
+    br --> pack["context-pack.mjs<br/>assemble the prompt"]
+    pack -->|"~59k tokens + 3 images,<br/>once per new model"| s1["STAGE 1 · SUGGEST<br/>EVERY new model, each on<br/>its own lab's API, in parallel"]
+    s1 -->|"N prose proposals<br/>no code"| rank{"more than one?"}
+    rank -->|"no"| s2
+    rank -->|"yes · authors stripped"| rk["STAGE 1b · RANK<br/>claude-opus-5 picks one"]
+    rk --> s2["STAGE 2 · IMPLEMENT<br/>claude-opus-5"]
+    s2 -->|"search/replace"| chk{"each SEARCH<br/>unique?"}
+    chk -->|"no · all-or-nothing"| rev
+    chk -->|"yes · written"| s3["STAGE 3 · REVIEW<br/>claude-opus-5,<br/>fresh context"]
+    s3 -->|"REJECTED, or<br/>no verdict at all"| rev["restore the<br/>pristine tree"]
+    rev -->|"STAGE 4 · REFINE<br/>attempt &lt; 3"| s2
   end
 
-  s3 -->|"approved"| push["commit + push<br/>agent/gen-NNN"]
-  rev -->|"3rd attempt exhausted"| rec["write attempts.json"]
-  rec --> mem[("failure memory")]
-  mem -.-> pack
+  s3 -->|APPROVED| push["commit + push<br/>agent/gen-NNN"]
+  rev -->|"3rd attempt<br/>exhausted"| rec["write attempts.json"]
+  rec -->|"own commit<br/>to main"| mem[("failure<br/>memory")]
+  mem -.->|"read back next run"| pack
 
-  push --> guard["job 4 · guard<br/>frozen paths, append-only tests"]
-  guard -->|"clean"| tests["job 5 · tests<br/>98 + 601 + 19 checks"]
-  tests -->|"all green"| merge["job 6 · merge to main"]
-  merge --> tag["tag gen-NNN"]
-  tag --> live["verify LIVE site<br/>carries the change"]
-  merge --> shots[("screenshots + scorecard")]
-  shots -.-> pack
-  live --> notify["job 7 · email digest"]
+  push --> g1["job 4 · guard<br/>AGENT branch"]
+  g1 -->|"no frozen path"| g2["job 5 · tests<br/>98 + 601 + 19"]
+  g2 -->|"all green"| mg["job 6 · merge<br/>tag, log, snapshot"]
+  mg --> shots[("screenshots<br/>per generation")]
+  shots -.->|"shown next run"| pack
+  mg --> mail(["job 7 · email digest"])
 
-  guard -->|"frozen path touched"| held(["left unmerged"])
-  tests -->|"any check red"| held
-  held --> notify
+  g1 -->|"frozen path touched"| held(["left unmerged<br/>for inspection"])
+  g2 -->|"any suite red"| held
+  held --> mail
 ```
 
 That is the reference implementation's real 7-job workflow — 18+
 generations run against it, including the incidents `learning/03-failure-modes.md`
 catalogs. Every stage in it that isn't already ✅ in this page's status
 diagram above is genuinely unbuilt in `self_optimisation` yet.
+
+The harness diagram — the same reference implementation, but token flow and
+per-provider dispatch instead of the CI job sequence:
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
+flowchart TB
+  src["editable source, in full<br/>2 games + index.html · ~57k tok"] --> pk
+  map["repository map · ~0.6k tok"] --> pk
+  idx["test index · assertion<br/>NAMES only · ~1.1k tok"] --> pk
+  hist["history · merged AND<br/>abandoned · ~0.2k tok"] --> pk
+  fb["player feedback · sanitised,<br/>or the section is omitted"] --> pk
+  png["screenshots · 3 PNGs"] --> pk
+
+  pk["one prompt · ~59k tok + 3 images"] ==> disp{"llm-provider.mjs<br/>resolve the lab from the model id"}
+
+  disp -->|anthropic| a["source.base64"]
+  disp -->|google| g["inlineData"]
+  disp -->|"openai"| o["image_url<br/>max_completion_tokens"]
+  disp -->|"moonshot · deepseek<br/>qwen · xai · meta"| m["image_url · max_tokens<br/>one shared factory"]
+  disp -->|"zai"| z["image_url · max_tokens<br/>+ extraBody: reasoning_effort low"]
+
+  a --> s1
+  o --> s1
+  g --> s1
+  m --> s1
+  z --> s1
+
+  s1["STAGE 1 · every newly released<br/>model, asked in parallel"] -->|"image rejected ·<br/>matched by error SHAPE, not wording"| nov["drop images, retry once"]
+  nov -.->|"a model without vision still runs"| s1
+  s1 -->|"one lab errors"| drop(["dropped · the run<br/>continues on the rest"])
+  s1 ==>|"N prose proposals"| rk["STAGE 1b · rank · claude-opus-5<br/>authors withheld"]
+  rk ==>|"the winner"| impl["STAGE 2 · implement · claude-opus-5"]
+
+  impl ==>|"SEARCH / REPLACE"| w1{"allowlist 1 · edit-format.mjs<br/>before any write"}
+  w1 -->|"frozen path, or SEARCH<br/>matching 0 or 2+ times"| no(["refused · nothing reaches disk"])
+  w1 ==>|"validated in memory for every file first"| tree[("working tree")]
+  tree ==> w2{"allowlist 2 · check-guarded-paths.mjs<br/>in CI, on the agent branch"}
+  w2 ==>|"the same rule again"| yes(["merge candidate"])
+  w2 -->|"frozen path, or churn ceiling"| no
+```
+
+Both diagrams describe the reference implementation, carrotgame — the check
+counts (98+601+19), token estimate (~59k), and provider-dispatch table are
+its numbers, not `self_optimisation`'s own.

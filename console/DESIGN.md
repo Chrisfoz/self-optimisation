@@ -97,7 +97,30 @@ unless it says otherwise.
 
 ### 2.1 The console is a front end for `init`, and `init` doesn't exist
 
-`README.md`'s own status table ends with two ❌ rows:
+**Update, two days after this section was written:** `init` now exists.
+`README.md`'s status table no longer ends with two ❌ rows for it — both are
+✅ Built: `harness/cli/init.mjs` (the CLI itself) and `harness/lib/scaffold.mjs`
+(the pure-function generator underneath it — `renderAdapterYaml()`,
+`renderWorkflowTemplate()`, `renderReadme()`), exercised by
+`tests/lib/scaffold.test.mjs`. That's the same `harness/lib/install.mjs`
+this section goes on to propose below, just already built under a different
+name and reachable today only via a terminal, not a browser form. The
+argument below for *why* a shared, pure, testable generator has to exist
+before any front end is still correct and is exactly what got built —
+`generateAdapter`/`generateWorkflow` map onto `renderAdapterYaml`/
+`renderWorkflowTemplate` roughly 1:1. What's still genuinely missing, checked
+against `scaffold.mjs`'s real exports: no `generateAgentBrief`/
+`generateReviewerBrief` equivalent (`init.mjs` copies the `.tmpl` files
+as-is rather than rendering them from answers) and no `validateAnswers()` —
+the invariant-checking function this section argues is "the whole value of
+the thing" doesn't exist in either the CLI or a library yet. The console's
+real remaining prerequisite is narrower than this section originally framed
+it: not "build a generator," but "add answer-validation to the generator
+that exists, then wrap it in a browser form instead of `init.mjs`'s prompts."
+
+The original argument, for the record:
+
+`README.md`'s own status table used to end with two ❌ rows:
 
 | `init` CLI scaffolder | ❌ Not started |
 | `templates/` (generated agent brief, reviewer brief, guard config, workflow) | ❌ Not started |

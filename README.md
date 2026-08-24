@@ -289,19 +289,29 @@ three.
 
 ## Testing this harness itself
 
-The tests in `tests/` cover `harness/lib/` and `harness/providers/` — they
-verify the harness's own code (resolver correctness across real model ids,
-the edit-format's all-or-nothing guarantee, every provider's catalogue
-parser against a fixture shaped like that lab's real response). This is
-different from — and has nothing to do with — the tests in *your* project
-that the harness will eventually check its own proposals against.
+`tests/lib/` covers each `harness/lib/` and `harness/providers/` module in
+isolation — resolver correctness across real model ids, the edit-format's
+all-or-nothing guarantee, every provider's catalogue parser against a
+fixture shaped like that lab's real response — with model calls faked at
+the narrowest boundary each test needs. `tests/e2e/` is a second, smaller
+layer on top: `full-loop.test.mjs` drives the whole chain in the real
+order the generated workflow uses — suggest → implement → review → guard →
+test → promote (autonomous merge) → verify → notify — against a real git
+remote (bare origin + working clone) and a real child-process test run,
+faking only the three model calls, the one boundary a repository working
+on itself can't cross from the inside. This is the automated version of the
+one-off manual end-to-end run mentioned below, not a replacement for the
+per-module suite — it exists to catch the failure the per-module tests
+structurally can't: two pieces individually correct but disagreeing at the
+seam (a field name, a branch/tag convention, what a gate result string
+actually says once it reaches the digest).
 
 ```bash
 npm test
 ```
 
 Zero dependencies here too: `node:test` and `node:assert` are Node
-built-ins, so there's no test framework to install. 33 checks as of this
+built-ins, so there's no test framework to install. 258 checks as of this
 writing, all passing.
 
 **Why this exists, and why it's worth keeping current:** every check here
@@ -372,6 +382,42 @@ what comes next and why.
 | A proposal for a second longitudinal pass — one that asks what the project still doesn't understand about itself, rather than what pattern is repeating | [`docs/Curiosity-Engine-Design.md`](docs/Curiosity-Engine-Design.md), with a build spec per component in [`docs/curiosity/`](docs/curiosity/) |
 | A proposal for a browser-based install flow — connect, configure, store keys, open the PR, rehearse — instead of running `init.mjs` by hand | [`console/DESIGN.md`](console/DESIGN.md) |
 
+## How the three pieces fit together
+
+This repository is really three things at three different stages, meant to
+compose into one journey — read this before the per-piece docs above so the
+status marks below don't read as contradictions:
+
+1. **Install** (🚧 proposed): a user goes to the console, connects a repo,
+   and fills in a form. `console/DESIGN.md` designs this; the front end
+   itself doesn't exist. What the console would generate — a filled
+   `project-adapter.yml` and a working `.github/workflows/` file — is
+   already real code, though: `harness/lib/scaffold.mjs`, driven today by
+   `harness/cli/init.mjs`'s terminal prompts rather than a web form. The
+   console's real remaining work is a browser front end for a generator
+   that already exists, not the generator itself.
+2. **Run** (✅ built): the generated workflow schedules the detector, and
+   once a new model appears, runs the real suggest → implement → review →
+   refine → guard → test → promote → verify → notify loop end to end — see
+   "What's actually built here, today" in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+   This is the only one of the three stages that runs unattended today.
+3. **Learn** (🚧 proposed): `docs/curiosity/` designs a second, slower pass
+   over the same run history — harvesting open questions from every
+   proposal, promoting the corroborated ones into a themes review, and
+   occasionally spending a whole generation on a sourced document instead of
+   a diff. None of it is built; every component is designed to attach onto a
+   specific file the loop already writes (`escalations.mjs`, `themes.mjs`,
+   `context-pack.mjs`) rather than requiring a new one, so a repository with
+   no run history yet is unaffected — see "Cold start" in
+   [`docs/curiosity/README.md`](docs/curiosity/README.md#cold-start-the-first-runs-must-work-with-none-of-this).
+
+**One known seam between stage 1 and stage 2, unresolved:** the generated
+workflow (stage 1's output) currently always auto-merges an approved change
+(`harness/lib/promote.mjs`); the console design calls for opening a pull
+request by default instead, with autonomous merge as an opt-in earned after
+a rehearsal. See ARCHITECTURE.md's "Known gap" for the full account — it
+affects real, generated code, not just a design disagreement on paper.
+
 ## The shape of it, in one paragraph
 
 A model release is the trigger, not the calendar. One seat rotates — whichever
@@ -393,11 +439,15 @@ self_optimisation/
 ├── README.md                        # this file
 ├── Portable-Harness-Design.md       # what ports, what's generic, what's next
 ├── Model-Release-Driven-Software-Improvement-Paper-Outline.md
-├── package.json                     # zero dependencies; `npm test` runs harness/'s own suite
+├── package.json                     # one dependency (js-yaml, for adapter.mjs/
+│                                     # scaffold.mjs only); `npm test` runs harness/'s own suite
 ├── docs/                            # research corpus, plus curiosity/ — a proposed
 │                                     # second longitudinal pass, design only, not built
-├── console/                         # a proposed browser-based install flow — design,
-│                                     # wireframe and Supabase schema only, not built
+├── console/                         # a proposed browser-based install flow — the UI
+│                                     # (about/mockup/privacy.html, DESIGN.md) is design
+│                                     # and wireframe only, not built; its Supabase schema
+│                                     # (console/supabase/migrations/) is BUILT and live
+│                                     # against a real project, ahead of the UI it backs
 ├── tests/                           # tests for the harness's OWN code (see above)
 │   └── lib/
 ├── learning/                        # principles, blueprint, failure modes,

@@ -216,9 +216,13 @@ deployment:
 #     # - docs/calibration/example-1.md     # bodies from YOUR project's own history —
 #                                            # optional; omit until you have some
 
-# --- RESERVED: still no CI-wiring/workflow template to read any of the
-# below — see ARCHITECTURE.md's "NOT built yet" box. Filling them in now is
-# free and forward-compatible.
+# --- RESERVED: the workflow template and CI wiring exist now (see
+# ARCHITECTURE.md), but nothing reads these three fields back out of an
+# existing project-adapter.yml — cadence is baked into the generated
+# workflow's cron at scaffold time, not re-read later, and approval_class is
+# parsed by nothing yet (see console/DESIGN.md §2.3 for the current
+# LIVE/RESERVED accounting). Filling them in now is still free and
+# forward-compatible.
 
 # approval_class: autonomous-merge   # or human-approval-required
 
