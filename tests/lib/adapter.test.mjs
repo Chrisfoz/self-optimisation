@@ -224,6 +224,7 @@ test('briefPaths, rolesConfig and contextConfig return null/empty defaults on a 
     generationsDir: null, runtimeEvidenceDir: null,
     architectureNotesPath: null, architectureNotesMarker: null,
     testFiles: [], purposes: {}, platformNotes: null, historyLimit: null, scopeRequired: null,
+    ambition: 'earned',
   });
 });
 
@@ -404,4 +405,17 @@ test('budgetConfig: reads a positive cap, and treats absent, zero or junk as no 
   assert.deepEqual(budgetConfig({ budget: { max_generation_tokens: 'lots' } }), { maxGenerationTokens: null });
   assert.deepEqual(budgetConfig({}), { maxGenerationTokens: null });
   assert.deepEqual(budgetConfig(null), { maxGenerationTokens: null });
+});
+
+test('normalizeAmbition and contextConfig: the three levels pass through, and anything else is "earned", never "ambitious"', async () => {
+  const { normalizeAmbition, contextConfig, DEFAULT_AMBITION } = await import('../../harness/lib/adapter.mjs');
+  assert.equal(DEFAULT_AMBITION, 'earned');
+  assert.equal(normalizeAmbition('focused'), 'focused');
+  assert.equal(normalizeAmbition(' Ambitious '), 'ambitious');
+  assert.equal(normalizeAmbition('earned'), 'earned');
+  assert.equal(normalizeAmbition('ambitous'), 'earned');
+  assert.equal(normalizeAmbition(true), 'earned');
+  assert.equal(normalizeAmbition(undefined), 'earned');
+  assert.equal(contextConfig({ context: { ambition: 'ambitious' } }).ambition, 'ambitious');
+  assert.equal(contextConfig({}).ambition, 'earned');
 });

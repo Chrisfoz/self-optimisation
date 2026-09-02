@@ -532,3 +532,9 @@ test('renderWorkflowTemplate: reads pull-request outcomes back at the top of eve
   assert.match(out, /id: prs\n\s+if: steps\.pause\.outputs\.paused != 'true'/);
   assert.doesNotThrow(() => loadYaml(out));
 });
+
+test('buildAdapterObject: the ambition dial defaults to earned and is normalised, never echoed', () => {
+  assert.equal(buildAdapterObject(baseAnswers()).context.ambition, 'earned');
+  assert.equal(buildAdapterObject(baseAnswers({ ambition: 'ambitious' })).context.ambition, 'ambitious');
+  assert.equal(buildAdapterObject(baseAnswers({ ambition: 'AMBITIOUS!' })).context.ambition, 'earned');
+});

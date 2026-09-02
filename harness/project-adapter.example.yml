@@ -224,6 +224,30 @@ context:
   history_limit: 3       # how many recent generations get full detail in the prompt
   scope_required: 2      # clean first-attempt merges in a row before "ambitious" unlocks
 
+  # --- LIVE: the ambition dial, read at RUN time by run-generation.mjs.
+  # How much each generation may ATTEMPT. The gates — independent review,
+  # the guard, your tests, the pull request — are identical at every
+  # setting; what changes is the size of the change that reaches them.
+  #
+  #   focused     one small, localised change, every generation.
+  #   earned      focused until `scope_required` generations in a row merged
+  #               on the first attempt, which earns ONE ambitious generation;
+  #               a lone ambitious failure costs one focused generation, two
+  #               in a row cost the streak. (DEFAULT)
+  #   ambitious   structural work — several files, several hundred lines —
+  #               on every run. More rejected attempts, more tokens, and a
+  #               shipped change that is harder to read in a diff. Pair it
+  #               with the pull-request merge model, keep the budget cap on,
+  #               and know that `harness/scripts/revert-generation.mjs NNN`
+  #               undoes a generation that passed every gate and still
+  #               should not have shipped.
+  #
+  # Anything unrecognised resolves to `earned`, never to `ambitious`. A
+  # single run can be overridden from the Actions tab ("Run workflow" →
+  # scope) without changing this file. docs/Ambition-Control.md has the
+  # risk table for each setting.
+  ambition: earned
+
 # --- LIVE: harness/scripts/run-generation.mjs reads this (via
 # harness/lib/adapter.mjs's budgetConfig()) --------------------------------
 # The most tokens one generation may spend, input plus output, across every

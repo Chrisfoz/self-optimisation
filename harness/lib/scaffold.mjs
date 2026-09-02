@@ -13,7 +13,7 @@
  */
 
 import { dump as dumpYaml } from 'js-yaml';
-import { normalizeApprovalClass } from './adapter.mjs';
+import { normalizeApprovalClass, normalizeAmbition } from './adapter.mjs';
 
 /**
  * The exact js-yaml version the generated workflow installs at run time.
@@ -158,6 +158,9 @@ export function buildAdapterObject(a) {
       purposes: a.purposes || {},
       history_limit: Number.isFinite(a.historyLimit) ? a.historyLimit : 3,
       scope_required: Number.isFinite(a.scopeRequired) ? a.scopeRequired : 2,
+      // LIVE, read at run time, normalised rather than echoed so a typo
+      // never lands on "ambitious". See docs/Ambition-Control.md.
+      ambition: normalizeAmbition(a.ambition),
     },
     deployment: {
       verify_strategy: a.deploymentStrategy || 'none',

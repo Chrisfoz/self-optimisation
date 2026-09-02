@@ -254,6 +254,30 @@ export function rolesConfig(adapter) {
 }
 
 /**
+ * The three settings of the ambition dial, and the one anything
+ * unrecognised falls back to.
+ *
+ *   focused    every generation is focused: one small, localised change.
+ *   earned     (DEFAULT) focused until the track record earns an ambitious
+ *              generation — context-pack.mjs's recommendScope().
+ *   ambitious  every generation is ambitious: structural work, several
+ *              files, several hundred lines, every run.
+ *
+ * Unknown values resolve to `earned`, not to `ambitious`: a typo must
+ * never be the reason a project starts attempting structural change on
+ * every run. See docs/Ambition-Control.md for the risks of each setting
+ * and why rollback exists alongside this dial.
+ */
+export const AMBITION_LEVELS = ['focused', 'earned', 'ambitious'];
+export const DEFAULT_AMBITION = 'earned';
+
+/** @returns {'focused'|'earned'|'ambitious'} */
+export function normalizeAmbition(value) {
+  const trimmed = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return AMBITION_LEVELS.includes(trimmed) ? trimmed : DEFAULT_AMBITION;
+}
+
+/**
  * Configuration for context-pack.mjs's builders — the pieces that are
  * always project-specific (a generations directory, an architecture doc,
  * a test-file list, a purposes map for the repo manifest, a platform-notes
@@ -277,6 +301,11 @@ export function contextConfig(adapter) {
     platformNotes: adapter?.context?.platform_notes ?? null,
     historyLimit: Number.isFinite(adapter?.context?.history_limit) ? adapter.context.history_limit : null,
     scopeRequired: Number.isFinite(adapter?.context?.scope_required) ? adapter.context.scope_required : null,
+    // The ambition dial — see normalizeAmbition() above. Read at RUN time
+    // by run-generation.mjs (unlike approval_class, which is baked into the
+    // workflow), because it changes what a run attempts, not what a run is
+    // permitted to do: the gates are the same at every setting.
+    ambition: normalizeAmbition(adapter?.context?.ambition),
   };
 }
 

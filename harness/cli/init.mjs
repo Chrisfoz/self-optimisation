@@ -48,6 +48,7 @@ import { getProvider, registeredProviders, resolveProvider } from '../lib/llm-pr
 import { renderAdapterYaml, renderWorkflowTemplate, renderReadme } from '../lib/scaffold.mjs';
 import { harnessVersion, checkUpgrade } from '../lib/version.mjs';
 import { describeSeats } from '../lib/seats.mjs';
+import { normalizeAmbition } from '../lib/adapter.mjs';
 
 // path.join(..., '../x'), not import.meta.dirname — that global needs Node
 // 20.11+, and package.json's engines field only promises 20.6.0.
@@ -121,6 +122,7 @@ async function ask(rl, question, { default: def = '' } = {}) {
 async function main() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   console.log('Self-optimisation harness — installation scaffolder\n');
+  let answersAmbitionOverride = null;
 
   try {
     const projectId = await ask(rl, 'Project id', { default: path.basename(repoRoot) });
@@ -218,6 +220,28 @@ async function main() {
       console.log('      is revertible — but nothing will ask you first. Rehearse at least one run by hand.');
     }
 
+    // The ambition dial. Phrased with "earned" as the default and the
+    // ambitious setting behind an explicit risk statement — the gates are
+    // the same at every setting, but what a run ATTEMPTS is not, and an
+    // owner who picks "ambitious" with autonomous merge has chosen to have
+    // structural change land unattended. docs/Ambition-Control.md.
+    console.log('\nHow ambitious may each generation be? "focused" is one small localised change every time;');
+    console.log('"earned" (the default) unlocks one ambitious generation after a clean streak; "ambitious" attempts');
+    console.log('structural work on every run. Every setting passes the same gates.\n');
+    const ambition = normalizeAmbition(await ask(rl, 'Ambition (focused / earned / ambitious)', { default: 'earned' }));
+    if (ambition === 'ambitious') {
+      console.log('   ⚠️  Ambitious on every run. Expect more rejected attempts and more tokens per generation, and');
+      console.log('      read docs/Ambition-Control.md — in particular, keep the pull-request merge model, and know');
+      console.log('      that `node harness/scripts/revert-generation.mjs NNN` undoes a shipped generation.');
+      if (wantsAutoMerge) {
+        console.log('   ⚠️  Ambitious AND autonomous merge: structural change will land on your default branch with');
+        console.log('      nobody asked first. That is the riskiest combination this harness offers.');
+        const sure = (await ask(rl, '      Type "ambitious" to confirm, or anything else to fall back to "earned"', { default: 'earned' })).trim().toLowerCase();
+        if (sure !== 'ambitious') console.log('      Falling back to "earned".');
+        answersAmbitionOverride = sure === 'ambitious' ? 'ambitious' : 'earned';
+      }
+    }
+
     const cadenceCron = await ask(rl, 'Cadence (cron, UTC)', { default: '0 0 1 * *' });
     // Defaulted ON here and OFF for the console (console/DESIGN.md §Step 9):
     // someone running this CLI in their own checkout has already done the
@@ -269,6 +293,7 @@ async function main() {
 
     const answers = {
       harnessVersion: harnessVersion(),
+      ambition: answersAmbitionOverride ?? ambition,
       projectId, repository, defaultBranch,
       allowedPaths, createOnlyPaths: [], frozenPaths, appendOnlyPaths,
       testCommands, providers, roleProviders, snapshotPath: '.agent/model-snapshot.json',

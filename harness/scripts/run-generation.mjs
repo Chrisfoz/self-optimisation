@@ -150,10 +150,22 @@ const suggestMaxTokens = Number(process.env.SUGGEST_MAX_TOKENS || roles.suggestM
 const generationsDir = ctxConfig.generationsDir || 'docs/generations';
 
 // --- scope ---
+// Precedence, highest first: SCOPE for this one run (the Actions tab's
+// "Run workflow" input, or the console's per-run override), then the
+// adapter's standing ambition dial, then the earned default. The dial is
+// the owner's decision about how much each run may attempt; the gates
+// (review, guard, tests, the pull request) are identical at every setting,
+// and rollback exists because an ambitious change that passes them can
+// still be one the owner wants gone — see docs/Ambition-Control.md.
 const scopeEnv = (process.env.SCOPE || '').toLowerCase();
 const scope = scopeEnv === 'focused' || scopeEnv === 'ambitious'
   ? { scope: scopeEnv, reason: 'set explicitly for this run' }
-  : recommendScope({ repoRoot, generationsDir, required: ctxConfig.scopeRequired ?? 2 });
+  : ctxConfig.ambition === 'focused'
+    ? { scope: 'focused', reason: 'context.ambition is "focused": every generation is a small, localised change' }
+    : ctxConfig.ambition === 'ambitious'
+      ? { scope: 'ambitious', reason: 'context.ambition is "ambitious": every generation may attempt structural work' }
+      : recommendScope({ repoRoot, generationsDir, required: ctxConfig.scopeRequired ?? 2 });
+console.error(`🎚️  Scope: ${scope.scope} — ${scope.reason}`);
 
 // --- context ---
 const context = {
