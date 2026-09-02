@@ -151,9 +151,50 @@ footer.foot {
   font-size:13.5px; color:var(--muted);
 }
 footer.foot .spacer { flex:1 1 30px; }
+
+/* ---- shared site nav (same markup on about / console / privacy) ---- */
+nav.sitenav {
+  display:flex; flex-wrap:wrap; gap:4px; align-items:center;
+  margin:0 0 26px; padding-bottom:14px; border-bottom:1px solid var(--line-soft);
+}
+nav.sitenav a {
+  font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;
+  font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.07em;
+  color:var(--muted); text-decoration:none; padding:6px 11px; border-radius:5px;
+}
+nav.sitenav a:hover { color:var(--ink); background:var(--surface-2); }
+nav.sitenav a[aria-current="page"] { color:var(--accent); background:var(--accent-wash); }
+nav.sitenav .navspace { flex:1 1 20px; }
+nav.sitenav .navrepo { font-size:12px; letter-spacing:.04em; text-transform:none; }
+
+/* ---- third-party embed ---- */
+.embed { margin:22px 0 8px; }
+.embed iframe { display:block; width:100%; max-width:640px; height:460px; border:0; border-radius:12px; }
+.embed .src { font-size:12.5px; color:var(--muted); margin:8px 0 0; }
+.metrics {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px;
+  margin:20px 0 10px; padding:0; list-style:none;
+}
+.metrics li {
+  background:var(--surface); border:1px solid var(--line); border-radius:8px;
+  padding:13px 15px; box-shadow:var(--shadow);
+}
+.metrics .fig {
+  display:block; font-size:22px; font-weight:700; letter-spacing:-.02em; color:var(--ink);
+}
+.metrics .cap { display:block; font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.45; }
+.asof { font-size:12.5px; color:var(--muted); }
 </style>
 
 <div class="wrap">
+
+  <nav class="sitenav" aria-label="Site">
+    <a href="https://claude.ai/code/artifact/34273fb4-75b4-4e09-af44-159ccc9677e7" aria-current="page">What it does</a>
+    <a href="https://claude.ai/code/artifact/00efd905-19bd-4d79-a613-e63182556742">The console</a>
+    <a href="https://claude.ai/code/artifact/476e81da-9930-46fb-bfb8-08b0c5a4911d">Privacy</a>
+    <span class="navspace"></span>
+    <a class="navrepo" href="https://github.com/Chrisfoz/self-optimisation">GitHub ↗</a>
+  </nav>
 
   <header class="top">
     <p class="eyebrow">Self-Optimisation</p>
@@ -301,14 +342,128 @@ footer.foot .spacer { flex:1 1 30px; }
   </section>
 
   <section>
+    <h2>Who sits in which seat</h2>
+    <p class="narrow">Four roles run in every generation. Only one of them
+    rotates — that's the whole design. The other three stay on models you
+    picked and can vouch for, so a brand-new model gets to <em>propose</em>
+    freely while nothing it says reaches your repository without a known
+    quantity checking it first.</p>
+
+    <div class="cards">
+      <div class="card">
+        <h3>🆕 The suggesting seat — rotates</h3>
+        <p>Whichever watched lab just shipped something new. Reads a curated
+        context pack, not your whole codebase, and proposes one specific
+        change. This is the only seat that changes hands, and it changes hands
+        because a release happened.</p>
+      </div>
+      <div class="card">
+        <h3>🔧 The implementer — pinned, your choice</h3>
+        <p>Turns the proposal into an exact edit — or steps aside when the
+        suggesting model wrote a usable patch itself. Defaults to Claude Opus,
+        and can be pointed at any lab's model instead.</p>
+      </div>
+      <div class="card">
+        <h3>🔍 The reviewer — pinned, your choice</h3>
+        <p>A fresh pass with no memory of the pitch. Configured
+        <em>separately</em> from the implementer, so the two can be different
+        models — and an unparseable verdict counts as a rejection, never an
+        approval.</p>
+      </div>
+      <div class="card">
+        <h3>✅ The gates — not a model at all</h3>
+        <p>Your own test suite and the guard. They don't care which model
+        wrote the change or how convincing its reasoning was. Green or it
+        stops.</p>
+      </div>
+    </div>
+
+    <p class="narrow" style="margin-top:18px">Picking a pinned model from a lab
+    you aren't watching is a normal thing to do — reviewing with Claude while
+    watching only OpenAI, say. Watching is about <em>where proposals come
+    from</em>; pinning is about <em>who you trust to check them</em>. The
+    installer works out which API keys that combination actually needs and
+    wires them all, rather than assuming the two lists are the same.</p>
+  </section>
+
+  <section>
+    <h2>What it starts asking, once it has a history</h2>
+    <p class="narrow"><b>This part is designed, not built.</b> Everything above
+    describes a loop that improves what it can already see. The gap it leaves
+    is that a loop like this only ever answers questions someone thought to
+    ask — it gets steadily better at fixing, and never gets curious.</p>
+    <p class="narrow">The proposed second pass changes what accumulates
+    between runs rather than what happens inside one:</p>
+    <ol class="steps">
+      <li>Every proposal carries an open question <span>asked from the first run — "none" is a fine answer — and the answers pile up where the next run can read them</span></li>
+      <li>Corroboration is counted, not assumed <span>a question only earns prompt space once independent models from different labs arrive at it separately</span></li>
+      <li>Every tenth-ish run looks for the pattern <span>not what happened, but what it meant — and, newly, what the project still doesn't understand about itself</span></li>
+      <li>Occasionally a run spends itself investigating <span>producing a sourced document instead of a diff, when the honest answer is "nobody here knows yet"</span></li>
+    </ol>
+    <p class="narrow">A repository with no history has nothing to be curious
+    about, and that's correct rather than a degraded mode — the first several
+    runs are the ordinary loop, quietly filling the record that makes the tenth
+    one worth having. The reason to build it at all is the bet above: if models
+    keep getting better at long tasks, the limit stops being <em>can it write
+    the change</em> and starts being <em>did anyone point it at the right
+    question</em>.</p>
+  </section>
+
+  <section>
+    <h2>The bet this depends on</h2>
+    <p class="narrow">None of this works if frontier labs stop shipping, or
+    stop improving. That's an external bet, not something this loop controls —
+    so rather than assert it, here is the actual release cadence, live from an
+    independent tracker this project doesn't maintain.</p>
+
+    <div class="embed">
+      <iframe src="https://aireleasetracker.com/embed/releases-by-lab"
+              title="Releases by Lab Over Time — AI Release Tracker"
+              loading="lazy"></iframe>
+      <p class="src"><a href="https://aireleasetracker.com/analytics?utm_source=embed&amp;utm_medium=referral&amp;utm_campaign=releases-by-lab"
+        target="_blank" rel="noopener">Releases by Lab Over Time — via AI Release Tracker</a> ·
+        an independent third-party site, not affiliated with this project.</p>
+    </div>
+
+    <p class="narrow">Cadence is only half of it. The other half is whether
+    each new model is actually <em>more capable</em> — and the clearest public
+    measure is METR's <b>50% task-completion time horizon</b>: how long a task
+    takes a skilled human, at the length where an AI agent succeeds half the
+    time. A longer horizon means a model can carry more of a change on its own
+    before it needs a person.</p>
+
+    <ul class="metrics">
+      <li><span class="fig">320 min</span><span class="cap">Claude Opus 4.5 — the longest horizon in METR's published 1.1 set</span></li>
+      <li><span class="fig">214 min</span><span class="cap">GPT-5</span></li>
+      <li><span class="fig">~89 days</span><span class="cap">Doubling time of that horizon, measured on models released since 2024</span></li>
+    </ul>
+
+    <p class="narrow asof">Figures from METR's Time Horizon 1.1 measurement set,
+    as published on their <a href="https://metr.org/time-horizons/" target="_blank" rel="noopener">time
+    horizons page</a> (last updated 8 May 2026). These are quoted rather than
+    embedded because METR offers no embeddable chart — so treat the numbers as
+    a dated snapshot and follow the link for the current set. METR's own
+    caveats are worth carrying with them: confidence intervals are wide,
+    the trend is sensitive to which tasks are in the suite, and measurements
+    above 16 hours are unreliable on the current one.</p>
+
+    <p class="narrow">This is why the trigger is a release rather than a
+    calendar tick. If the curve flattens, this loop quietly stops proposing
+    anything — which is the correct behaviour, not a failure. Nothing here
+    depends on the bet paying off <em>this</em> month; it depends on it being
+    worth asking each time someone ships.</p>
+  </section>
+
+  <section>
     <h2>What you set up, once</h2>
-    <p class="narrow">The console asks nine questions and writes four files to
+    <p class="narrow">The console asks ten questions and writes four files to
     your repository as a pull request. There's no terminal, no YAML to
     hand-write, and no step where an API key of yours reaches anyone but
     GitHub.</p>
     <ol class="steps">
       <li>Install on your repository <span>GitHub's own picker — one repo or several, nothing granted beyond what you select</span></li>
       <li>Choose which labs get a seat <span>pick two, or all nine</span></li>
+      <li>Choose who implements and who reviews <span>pinned models, defaulting to Claude Opus — set separately, so they can differ</span></li>
       <li>Choose which stages run <span>review and the guard can't be switched off</span></li>
       <li>Mark what may change <span>and what must never be touched</span></li>
       <li>Say what "better" means here <span>the one thing no template can guess</span></li>
@@ -339,18 +494,23 @@ footer.foot .spacer { flex:1 1 30px; }
         </tr>
         <tr>
           <td>The guard, the memory, promotion, the digest</td>
-          <td><span class="pill part">built, wired by hand</span></td>
-          <td>Real tested code, each invoked as its own step rather than chained automatically.</td>
+          <td><span class="pill yes">runs today</span></td>
+          <td>Real tested code, each a step in the generated workflow rather than something a person invokes by hand.</td>
         </tr>
         <tr>
           <td>One workflow that chains all of it</td>
-          <td><span class="pill no">not built</span></td>
-          <td>The gap between "the loop is real" and "the loop is one command".</td>
+          <td><span class="pill yes">runs today</span></td>
+          <td>A generator writes it for your project: detect → probe → preflight → improve → guard → test → promote → verify → notify, as one job.</td>
         </tr>
         <tr>
           <td>The console on this page</td>
+          <td><span class="pill part">generator built, front end not</span></td>
+          <td>What the console would <em>write</em> already exists and is tested — today you reach it through a terminal prompt rather than this form.</td>
+        </tr>
+        <tr>
+          <td>The curiosity pass</td>
           <td><span class="pill no">a proposal</span></td>
-          <td>Designed, wireframed, not written. Today, installing means copying a folder and filling in a config file.</td>
+          <td>Designed in detail, none of it built. See "What it starts asking" above.</td>
         </tr>
       </table>
     </div>
@@ -359,6 +519,8 @@ footer.foot .spacer { flex:1 1 30px; }
   <footer class="foot">
     <a href="https://github.com/Chrisfoz/self-optimisation">Repository</a>
     <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/console/DESIGN.md">Console design</a>
+    <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://claude.ai/code/artifact/00efd905-19bd-4d79-a613-e63182556742">The console</a>
     <a href="https://claude.ai/code/artifact/476e81da-9930-46fb-bfb8-08b0c5a4911d">Privacy</a>
     <span class="spacer"></span>
     <span>A portable harness for model-release-driven software improvement.</span>

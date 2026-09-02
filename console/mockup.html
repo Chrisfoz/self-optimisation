@@ -185,6 +185,25 @@ code, .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo,
   display: flex; gap: 7px; align-items: baseline;
 }
 
+/* pinned-seat pickers */
+.seats { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px,1fr)); gap: 10px; }
+.seat {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 12px 13px; background: var(--surface);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.seat .name { font-weight: 600; font-size: 14px; }
+.seat .note { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.seat select {
+  font: inherit; font-size: 13px; padding: 7px 9px; border-radius: 5px;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); width: 100%;
+}
+.seat .lab-of {
+  font-size: 11.5px; color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+}
+.seat .lab-of b { color: var(--ink-2); font-weight: 500; }
+
 /* provider grid */
 .labs { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px,1fr)); gap: 10px; }
 .lab {
@@ -389,14 +408,16 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
       <button type="button" id="tabRuns" role="tab" aria-selected="false">Runs</button>
     </div>
     <span class="spacer"></span>
-    <a class="eyebrow" style="color:var(--accent);text-decoration:none" href="https://claude.ai/code/artifact/34273fb4-75b4-4e09-af44-159ccc9677e7">About ↗</a>
+    <a class="eyebrow" style="color:var(--accent);text-decoration:none" href="https://claude.ai/code/artifact/34273fb4-75b4-4e09-af44-159ccc9677e7">What it does ↗</a>
+    <a class="eyebrow" style="color:var(--accent);text-decoration:none" href="https://claude.ai/code/artifact/476e81da-9930-46fb-bfb8-08b0c5a4911d">Privacy ↗</a>
+    <a class="eyebrow" style="color:var(--accent);text-decoration:none" href="https://github.com/Chrisfoz/self-optimisation">GitHub ↗</a>
     <span class="eyebrow">Wireframe · DESIGN.md §4</span>
   </header>
 
   <div class="wireframe-note">
     <span><strong>Not a working product.</strong> A clickable sketch of
-    <span class="mono">console/DESIGN.md</span>. Toggles on steps 2, 3, 4, 6, 7
-    and 8 really do update the generated <span class="mono">project-adapter.yml</span>
+    <span class="mono">console/DESIGN.md</span>. Toggles on steps 2, 3, 4, 5, 7, 8
+    and 9 really do update the generated <span class="mono">project-adapter.yml</span>
     on the right — that live "here is exactly what we will write to your repo"
     panel is the point of the design, not a garnish. <b>Runs</b> above sketches
     the other half: what the console shows once a repository is live.</span>
@@ -416,7 +437,7 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
 
         <!-- 1 -->
         <section class="step" data-step="1">
-          <p class="eyebrow">Step 1 of 9</p>
+          <p class="eyebrow" data-stepnum></p>
           <h2>Install on your repository</h2>
           <p class="lede">This is GitHub's own installation picker, not ours —
           "All repositories" or "Only select repositories," the same dialog every
@@ -454,7 +475,7 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
 
         <!-- 2 -->
         <section class="step" data-step="2">
-          <p class="eyebrow">Step 2 of 9</p>
+          <p class="eyebrow" data-stepnum></p>
           <h2>Which labs get a seat <span class="badge live">live</span></h2>
           <p class="lede">Each new frontier model gets one turn to propose an
           improvement. Pick only the labs you hold a key for — two is a normal
@@ -470,7 +491,18 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
 
         <!-- 3 -->
         <section class="step" data-step="3">
-          <p class="eyebrow">Step 3 of 9</p>
+          <p class="eyebrow" data-stepnum></p>
+          <h2>Who implements, who reviews <span class="badge live">live</span></h2>
+          <p class="lede">The suggesting seat rotates — whichever lab above just
+          shipped gets it. These two don't. They stay on models you picked, so a
+          brand-new model can propose freely while a known quantity checks the
+          result.</p>
+          <div class="seats" id="seats"></div>
+          <p class="field-note" id="seatNote"></p>
+        </section>
+        <!-- 3 -->
+        <section class="step" data-step="4">
+          <p class="eyebrow" data-stepnum></p>
           <h2>Which stages run</h2>
           <p class="lede">Every stage you switch off is a job the generated
           workflow simply doesn't contain. Two can't be switched off at all.</p>
@@ -478,8 +510,8 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
         </section>
 
         <!-- 4 -->
-        <section class="step" data-step="4">
-          <p class="eyebrow">Step 4 of 9</p>
+        <section class="step" data-step="5">
+          <p class="eyebrow" data-stepnum></p>
           <h2>What may change, what may never <span class="badge live">live</span></h2>
           <p class="lede">Click a row to cycle it. Anything left unmarked can't
           be edited — this is an allowlist, so silence means no. The dangerous
@@ -496,8 +528,8 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
         </section>
 
         <!-- 5 -->
-        <section class="step" data-step="5">
-          <p class="eyebrow">Step 5 of 9</p>
+        <section class="step" data-step="6">
+          <p class="eyebrow" data-stepnum></p>
           <h2>What "better" means here <span class="badge live">live</span></h2>
           <p class="lede">This becomes the agent's brief, and it is sent whole
           as the suggestion stage's entire system prompt. It's the one thing no
@@ -521,8 +553,8 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
         </section>
 
         <!-- 6 -->
-        <section class="step" data-step="6">
-          <p class="eyebrow">Step 6 of 9</p>
+        <section class="step" data-step="7">
+          <p class="eyebrow" data-stepnum></p>
           <h2>How often it runs</h2>
           <p class="lede">The design's premise is that a model release is the
           trigger, not the calendar — the schedule is just how often we check
@@ -534,8 +566,8 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
         </section>
 
         <!-- 7 -->
-        <section class="step" data-step="7">
-          <p class="eyebrow">Step 7 of 9</p>
+        <section class="step" data-step="8">
+          <p class="eyebrow" data-stepnum></p>
           <h2>Who says yes</h2>
           <p class="lede">Independent review and the guard run either way. This
           decides only what happens after they both pass.</p>
@@ -543,8 +575,8 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
         </section>
 
         <!-- 8 -->
-        <section class="step" data-step="8">
-          <p class="eyebrow">Step 8 of 9</p>
+        <section class="step" data-step="9">
+          <p class="eyebrow" data-stepnum></p>
           <h2>How wide one run may fan out <span class="badge live">live</span></h2>
           <p class="lede">A ceiling on how many newly released models one run may
           ask. We won't guess what that costs — lab pricing moves on its own
@@ -568,8 +600,8 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
         </section>
 
         <!-- 9 -->
-        <section class="step" data-step="9">
-          <p class="eyebrow">Step 9 of 9</p>
+        <section class="step" data-step="10">
+          <p class="eyebrow" data-stepnum></p>
           <h2>Review, merge, rehearse, then switch on</h2>
           <p class="lede">Four files, one pull request, nothing on your default
           branch until you merge it. Merging switches nothing on — the workflow
@@ -699,9 +731,29 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
   "use strict";
 
   const STEPS = [
-    "Connect", "Labs", "Stages", "Boundaries", "Meta-goal",
+    "Connect", "Labs", "Seats", "Stages", "Boundaries", "Meta-goal",
     "Cadence", "Approval", "Budget", "Review"
   ];
+
+  // Which model sits in each pinned seat. Defaults match the harness's own
+  // (claude-opus-5 everywhere); the point of the step is that they need not.
+  const SEATS = [
+    { id: "implement", name: "Implementer", model: "claude-opus-5",
+      note: "Writes the exact edit when the suggesting model offers none of its own." },
+    { id: "review", name: "Reviewer", model: "claude-opus-5",
+      note: "Fresh context, no memory of the pitch. An unparseable verdict counts as a rejection." }
+  ];
+
+  // Model id -> the lab that serves it, mirroring harness/lib/llm-provider.mjs's
+  // resolveProvider(): the provider is derived from the id, never asked for.
+  const MODEL_LAB = {
+    "claude-opus-5": { lab: "anthropic", env: "ANTHROPIC_API_KEY" },
+    "claude-sonnet-5": { lab: "anthropic", env: "ANTHROPIC_API_KEY" },
+    "gpt-5": { lab: "openai", env: "OPENAI_API_KEY" },
+    "gemini-3-pro": { lab: "google", env: "GEMINI_API_KEY" },
+    "grok-4": { lab: "xai", env: "XAI_API_KEY" },
+    "deepseek-v3": { lab: "deepseek", env: "DEEPSEEK_API_KEY" }
+  };
 
   const LABS = [
     { id: "anthropic", name: "Anthropic", env: "ANTHROPIC_API_KEY", on: true  },
@@ -784,6 +836,39 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
   $("#next").addEventListener("click", () => go(step + 1));
 
   /* ---------- step 2: labs ---------- */
+  // Fill every step's "Step N of M" eyebrow from its own data-step and the
+  // real length of STEPS, so adding a step can never leave a stale total
+  // behind in the markup.
+  document.querySelectorAll(".step").forEach((sec) => {
+    const eyebrow = sec.querySelector("[data-stepnum]");
+    if (eyebrow) eyebrow.textContent = `Step ${sec.dataset.step} of ${STEPS.length}`;
+  });
+
+  const seatsHost = $("#seats");
+  SEATS.forEach((seat) => {
+    const options = Object.keys(MODEL_LAB)
+      .map((id) => `<option value="${id}"${id === seat.model ? " selected" : ""}>${id}</option>`)
+      .join("");
+    const card = el("div", "seat", `
+      <span class="name">${seat.name}</span>
+      <select aria-label="${seat.name} model">${options}</select>
+      <span class="lab-of"></span>
+      <span class="note">${seat.note}</span>`);
+    const select = $("select", card);
+    const labOf = $(".lab-of", card);
+    const paint = () => {
+      const { lab, env } = MODEL_LAB[seat.model];
+      labOf.innerHTML = `served by <b>${lab}</b> · needs ${env}`;
+    };
+    select.addEventListener("change", () => {
+      seat.model = select.value;
+      paint();
+      render();
+    });
+    paint();
+    seatsHost.appendChild(card);
+  });
+
   const labsHost = $("#labs");
   LABS.forEach((lab) => {
     const b = el("button", "lab", `
@@ -875,6 +960,21 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
     const creates= TREE.filter((t) => t.s === "create");
     const frozen = TREE.filter((t) => t.s === "frozen");
 
+    // A pinned seat may sit on a lab nobody is watching — reviewing with
+    // Claude while watching only OpenAI is a normal setup. Watching is where
+    // proposals come from; pinning is who checks them. Either way that lab's
+    // key has to exist, so say so here rather than letting the run discover
+    // it mid-flight. Mirrors requiredProviders() in harness/lib/scaffold.mjs.
+    const watchedLabs = new Set(watched.map((l) => l.id));
+    const extraKeys = [...new Set(
+      SEATS.map((s) => MODEL_LAB[s.model])
+        .filter((m) => !watchedLabs.has(m.lab))
+        .map((m) => `${m.env} (${m.lab})`)
+    )];
+    $("#seatNote").innerHTML = extraKeys.length
+      ? `⚠️ Also needs ${extraKeys.join(" and ")} — a pinned seat is on a lab you aren't watching. We'll wire that secret too.`
+      : `✓ Both seats sit on labs you already watch, so no extra API key is needed.`;
+
     $("#fanoutVal").textContent = fanout;
     const seats = Math.min(fanout, Math.max(watched.length, 1));
     $("#cost").textContent =
@@ -923,8 +1023,13 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
     y.push(K("roles:"));
     y.push("  " + K("agent_brief_path:") + " .claude/agents/improve.md");
     y.push("  " + K("reviewer_brief_path:") + " .claude/agents/review.md");
-    y.push("  " + K("review:"));
-    y.push("    " + K("model:") + " claude-opus-5" + C("   # pinned — this gate does not rotate"));
+    SEATS.forEach((seat) => {
+      const comment = seat.id === "review"
+        ? "   # pinned — this gate does not rotate"
+        : "   # pinned — fallback when the suggester writes no edits itself";
+      y.push("  " + K(seat.id + ":"));
+      y.push("    " + K("model:") + " " + seat.model + C(comment));
+    });
     y.push("");
     if (STAGES.find((s) => s.id === "notify").on) {
       y.push(K("notify:"));
