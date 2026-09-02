@@ -662,6 +662,40 @@ export function recordPullRequestUrl({ repoRoot, generationsDir = 'docs/generati
   return relative;
 }
 
+/**
+ * Every proposal the fan-out produced, winners and losers alike, one file
+ * each under `gen-NNN/proposals/`. Until this existed only the winner's
+ * text survived (in proposal.md); the losers were an id in fanOut.proposed
+ * and their argument was gone. The curiosity design (§3.4) is explicit
+ * that the four rejected proposals are four different reads of the same
+ * repository, and where they diverge is where the repository is ambiguous
+ * — and a later compare-two-implementations experiment needs them too.
+ * Costs nothing: the fan-out was already paid for.
+ *
+ * Nothing reads these back into a prompt. The generation index and history
+ * read proposal.md and attempts.json only, so the prompt is unchanged.
+ *
+ * @returns {string[]} the relative paths written
+ */
+export function writeFanOutProposals({ repoRoot, generationsDir = 'docs/generations', genNumber, proposals }) {
+  const dir = path.join(repoRoot, generationsDir, `gen-${genNumber}`, 'proposals');
+  fs.mkdirSync(dir, { recursive: true });
+  const written = [];
+  for (const p of proposals) {
+    const safe = String(p.id).replace(/[^A-Za-z0-9._-]+/g, '_');
+    const relative = `${generationsDir}/gen-${genNumber}/proposals/${safe}.md`;
+    fs.writeFileSync(
+      path.join(repoRoot, relative),
+      `# Generation ${genNumber} — proposal from \`${p.id}\` (${p.provider})\n\n` +
+      `Every model asked this generation, not only the one whose proposal was chosen. ` +
+      `See attempts.json's fanOut for which one was.\n\n\`\`\`\n${String(p.text).trim()}\n\`\`\`\n`,
+      'utf8'
+    );
+    written.push(relative);
+  }
+  return written;
+}
+
 export function writeProposal({ repoRoot, generationsDir = 'docs/generations', genNumber, proposal, parsed, suggestResult, applied, review, attempts, implementedBy, implementModel, reviewModel, scope, briefFeedback }) {
   const dir = path.join(repoRoot, generationsDir, `gen-${genNumber}`);
   fs.mkdirSync(dir, { recursive: true });
@@ -1074,6 +1108,10 @@ export async function runGeneration(config, deps = {}) {
   // to produce one.
   const escalationRound = recordEscalations(proposals, { repoRoot, ledgerPath, genNumber, threshold: consensus });
 
+  // Same seam, same reasoning: keep every proposal's text before anything
+  // below can throw or discard.
+  const proposalFiles = writeFanOutProposals({ repoRoot, generationsDir, genNumber, proposals });
+
   const crashState = { suggestResult: null, proposal: null, fanOut: null, attempts: [], by: null };
 
   try {
@@ -1090,6 +1128,7 @@ export async function runGeneration(config, deps = {}) {
       chosen: `${winner.id} (${winner.provider})`,
       rankedBy: proposals.length > 1 ? rankModel : null,
       rankingReason: ranking.reason,
+      proposalFiles,
       briefFeedback: Object.fromEntries(proposals.filter((p) => p.briefFeedback).map((p) => [p.id, p.briefFeedback])),
     };
     crashState.suggestResult = suggestResult;

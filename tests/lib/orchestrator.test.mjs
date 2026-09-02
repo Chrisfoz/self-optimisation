@@ -708,3 +708,27 @@ test('rankProposals: the focused rubric is the original, and the ambitious one s
   assert.doesNotMatch(seen[2], /a few localised edits/);
   assert.match(seen[2], /reversed in one revert/);
 });
+
+// --- Every proposal is kept, not only the winner's (5.12) ---------------------
+
+test('runGeneration: every fan-out proposal is written under gen-NNN/proposals/, and the index does not grow', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  const call = async ({ model }) => {
+    if (model === 'suggest-a' || model === 'suggest-b') return { text: `${VALID_SUGGESTION}\nMARKER: from ${model}`, truncated: false, provider: 'anthropic', model, sentImages: 0 };
+    if (model === 'rank-model') return { text: 'CHOICE: 1\nREASON: first.' };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.' };
+    throw new Error('unexpected call: ' + model);
+  };
+  const result = await runGeneration(baseConfig(repoRoot, { suggestModels: [{ id: 'suggest-a', provider: 'anthropic' }, { id: 'suggest-b', provider: 'anthropic' }] }), { call });
+  assert.equal(result.outcome, 'approved');
+  const dir = path.join(repoRoot, 'docs/generations/gen-001/proposals');
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['suggest-a.md', 'suggest-b.md']);
+  assert.match(fs.readFileSync(path.join(dir, 'suggest-b.md'), 'utf8'), /from suggest-b/);
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.deepEqual(record.fanOut.proposalFiles, ['docs/generations/gen-001/proposals/suggest-a.md', 'docs/generations/gen-001/proposals/suggest-b.md']);
+  const { buildGenerationIndex } = await import('../../harness/lib/context-pack.mjs');
+  assert.equal(buildGenerationIndex({ repoRoot }).split('\n').length, 3, 'header, rule, one row');
+});

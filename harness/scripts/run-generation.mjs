@@ -36,7 +36,7 @@ import { compileAllowlist } from '../lib/edit-format.mjs';
 import { globToRegExp } from '../lib/glob.mjs';
 import {
   buildSourceBundle, buildRepoManifest, buildTestIndex, buildArchitectureNotes,
-  buildGenerationIndex, buildGenerationHistory, buildRuntimeEvidence, recommendScope,
+  buildGenerationIndex, buildGenerationHistory, buildRuntimeEvidence, recommendScope, fenceUntrusted,
 } from '../lib/context-pack.mjs';
 import { loadLatestThemesReview, buildThemesBrief } from '../lib/themes.mjs';
 import { buildMetricsBrief, loadLatestMetrics } from '../lib/evaluators.mjs';
@@ -169,7 +169,11 @@ console.error(`🎚️  Scope: ${scope.scope} — ${scope.reason}`);
 
 // --- context ---
 const context = {
-  sources: buildSourceBundle(editableFiles, { repoRoot }),
+  // Fenced (context-pack.mjs's fenceUntrusted()): the source and the
+  // architecture notes are the two blocks a stranger with commit access to
+  // the project could have written into. Everything else in this object is
+  // derived by the harness or written by the owner.
+  sources: fenceUntrusted('SOURCE', buildSourceBundle(editableFiles, { repoRoot })) ?? '',
   manifest: buildRepoManifest({
     repoRoot,
     purposes: ctxConfig.purposes,
@@ -180,7 +184,7 @@ const context = {
   testIndex: buildTestIndex({ repoRoot, testFiles: ctxConfig.testFiles }),
   generationIndex: buildGenerationIndex({ repoRoot, generationsDir }),
   history: buildGenerationHistory({ repoRoot, generationsDir, limit: 3 }),
-  architectureNotes: buildArchitectureNotes({ repoRoot, docPath: ctxConfig.architectureNotesPath, appendOnlyMarker: ctxConfig.architectureNotesMarker }),
+  architectureNotes: fenceUntrusted('ARCHITECTURE NOTES', buildArchitectureNotes({ repoRoot, docPath: ctxConfig.architectureNotesPath, appendOnlyMarker: ctxConfig.architectureNotesMarker })),
   themes: buildThemesBrief(loadLatestThemesReview({ repoRoot, themesDir: memory.themesDir || 'docs/themes' })),
   escalations: buildEscalationBrief(
     loadLedger({ repoRoot, ledgerPath: memory.ledgerPath || undefined }),
