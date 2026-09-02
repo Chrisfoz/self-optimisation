@@ -106,6 +106,49 @@ test('buildSuggestUserPrompt: drops empty context sections, includes screenshots
   assert.match(withImages, /# Screenshots/);
 });
 
+// --- the additive-by-construction guarantee ----------------------------------
+// Every context block added since the harness was ported (quality metrics, a
+// work order, the escalation-review field) must be INVISIBLE when its input
+// is absent. Not "roughly the same" — byte-identical, because a stray
+// newline is invisible in review, costs nothing measurable, and silently
+// changes the prompt every model in the rotation has been answering.
+
+test('buildSuggestUserPrompt: a cold-start prompt is byte-identical whether the optional blocks are absent or null', () => {
+  const base = { genLabel: 'Generation #1', context: { manifest: 'M', sources: 'S' } };
+  const withNulls = buildSuggestUserPrompt({
+    genLabel: 'Generation #1',
+    context: {
+      manifest: 'M', sources: 'S',
+      qualityMetrics: null, workOrder: null, escalationReview: null,
+      themes: null, escalations: null, platform: null, feedback: null,
+    },
+  });
+  assert.equal(withNulls, buildSuggestUserPrompt(base));
+});
+
+test('buildSuggestUserPrompt: a work order replaces "pick the ONE improvement" rather than sitting beside it', () => {
+  const prompt = buildSuggestUserPrompt({
+    genLabel: 'Generation #12',
+    context: { manifest: 'M', workOrder: 'esc-001 — do the decided thing' },
+  });
+  assert.match(prompt, /THIS GENERATION HAS BEEN ASSIGNED A DECIDED CHANGE/);
+  assert.match(prompt, /It is not yours to choose; it is yours to specify well/);
+  assert.doesNotMatch(prompt, /Pick the ONE improvement you would make/);
+});
+
+test('buildSuggestUserPrompt: the ESCALATION REVIEW field appears only when a run has something due', () => {
+  const without = buildSuggestUserPrompt({ genLabel: 'G', context: { manifest: 'M' } });
+  assert.doesNotMatch(without, /ESCALATION REVIEW/);
+
+  const with_ = buildSuggestUserPrompt({
+    genLabel: 'G',
+    context: { manifest: 'M', escalationReview: 'ESCALATION REVIEW: <answer esc-004>' },
+  });
+  assert.match(with_, /ESCALATION REVIEW: <answer esc-004>/);
+  // and it lands after the response format, not inside it
+  assert.ok(with_.indexOf('ESCALATION REVIEW') > with_.indexOf('ESCALATION DISSENT'));
+});
+
 test('buildImplementSystemPrompt: lists only the editable files, includes optional implementation notes', () => {
   const prompt = buildImplementSystemPrompt({ editableFiles: ['a.html'], implementationNotes: 'Watch out for canvas overlap.' });
   assert.match(prompt, /- a\.html/);

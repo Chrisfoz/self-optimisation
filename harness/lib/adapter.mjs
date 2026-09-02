@@ -210,6 +210,13 @@ export function memoryConfig(adapter) {
         ? adapter.memory.escalation_consensus.labs
         : null,
     },
+    // How long an escalation may sit below the consensus bar, untouched,
+    // before the next fan-out is asked about it by name. Null means "use
+    // escalations.mjs's own default" — see DEFAULT_RESURFACE_AFTER there
+    // for why silence needed a mechanism at all.
+    resurfaceAfter: Number.isFinite(adapter?.memory?.escalation_consensus?.resurface_after)
+      ? adapter.memory.escalation_consensus.resurface_after
+      : null,
     themesDir: adapter?.memory?.themes_review?.dir ?? null,
     themesCadence: Number.isFinite(adapter?.memory?.themes_review?.cadence_generations)
       ? adapter.memory.themes_review.cadence_generations

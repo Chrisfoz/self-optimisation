@@ -247,12 +247,33 @@ that already runs, and renders nothing when its input is absent. Don't treat
 this tier as optional-forever work — it is the answer to "the loop gets better
 at fixing and never gets curious" — but do respect its own gate.
 
-- [ ] **4.1 — C8, escalation follow-through.**
+- [x] **4.1 — C8, escalation follow-through.**
   Independent of everything else and buildable today. The smallest and the
   highest value: an escalation that reaches consensus and is accepted
   currently changes a `status` field and schedules no work. Wiring acceptance
   to a work order produces this project's first genuine outcome label — *did
   the thing three models agreed on actually work?*
+  **Done — all four parts.** 8a: acceptance queues a work order, the next
+  ambitious run is handed it and told the change is already decided, and the
+  outcome is written back — on approval, on abandonment, on a crash, and on a
+  run that got no proposals at all, because an order left assigned forever
+  drains the queue without recording why. `accepted` stays `accepted`;
+  `work.completed` is what stops it being re-queued. 8b: an entry nobody has
+  engaged with for `resurface_after` generations is put to the fan-out by
+  name with an `ESCALATION REVIEW` field it must answer AGREE / DISAGREE /
+  IRRELEVANT — "I had not considered it" is refused explicitly, because it is
+  the honest answer that recreates the bug — and three distinct IRRELEVANT
+  judgements retire it. 8c: the minority report rides along in the digest.
+  8d: a dissenter the outcome contradicted is marked, on `approved` only.
+  Two deliberate departures from the spec, both written up in the doc: the
+  queue is drained here rather than waiting for C4 (a queue nothing drains is
+  the disease this workplan keeps curing), and queueing happens at the top of
+  a run so a decision made yesterday is acted on today rather than next
+  generation.
+  Every part is additive by construction, and
+  `tests/lib/orchestrator.test.mjs` now asserts the cold-start prompt is
+  byte-identical with the new blocks absent or null — 4.5's assertion, on the
+  first component it applies to.
 
 - [ ] **4.2 — C10, runtime evidence.**
   Also independent and buildable today. Pure `context-pack.mjs` work, and it

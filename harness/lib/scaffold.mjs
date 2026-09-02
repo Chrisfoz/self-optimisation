@@ -124,6 +124,7 @@ export function buildAdapterObject(a) {
       escalation_consensus: {
         models: Number.isFinite(a.consensusModels) ? a.consensusModels : 3,
         labs: Number.isFinite(a.consensusLabs) ? a.consensusLabs : 2,
+        resurface_after: Number.isFinite(a.resurfaceAfter) ? a.resurfaceAfter : 5,
       },
       themes_review: {
         dir: a.themesDir || 'docs/themes',

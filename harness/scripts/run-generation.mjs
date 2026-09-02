@@ -193,6 +193,7 @@ try {
       screenshots: { images: [], source: null }, // visual capture: project-specific plugin, not wired by default
       ledgerPath: memory.ledgerPath || undefined,
       consensus: { models: memory.consensus.models ?? 3, labs: memory.consensus.labs ?? 2 },
+      resurfaceAfter: memory.resurfaceAfter ?? undefined,
     },
     { log: (msg) => console.error(msg) }
   );
@@ -214,6 +215,10 @@ if (result.attemptRecordPath) setOutput('attempt-record', result.attemptRecordPa
 setOutput('escalations-opened', String(result.escalations?.opened?.length ?? 0));
 setOutput('escalations-flagged', String(result.escalations?.flagged?.length ?? 0));
 setOutput('escalations-flagged-json', JSON.stringify(result.escalations?.flagged ?? []));
+
+// The outcome label: did the thing three models agreed on, and a human
+// accepted, actually work? Empty on every run that carried no work order.
+setOutput('work-order-completed', result.workOrder ? `${result.workOrder.id}:${result.workOrder.outcome}` : '');
 
 if (result.outcome === 'approved') {
   console.error(`\n✅ Approved on attempt ${result.attempts}`);

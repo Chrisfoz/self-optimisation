@@ -1,6 +1,6 @@
 # C8 — Escalation follow-through
 
-**Status:** PROPOSED · **Phase:** any — **independent of everything else here** · **Blocks:** C4
+**Status:** ✅ **BUILT** (2026-09-02) · **Phase:** any — **independent of everything else here** · **Blocks:** C4
 **Drawn in:** [D2](../../learning/diagrams/proposed-curiosity-memory.mmd) nodes `stuck`/`resurf`, [D3](../../learning/diagrams/proposed-curiosity-authorisation.mmd) nodes `silent` → `ship`
 
 ---
@@ -8,6 +8,31 @@
 > **Build this first.** It is the smallest component in the folder, it
 > depends on nothing else in it, and it produces this project's first genuine
 > outcome label: *did the thing three models agreed on actually work?*
+>
+> **Built.** All four parts, in `harness/lib/escalations.mjs` +
+> `harness/lib/orchestrator.mjs` + `harness/lib/notify.mjs`, with 37 tests
+> (`tests/lib/escalation-followthrough.test.mjs` and
+> `tests/lib/work-order-loop.test.mjs`, the latter driving the whole loop
+> through a real `runGeneration()`). Two things landed differently from the
+> spec below, both deliberate:
+>
+> - **The queue is drained here, not by C4.** The spec has C4's run-mode
+>   selector draining it, and C4 is behind the go/no-go gate. A queue nothing
+>   drains is the same "parsed by nothing" disease this whole workplan keeps
+>   fixing, so `orchestrator.mjs`'s `takeWorkOrder()` does the minimal
+>   version: the oldest queued order goes to the next **ambitious** run.
+>   C4 replaces that selector; it does not have to invent the queue.
+> - **Queueing happens at the top of a run, not after it.** Queueing in the
+>   fold-in step (where the spec implies it) would mean an escalation
+>   accepted since the last run waits a whole extra generation, invisibly.
+>   `takeWorkOrder()` queues and assigns in one pass, so a decision made
+>   yesterday is acted on today.
+>
+> One thing the spec asked for that is deliberately narrower: **8d marks a
+> dissenter contradicted only on an `approved` outcome.** An abandoned or
+> crashed run means the run failed, which is not the same as the objection
+> being right — treating it as vindication would be the mirror image of the
+> bug 8b exists to fix.
 
 ## Three gaps, one file
 

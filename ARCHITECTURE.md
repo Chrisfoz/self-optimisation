@@ -94,7 +94,7 @@ flowchart TD
     executor["✅ Implement<br/>edit-format.mjs — targeted edits,<br/>all-or-nothing"]
     reviewer["✅ Review<br/>review.mjs — fresh context,<br/>fails closed"]
     refine["✅ Refine<br/>rejected? restore to pristine,<br/>retry up to maxAttempts"]
-    memory["✅ Memory<br/>escalations.mjs + themes.mjs<br/>folded in every run;<br/>generate-themes-review.mjs writes<br/>a new review every N generations"]
+    memory["✅ Memory<br/>escalations.mjs + themes.mjs<br/>folded in every run;<br/>generate-themes-review.mjs writes<br/>a new review every N generations;<br/>an accepted escalation becomes a<br/>work order a later run carries out"]
     evaluators["✅ Quality dimensions<br/>evaluators.mjs + plugins/evaluators/<br/>measured, never gating"]
 
     adapter --> context --> propose

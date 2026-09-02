@@ -54,7 +54,11 @@ import { callModelWithHeadroom, resolveProvider } from './llm-provider.mjs';
 import { setOutput, oneLine } from './gh-output.mjs';
 import { buildEditFormatSpec, parseResponse, applyEdits, renderForReview } from './edit-format.mjs';
 import { reviewChanges } from './review.mjs';
-import { parseEscalation, recordRound, loadLedger, saveLedger, renderForNotification } from './escalations.mjs';
+import {
+  parseEscalation, parseEscalationReview, recordRound, recordJudgements, resurfaceDue,
+  queueWorkOrders, assignWorkOrder, completeWorkOrder, buildWorkOrderBrief,
+  buildEscalationReviewField, buildEscalationBrief, loadLedger, saveLedger, renderForNotification,
+} from './escalations.mjs';
 import { summarizeApiIssues } from './api-errors.mjs';
 
 // ---------------------------------------------------------------------------
@@ -235,8 +239,13 @@ export const DEFAULT_SCOPE_TEXT = {
  * @param {string} opts.genLabel
  * @param {object} opts.context  Named text blocks — sources, manifest,
  *   testIndex, generationIndex, history, themes, escalations, feedback,
- *   platform, qualityMetrics, architectureNotes — any of which may be
- *   null/undefined and is dropped from the prompt via section().
+ *   platform, qualityMetrics, workOrder, architectureNotes — any of which
+ *   may be null/undefined and is dropped from the prompt via section().
+ *   `workOrder` is the directive for a generation that has been assigned an
+ *   accepted escalation; `escalationReview` is the extra response field a
+ *   run needs only when something is actually awaiting judgement. Both are
+ *   null on an ordinary run, which is what keeps that run's prompt
+ *   byte-identical to one from before either existed.
  *   `qualityMetrics` is what carrotgame's readiness scorecard generalised
  *   into: measured, non-gating dimensions from this project's evaluator
  *   plugins (harness/lib/evaluators.mjs). Null for every project that has
@@ -252,14 +261,16 @@ export function buildSuggestUserPrompt({ genLabel, context, screenshots = { imag
 
 # Repository map
 ${context.manifest ?? ''}
-${section('Target platform', context.platform)}${section('Measured quality dimensions — non-gating', context.qualityMetrics)}${section('Frozen test invariants', context.testIndex)}${section('Every generation on record (compact — nothing here is ever dropped)', context.generationIndex)}${section('Most recent generations, in full detail (including what failed)', context.history)}${section('Recurring themes from the last review', context.themes)}${section('Open escalations — what earlier models asked us to change', context.escalations)}${section('Player feedback', context.feedback)}${section('How this project is built, and what it has learned building itself', context.architectureNotes)}
+${section('THIS GENERATION HAS BEEN ASSIGNED A DECIDED CHANGE', context.workOrder)}${section('Target platform', context.platform)}${section('Measured quality dimensions — non-gating', context.qualityMetrics)}${section('Frozen test invariants', context.testIndex)}${section('Every generation on record (compact — nothing here is ever dropped)', context.generationIndex)}${section('Most recent generations, in full detail (including what failed)', context.history)}${section('Recurring themes from the last review', context.themes)}${section('Open escalations — what earlier models asked us to change', context.escalations)}${section('Player feedback', context.feedback)}${section('How this project is built, and what it has learned building itself', context.architectureNotes)}
 ${shots}
 # Current source
 ${context.sources ?? ''}
 
 # Your task
 
-Pick the ONE improvement you would make. ${SUGGEST_RESPONSE_FORMAT}`;
+${context.workOrder
+    ? 'Propose the change the work order above describes. It is not yours to choose; it is yours to specify well.'
+    : 'Pick the ONE improvement you would make.'} ${SUGGEST_RESPONSE_FORMAT}${context.escalationReview ? `\n${context.escalationReview}` : ''}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -321,6 +332,9 @@ export async function gatherProposals(promptConfig, models, deps = {}) {
       const text = outcome.value.text;
       const directEdits = extractDirectEdits(text);
       const escalation = parseEscalation(text);
+      // Answers to the ESCALATION REVIEW field, if this run asked for any.
+      // Empty on every run that didn't, which is most of them.
+      const judgements = parseEscalationReview(text);
       proposals.push({
         ...asked,
         result: outcome.value,
@@ -328,9 +342,11 @@ export async function gatherProposals(promptConfig, models, deps = {}) {
         directEdits,
         briefFeedback: extractField(text, 'BRIEF FEEDBACK'),
         escalation,
+        judgements,
       });
       if (escalation.opened) log(`   ${asked.id} opened an escalation: ${escalation.opened.title}`);
       for (const ref of escalation.supports) log(`   ${asked.id} backs ${ref.id}`);
+      for (const j of judgements) log(`   ${asked.id} judged ${j.id}: ${j.judgement.toUpperCase()}`);
       if (directEdits) log(`   ${asked.id} also offered ${directEdits.edits.length} edit(s) and ${directEdits.creates.length} new file(s)`);
     } else {
       failures.push({
@@ -664,19 +680,39 @@ ${review.raw.trim()}
  * idea every run.
  */
 export function recordEscalations(proposals, { repoRoot, ledgerPath, genNumber, threshold }) {
+  const date = new Date().toISOString().slice(0, 10);
   const entries = proposals.map((p) => ({ model: p.id, provider: p.provider, parsed: p.escalation }));
+
+  // Judgements first. An AGREE is a supporter like any other, so folding
+  // them in before the consensus check means a resurfaced entry can cross
+  // the bar in the same run it was finally asked about — which is the point
+  // of asking.
+  const judged = recordJudgements({
+    generation: genNumber,
+    date,
+    entries: proposals.map((p) => ({ model: p.id, provider: p.provider, judgements: p.judgements })),
+    ledger: loadLedger({ repoRoot, ledgerPath }),
+  });
 
   const round = recordRound({
     generation: genNumber,
-    date: new Date().toISOString().slice(0, 10),
+    date,
     entries,
-    ledger: loadLedger({ repoRoot, ledgerPath }),
+    ledger: judged.ledger,
     threshold,
   });
 
-  const touched = round.opened.length + round.supported.length + round.dissented.length;
+  // Queueing is NOT done here: takeWorkOrder() does it at the top of the
+  // run, before the fan-out, so an escalation accepted since the last run is
+  // available to this one rather than the next.
+  const ledger = round.ledger;
+
+  const touched =
+    round.opened.length + round.supported.length + round.dissented.length +
+    judged.agreed.length + judged.disagreed.length + judged.irrelevant.length +
+    judged.retired.length;
   if (touched > 0) {
-    saveLedger(round.ledger, { repoRoot, ledgerPath });
+    saveLedger(ledger, { repoRoot, ledgerPath });
   }
 
   return {
@@ -684,7 +720,83 @@ export function recordEscalations(proposals, { repoRoot, ledgerPath, genNumber, 
     supported: round.supported.map((s) => ({ id: s.id, by: `${s.model} (${s.provider})` })),
     dissented: round.dissented.map((s) => ({ id: s.id, by: `${s.model} (${s.provider})` })),
     flagged: round.flagged.map((e) => ({ id: e.id, title: e.title, target: e.target, notification: renderForNotification(e, { threshold }) })),
+    judged: {
+      agreed: judged.agreed.map((j) => ({ id: j.id, by: `${j.model} (${j.provider})` })),
+      disagreed: judged.disagreed.map((j) => ({ id: j.id, by: `${j.model} (${j.provider})` })),
+      irrelevant: judged.irrelevant.map((j) => ({ id: j.id, by: `${j.model} (${j.provider})` })),
+      retired: judged.retired.map((e) => ({ id: e.id, title: e.title })),
+    },
   };
+}
+
+/**
+ * Take a work order for this generation, if one is queued — and say what is
+ * awaiting judgement while the ledger is open.
+ *
+ * Both reads happen here, before the suggestion prompt is built, because
+ * both change what that prompt says. The assignment is written to disk
+ * immediately: that is what makes two runs racing for one order harmless,
+ * since the second sees it assigned and takes the next item or none.
+ *
+ * Returns nulls for a project with no ledger, no accepted escalations, and
+ * nothing overdue — which is every project until a human has actually
+ * accepted something, and is what keeps the prompt byte-identical until
+ * then.
+ */
+export function takeWorkOrder({ repoRoot, ledgerPath, genNumber, scope, resurfaceAfter, threshold }) {
+  const loaded = loadLedger({ repoRoot, ledgerPath });
+  const due = resurfaceDue(loaded, { currentGeneration: genNumber, resurfaceAfter, threshold });
+
+  // Queue first, then assign, in that order and in one pass. An escalation a
+  // human accepted since the last run is available to THIS run — queueing it
+  // in a later step would cost a whole generation of delay for no reason,
+  // and the delay would be invisible.
+  const { ledger, queued } = queueWorkOrders(loaded);
+
+  // Only an ambitious run takes a work order. A focused generation is a
+  // small, localised improvement by definition, and an accepted escalation
+  // about the harness itself is not that.
+  const assignment = scope === 'ambitious'
+    ? assignWorkOrder(ledger, { generation: genNumber })
+    : { ledger, order: null };
+
+  if (queued.length || assignment.order) saveLedger(assignment.ledger, { repoRoot, ledgerPath });
+
+  return {
+    order: assignment.order
+      ? { id: assignment.order.id, title: assignment.order.title, target: assignment.order.target }
+      : null,
+    workOrderBrief: buildWorkOrderBrief(assignment.order),
+    queued: queued.map((q) => ({ id: q.id, title: q.title })),
+    due,
+    // Rebuilt here rather than reusing the caller's, because only this
+    // function knows which entries are due and the marker is what makes the
+    // ESCALATION REVIEW field answerable. Used ONLY when something is
+    // actually due — an ordinary run keeps the brief its caller built, so
+    // the byte-identity of that path is a property of the code rather than
+    // an argument about two calls agreeing.
+    escalationBrief: due.length
+      ? buildEscalationBrief(assignment.ledger, { threshold, awaitingJudgement: due })
+      : null,
+  };
+}
+
+/**
+ * Record how the generation that carried a work order went — the label this
+ * whole mechanism exists to produce.
+ *
+ * Called on every terminal outcome, crashes included. A run that was handed
+ * an order and died still completes it with that outcome: leaving it
+ * assigned forever would drain the queue without ever recording why.
+ */
+export function finishWorkOrder({ repoRoot, ledgerPath, genNumber, outcome }) {
+  const { ledger, completed } = completeWorkOrder(loadLedger({ repoRoot, ledgerPath }), {
+    generation: genNumber,
+    outcome,
+  });
+  if (!completed) return null;
+  saveLedger(ledger, { repoRoot, ledgerPath });
+  return { id: completed.id, title: completed.title, outcome };
 }
 
 // ---------------------------------------------------------------------------
@@ -784,6 +896,7 @@ export async function runGeneration(config, deps = {}) {
     screenshots = { images: [], source: null },
     ledgerPath,
     consensus,
+    resurfaceAfter,
     captureVisual,
     implementationNotes = null,
   } = config;
@@ -806,13 +919,29 @@ export async function runGeneration(config, deps = {}) {
   log(`   implement: ${implementModel}`);
   log(`   review:    ${reviewModel}\n`);
 
+  // Before the prompt is built, because both of these change what it says.
+  // Nulls for a project whose ledger holds nothing accepted and nothing
+  // overdue — which is every project until a human has actually decided
+  // something, and is what keeps an ordinary run's prompt byte-identical to
+  // one from before any of this existed.
+  const { order, workOrderBrief, due, escalationBrief } = takeWorkOrder({
+    repoRoot, ledgerPath, genNumber, scope: scope.scope, resurfaceAfter, threshold: consensus,
+  });
+  if (order) log(`📋 Carrying work order ${order.id} — ${order.title}`);
+  if (due.length) log(`❓ Asking about ${due.length} escalation(s) nobody has engaged with: ${due.map((e) => e.id).join(', ')}`);
+
   const promptConfig = {
     agentBrief,
     scopeText: scopeText[scope.scope] ?? scopeText.focused,
     editableFiles,
     createOnlyDescription,
     suggestMaxTokens,
-    context,
+    context: {
+      ...context,
+      ...(escalationBrief ? { escalations: escalationBrief } : {}),
+      workOrder: workOrderBrief,
+      escalationReview: buildEscalationReviewField(due),
+    },
     screenshots,
     genLabel,
     implementModel,
@@ -835,6 +964,10 @@ export async function runGeneration(config, deps = {}) {
       scope,
       apiIssues: summarizeApiIssues(failures),
     });
+
+    // Assigned before the fan-out, so an order can be outstanding even on a
+    // run where no model answered at all.
+    finishWorkOrder({ repoRoot, ledgerPath, genNumber, outcome: 'no-proposal' });
 
     return {
       outcome: 'no-proposal',
@@ -967,8 +1100,13 @@ export async function runGeneration(config, deps = {}) {
       log(`\n✅ Approved on attempt ${attempt}: ${review.reason}`);
       log(`   implemented by ${implementedBy}`);
 
+      // The outcome label this generation's work order was waiting for.
+      const workOrder = finishWorkOrder({ repoRoot, ledgerPath, genNumber, outcome: 'approved' });
+      if (workOrder) log(`📋 Work order ${workOrder.id} completed: approved`);
+
       return {
         outcome: 'approved',
+        workOrder,
         hasChanges: true,
         scope,
         summary,
@@ -998,8 +1136,12 @@ export async function runGeneration(config, deps = {}) {
       apiIssues: summarizeApiIssues(failures),
     });
 
+    const workOrder = finishWorkOrder({ repoRoot, ledgerPath, genNumber, outcome: 'abandoned' });
+    if (workOrder) log(`📋 Work order ${workOrder.id} completed: abandoned`);
+
     return {
       outcome: 'abandoned',
+      workOrder,
       hasChanges: false,
       scope,
       suggestModel: suggestResult.model,
@@ -1042,6 +1184,10 @@ export async function runGeneration(config, deps = {}) {
       ]),
     });
     log(`📓 Recorded the crash in ${attemptRecordPath}`);
+    // A run that was handed a work order and died still completes it, with
+    // that outcome. Leaving it assigned forever would drain the queue
+    // without ever recording why.
+    finishWorkOrder({ repoRoot, ledgerPath, genNumber, outcome: 'crashed' });
     err.attemptRecordPath = attemptRecordPath;
     throw err;
   }

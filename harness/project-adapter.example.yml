@@ -145,6 +145,19 @@ memory:
   escalation_consensus:
     models: 3
     labs: 2
+    # How many generations an escalation may sit BELOW that bar, with nobody
+    # mentioning it either way, before the next fan-out is asked about it by
+    # name. Optional; harness/lib/escalations.mjs defaults to 5.
+    #
+    # Why this exists: the bar counts supporters, and nothing counted
+    # silence. What actually kills a lone idea is that other models never
+    # mention it — it sits at 1/3 forever, and inattention scored identically
+    # to judgement. A resurfaced entry is put to the models directly and they
+    # must answer AGREE, DISAGREE or IRRELEVANT; three distinct IRRELEVANT
+    # judgements retire it, which is a real verdict where silence never was.
+    # This does not lower the bar. It asks the question the bar was silently
+    # answering on the models' behalf.
+    resurface_after: 5
   # Every N generations, one model reads the same history window every
   # suggesting model reads and is asked what principle explains it —
   # abstraction rather than association. Written by
