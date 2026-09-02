@@ -418,6 +418,55 @@ request by default instead, with autonomous merge as an opt-in earned after
 a rehearsal. See ARCHITECTURE.md's "Known gap" for the full account — it
 affects real, generated code, not just a design disagreement on paper.
 
+## The bet this depends on
+
+This whole design rests on one external assumption, worth stating plainly
+rather than leaving implicit: **frontier labs keep shipping, and each new
+model is meaningfully better than the last.** Neither is something this
+repository controls, and if either stops being true the loop quietly stops
+proposing anything — which is the correct behaviour, not a failure. So it's
+worth checking the bet against outside data rather than asserting it.
+
+**Are they still shipping?** The console's
+[about page](console/about.html) embeds a live release-cadence chart from
+[AI Release Tracker](https://aireleasetracker.com/analytics?utm_source=embed&utm_medium=referral&utm_campaign=releases-by-lab)
+— an independent third party, not affiliated with this project. It's an
+`<iframe>`, so it renders there and not here: GitHub strips iframes from
+markdown, and a screenshot pasted into this file would be a hand-maintained
+copy that rots silently, which is exactly what
+[`learning/01-principles.md`](learning/01-principles.md) principle 23
+("generate the record; never hand-maintain it") warns against.
+
+**Are they getting better in the way that matters here?** The most useful
+public measure is METR's **50% task-completion time horizon**: how long a
+task takes a skilled human, at the length where an AI agent completes it
+successfully half the time. It matters for this project specifically because
+it tracks *how much of a change a model can carry unattended* — which is the
+thing a governed autonomous loop is actually buying.
+
+| Model | 50% time horizon |
+|---|---|
+| Claude Opus 4.5 | 320 min |
+| GPT-5 | 214 min |
+| o3 | 121 min |
+
+Doubling time of that horizon, measured across models released since 2024:
+**~89 days**.
+
+Figures from METR's Time Horizon 1.1 set, via
+[metr.org/time-horizons](https://metr.org/time-horizons/) (page last updated
+8 May 2026; quoted here rather than embedded because METR publishes no
+embeddable chart). Carry METR's own caveats with the numbers: confidence
+intervals are wide, the trend is sensitive to which tasks are in the suite,
+and measurements above 16 hours are unreliable on the current one.
+
+The connection to this repository is direct. A rotating suggest seat is only
+worth the plumbing if a genuinely new mind arrives often enough to be worth
+asking — that's the first chart. And the curiosity design in
+[`docs/curiosity/`](docs/curiosity/) is a bet on the second: if models keep
+getting better at long tasks, the binding constraint shifts from *can it
+write the change* to *did anyone point it at the right question*.
+
 ## The shape of it, in one paragraph
 
 A model release is the trigger, not the calendar. One seat rotates — whichever

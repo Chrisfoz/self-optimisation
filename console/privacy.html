@@ -93,9 +93,32 @@ footer.foot {
   font-size:13.5px; color:var(--muted);
 }
 footer.foot .spacer { flex:1 1 30px; }
+
+/* ---- shared site nav (same markup on about / console / privacy) ---- */
+nav.sitenav {
+  display:flex; flex-wrap:wrap; gap:4px; align-items:center;
+  margin:0 0 26px; padding-bottom:14px; border-bottom:1px solid var(--line-soft);
+}
+nav.sitenav a {
+  font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;
+  font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.07em;
+  color:var(--muted); text-decoration:none; padding:6px 11px; border-radius:5px;
+}
+nav.sitenav a:hover { color:var(--ink); background:var(--surface-2); }
+nav.sitenav a[aria-current="page"] { color:var(--accent); background:var(--accent-wash); }
+nav.sitenav .navspace { flex:1 1 20px; }
+nav.sitenav .navrepo { font-size:12px; letter-spacing:.04em; text-transform:none; }
 </style>
 
 <div class="wrap">
+
+  <nav class="sitenav" aria-label="Site">
+    <a href="https://claude.ai/code/artifact/34273fb4-75b4-4e09-af44-159ccc9677e7">What it does</a>
+    <a href="https://claude.ai/code/artifact/00efd905-19bd-4d79-a613-e63182556742">The console</a>
+    <a href="https://claude.ai/code/artifact/476e81da-9930-46fb-bfb8-08b0c5a4911d" aria-current="page">Privacy</a>
+    <span class="navspace"></span>
+    <a class="navrepo" href="https://github.com/Chrisfoz/self-optimisation">GitHub ↗</a>
+  </nav>
 
   <header class="top">
     <p class="eyebrow">Self-Optimisation · Install console</p>
@@ -232,6 +255,14 @@ footer.foot .spacer { flex:1 1 30px; }
     <li><b>The model labs you choose</b> — Anthropic, OpenAI, Google and the rest — receive whatever the harness sends them, under their own terms. You pick which ones, and you can pick none.</li>
     <li><b>Supabase</b> hosts our database and handles the GitHub sign-in described above, in their Sydney region.</li>
     <li><b>An email provider</b>, if you switch on the run digest, sends that email using a key you supply. We don't operate it and don't receive the mail.</li>
+    <li><b>AI Release Tracker</b> supplies the release-cadence chart embedded on
+    the "what it does" page. That chart is an iframe served by
+    <span class="mono">aireleasetracker.com</span>, so loading that page makes a
+    request to them and they may see your IP address and browser, under their
+    own privacy policy. No console page sends them anything about you, your
+    account, or your repositories. It is the only third-party embed on any of
+    these pages, and it appears on that one page only — the console itself
+    embeds nothing.</li>
   </ul>
 
   <h2>Removing it</h2>
@@ -260,6 +291,8 @@ footer.foot .spacer { flex:1 1 30px; }
   <footer class="foot">
     <a href="https://github.com/Chrisfoz/self-optimisation">Repository</a>
     <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/console/DESIGN.md">Console design doc</a>
+    <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://claude.ai/code/artifact/34273fb4-75b4-4e09-af44-159ccc9677e7">What it does</a>
     <span class="spacer"></span>
     <span>Draft · not yet in force</span>
   </footer>

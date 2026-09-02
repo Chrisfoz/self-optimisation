@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { load as loadYaml } from 'js-yaml';
-import { buildAdapterObject, renderAdapterYaml, renderWorkflowTemplate, renderReadme } from '../../harness/lib/scaffold.mjs';
+import { buildAdapterObject, renderAdapterYaml, renderWorkflowTemplate, renderReadme, requiredProviders } from '../../harness/lib/scaffold.mjs';
 
 const TEMPLATE_PATH = path.join(import.meta.dirname, '../../harness/templates/workflow.yml.tmpl');
 const template = fs.readFileSync(TEMPLATE_PATH, 'utf8');
@@ -159,6 +159,62 @@ test('renderWorkflowTemplate: embeds every configured provider secret and the CS
   assert.match(out, /ANTHROPIC_API_KEY: \$\{\{ secrets\.ANTHROPIC_API_KEY \}\}/);
   assert.match(out, /OPENAI_API_KEY: \$\{\{ secrets\.OPENAI_API_KEY \}\}/);
   assert.match(out, /--providers anthropic,openai/);
+});
+
+// --- pinned-seat providers vs. watched providers ----------------------------
+// The bug these lock down: `providers.watched` is the DETECTOR's scope, but
+// the implement/review/rank seats are pinned to a model that may belong to a
+// lab nobody watches. Injecting only the watched labs' secrets meant that
+// configuration failed at runtime, mid-run, after the suggest call had
+// already been paid for.
+
+test('requiredProviders: watched only, when no pinned model needs anything else', () => {
+  const out = requiredProviders({
+    providers: [{ name: 'anthropic', envKey: 'ANTHROPIC_API_KEY' }],
+    roleProviders: [{ name: 'anthropic', envKey: 'ANTHROPIC_API_KEY' }],
+  });
+  assert.deepEqual(out, [{ name: 'anthropic', envKey: 'ANTHROPIC_API_KEY' }]);
+});
+
+test('requiredProviders: a pinned model on an unwatched lab is added, watched labs first', () => {
+  const out = requiredProviders({
+    providers: [{ name: 'openai', envKey: 'OPENAI_API_KEY' }],
+    roleProviders: [{ name: 'anthropic', envKey: 'ANTHROPIC_API_KEY' }],
+  });
+  assert.deepEqual(out, [
+    { name: 'openai', envKey: 'OPENAI_API_KEY' },
+    { name: 'anthropic', envKey: 'ANTHROPIC_API_KEY' },
+  ]);
+});
+
+test('requiredProviders: tolerates a missing roleProviders entirely (nothing resolved, or an older answers object)', () => {
+  const out = requiredProviders({ providers: [{ name: 'openai', envKey: 'OPENAI_API_KEY' }] });
+  assert.deepEqual(out, [{ name: 'openai', envKey: 'OPENAI_API_KEY' }]);
+});
+
+test('renderWorkflowTemplate: a reviewer pinned to an unwatched lab still gets its API key wired', () => {
+  // Watching only OpenAI, but reviewing with claude-opus-5 — the default
+  // pinned model, and therefore the single most likely way to hit this.
+  const out = renderWorkflowTemplate(template, baseAnswers({
+    providers: [{ name: 'openai', envKey: 'OPENAI_API_KEY' }],
+    roleProviders: [{ name: 'anthropic', envKey: 'ANTHROPIC_API_KEY' }],
+  }));
+  assert.match(out, /ANTHROPIC_API_KEY: \$\{\{ secrets\.ANTHROPIC_API_KEY \}\}/);
+  // ...while the detector's own scope stays the watched list alone — the
+  // line is `--providers openai \` (a bash continuation), so match the
+  // argument itself rather than an end-of-line anchor.
+  assert.match(out, /--providers openai\s*\\/);
+  assert.doesNotMatch(out, /--providers [\w,]*anthropic/);
+  assert.doesNotThrow(() => loadYaml(out));
+});
+
+test('renderReadme: says which secrets are needed because of a pinned model rather than listing them unexplained', () => {
+  const out = renderReadme(baseAnswers({
+    providers: [{ name: 'openai', envKey: 'OPENAI_API_KEY' }],
+    roleProviders: [{ name: 'anthropic', envKey: 'ANTHROPIC_API_KEY' }],
+  }));
+  assert.match(out, /OPENAI_API_KEY`? — openai \(watched for new releases\)/);
+  assert.match(out, /ANTHROPIC_API_KEY`? — anthropic \(needed by a pinned/);
 });
 
 test('renderWorkflowTemplate: quotes allowed_paths for the git add step', () => {

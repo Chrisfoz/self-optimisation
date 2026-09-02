@@ -29,6 +29,45 @@ function indentBlock(text, spaces) {
 }
 
 /**
+ * Every provider whose API key this installation actually needs a secret
+ * for — which is NOT the same set as `providers.watched`.
+ *
+ * `watched` is the detector's scope: which labs get polled for a model that
+ * hasn't been seen before, and therefore which labs can win the rotating
+ * suggest seat. The implement, review and rank seats are pinned to a model
+ * the project chose, and that model may well belong to a lab nobody is
+ * watching — pinning the reviewer to `claude-opus-5` while watching only
+ * OpenAI is a perfectly reasonable configuration, and the default one
+ * (`claude-opus-5` for all three pinned seats) does exactly this for any
+ * project that doesn't watch Anthropic.
+ *
+ * Injecting only the watched labs' secrets is why that configuration used
+ * to fail at runtime, mid-run, *after* the suggest call had already been
+ * paid for: the improve step had no key for the lab it was about to call.
+ * The union is what the workflow needs; `--providers` keeps using the
+ * watched list alone, since that genuinely is the detector's scope.
+ *
+ * A secret that is injected but never set resolves to an empty string in
+ * GitHub Actions rather than erroring, so a superset is safe; a subset is
+ * not.
+ *
+ * @param {object} a  Answers object — `providers` (watched) and the
+ *   optional `roleProviders` init.mjs resolved from the pinned role models.
+ * @returns {Array<{name: string, envKey: string}>} deduped by `name`,
+ *   watched labs first, then any extra labs a pinned role model needs.
+ */
+export function requiredProviders(a) {
+  const seen = new Set();
+  const out = [];
+  for (const p of [...(a.providers || []), ...(a.roleProviders || [])]) {
+    if (!p || !p.name || seen.has(p.name)) continue;
+    seen.add(p.name);
+    out.push({ name: p.name, envKey: p.envKey });
+  }
+  return out;
+}
+
+/**
  * Build the `project-adapter.yml` object for a new installation. Every
  * field init.mjs didn't ask about gets the same default
  * `harness/project-adapter.example.yml` documents, so a generated file is
@@ -168,8 +207,11 @@ export function renderAdapterYaml(answers) {
  * enough; no template engine needed).
  */
 export function renderWorkflowTemplate(template, answers) {
+  // The union, not just the watched labs — see requiredProviders()'s own
+  // doc for why a pinned reviewer on an unwatched lab used to fail at
+  // runtime, after the suggest call had already been paid for.
   const providerEnvLines = indentBlock(
-    answers.providers.map((p) => `${p.envKey}: \${{ secrets.${p.envKey} }}`).join('\n'),
+    requiredProviders(answers).map((p) => `${p.envKey}: \${{ secrets.${p.envKey} }}`).join('\n'),
     10
   );
   const testCommandLines = indentBlock((answers.testCommands || []).join('\n'), 10);
@@ -184,12 +226,26 @@ export function renderWorkflowTemplate(template, answers) {
   let notifySteps = '';
   if (answers.notify) {
     const notifyEnvLine = `${answers.notify.envKey}: \${{ secrets.${answers.notify.envKey} }}`;
+    // Deliberately NOT gated on a generation number existing. The cycles
+    // with no generation are exactly the ones whose silence is hardest to
+    // read: a crashed release check, a lab shipping something nothing could
+    // reach, a preflight failure. send-digest.mjs picks the right message
+    // from CHECK_RESULT / PREFLIGHT_RESULT / RELEASE_DETECTED when
+    // GEN_NUMBER is absent. "It is visible as a red step in the Actions run"
+    // is not a substitute — nobody is watching the Actions tab, which is
+    // why the digest exists at all.
     notifySteps = `- name: Send the generation digest
-        if: always() && steps.gen.outputs.number
+        if: always()
         shell: bash
         env:
           ${notifyEnvLine}
           GEN_NUMBER: \${{ steps.gen.outputs.number }}
+          CHECK_RESULT: \${{ steps.check.outcome }}
+          PREFLIGHT_RESULT: \${{ steps.preflight.outcome }}
+          RELEASE_DETECTED: \${{ steps.check.outputs.release-detected }}
+          NO_GENERATION_DETAIL: \${{ steps.probe.outputs.dropped }}
+          LABS_WATCHED: ${answers.providers.map((p) => p.name).join(',')}
+          RUN_URL: \${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}
           GATES: \${{ steps.gates.outputs.json }}
           MERGED: \${{ steps.gates.outputs.merged }}
           SUGGEST_MODEL: \${{ steps.probe.outputs.model }}
@@ -241,7 +297,15 @@ export function renderWorkflowTemplate(template, answers) {
  * not for someone reading harness source.
  */
 export function renderReadme(answers) {
-  const providerLines = answers.providers.map((p) => `- \`${p.envKey}\` — ${p.name}`).join('\n');
+  const watched = new Set((answers.providers || []).map((p) => p.name));
+  const providerLines = requiredProviders(answers)
+    .map((p) => {
+      const why = watched.has(p.name)
+        ? 'watched for new releases'
+        : 'needed by a pinned implement/review/rank model, even though it is not watched';
+      return `- \`${p.envKey}\` — ${p.name} (${why})`;
+    })
+    .join('\n');
   const notifyLine = answers.notify ? `- \`${answers.notify.envKey}\` — sends the generation digest via ${answers.notify.provider}` : null;
   const secretLines = [providerLines, notifyLine].filter(Boolean).join('\n');
 

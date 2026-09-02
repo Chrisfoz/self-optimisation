@@ -24,6 +24,8 @@
 
 import https from 'https';
 import { getProvider } from './llm-provider.mjs';
+import { isKnownAlias, dedupeAliases, aliasDuplicates } from './model-aliases.mjs';
+import { isUnfixable } from './unfixable-models.mjs';
 
 // ---------------------------------------------------------------------------
 // Chat-model filtering
@@ -193,6 +195,12 @@ export async function checkReleases({
   maxFanout = 8,
   isChatModelOptions,
   log = () => {},
+  // Injectable purely so tests can exercise the candidate-filtering logic
+  // (alias collapsing, unfixable suppression, baselines) without a network.
+  // Same idiom as probe-models.mjs's injectable prober, and for the same
+  // reason: the filtering is where the interesting bugs live, and it is
+  // unreachable in a test if the only way in is a real /models call.
+  fetchModelsImpl = fetchModels,
 }) {
   const results = {};
   const candidates = [];
@@ -209,7 +217,7 @@ export async function checkReleases({
       continue;
     }
 
-    const { status, models = [], reason } = await fetchModels(providerName, key, isChatModelOptions);
+    const { status, models = [], reason } = await fetchModelsImpl(providerName, key, isChatModelOptions);
     const previousModels = snapshot[providerName] || [];
 
     // "New" only means anything relative to a known baseline. The first
@@ -217,7 +225,38 @@ export async function checkReleases({
     // trigger nothing — otherwise fixing a broken API key would make that
     // lab's entire back catalogue look like a same-day release.
     const isBaseline = status === 'success' && !Object.prototype.hasOwnProperty.call(snapshot, providerName);
-    const newModels = isBaseline ? [] : models.filter((m) => !previousModels.includes(m.id));
+
+    // A reseller re-listing a model under a vendor prefix is not a release.
+    // A bare `previousModels.includes()` compares id strings, and
+    // `kimi/kimi-k3` is not the string `kimi-k3` even though it names a model
+    // that may already have been run. See model-aliases.mjs for the cycle
+    // this cost the reference implementation.
+    const isUnseen = (m) => !isKnownAlias(m.id, previousModels);
+
+    // The suppression worth announcing loudest is the SILENT one: an id that
+    // is new as a string but not as a model. Left unlogged, "we recognised a
+    // duplicate" and "the lab stopped listing it" read identically from
+    // outside — which is how the original bug survived a month.
+    const seenAsAlias = isBaseline
+      ? []
+      : models.filter((m) => !previousModels.includes(m.id) && !isUnseen(m));
+
+    // Candidates a diagnostic step has confirmed are permanently blocked
+    // never re-trigger, even though they never enter previousModels by the
+    // normal path. Every OTHER kind of failure stays eligible to retry — see
+    // unfixable-models.mjs for why that distinction is load-bearing.
+    const skippedUnfixable = isBaseline
+      ? []
+      : models.filter((m) => isUnseen(m) && isUnfixable(snapshot, providerName, m.id));
+
+    const unseenModels = isBaseline
+      ? []
+      : models.filter((m) => isUnseen(m) && !isUnfixable(snapshot, providerName, m.id));
+
+    // Both forms can appear in one listing on the same day, in which case
+    // neither is "already seen" and only this collapses them.
+    const aliasedAway = aliasDuplicates(unseenModels);
+    const newModels = dedupeAliases(unseenModels);
 
     results[providerName] = {
       status: status === 'error' ? 'unknown' : 'success',
@@ -226,7 +265,20 @@ export async function checkReleases({
       totalCount: models.length,
       ...(isBaseline ? { baseline: true } : {}),
       ...(reason ? { reason } : {}),
+      ...(seenAsAlias.length ? { seenAsAlias: seenAsAlias.map((m) => m.id).sort() } : {}),
+      ...(aliasedAway.length ? { aliasDuplicates: aliasedAway } : {}),
+      ...(skippedUnfixable.length ? { skippedUnfixable: skippedUnfixable.map((m) => m.id).sort() } : {}),
     };
+
+    if (seenAsAlias.length > 0) {
+      log(`🔗 ${providerName}: not new — vendor-namespaced re-listing of a model already seen: ${seenAsAlias.map((m) => m.id).join(', ')}`);
+    }
+    if (aliasedAway.length > 0) {
+      log(`🔗 ${providerName}: collapsing vendor-namespaced duplicate(s): ${aliasedAway.map((m) => `${m.id} → ${m.duplicateOf}`).join(', ')}`);
+    }
+    if (skippedUnfixable.length > 0) {
+      log(`⏭️  ${providerName}: not re-selecting (diagnosed unfixable): ${skippedUnfixable.map((m) => m.id).join(', ')}`);
+    }
 
     if (isBaseline) {
       log(`📋 ${providerName}: baseline recorded (${models.length} models). Nothing triggered — future additions will count as new.`);
@@ -264,6 +316,16 @@ export async function checkReleases({
     }
   }
 
+  // Carried forward unconditionally. This function never writes `_unfixable`
+  // itself — only a diagnostic step does, via mergeUnfixable() — so it must
+  // never be the thing that drops it. A snapshot rebuilt purely from the
+  // per-provider results would silently erase every diagnosis on the next
+  // run, and the candidates would start being retried again with nothing to
+  // show that anything had been forgotten.
+  if (snapshot._unfixable) {
+    newSnapshot._unfixable = snapshot._unfixable;
+  }
+
   if (selected.length === 1) {
     log(`\n🎯 Suggestion stage will run on: ${selected[0].id} (${selected[0].provider})`);
   } else if (selected.length > 1) {
@@ -274,6 +336,14 @@ export async function checkReleases({
 
   return {
     hasNewReleases: anyNewReleases,
+    // Set HERE, before any reachability probe runs, and never overwritten by
+    // one. `hasNewReleases` is what survives probing; `releaseDetected` is
+    // what was found. A probe that drops every candidate makes the first
+    // false, and without this second field that is indistinguishable from a
+    // month in which no lab shipped anything — so "a lab shipped something we
+    // cannot reach" gets reported as "nothing happened", which is the one
+    // outcome that most needs a human to look.
+    releaseDetected: anyNewReleases,
     selectedModels: selected.map((m) => ({ id: m.id, provider: m.provider, contextWindow: m.contextWindow ?? null })),
     selectedModel: selected[0]?.id ?? '',
     selectedProvider: selected[0]?.provider ?? '',

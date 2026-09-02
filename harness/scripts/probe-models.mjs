@@ -87,6 +87,11 @@ const { survivors, dropped } = await probeCandidates(
 release.selectedModels = survivors;
 release.selectedModel = survivors[0]?.id ?? '';
 release.selectedProvider = survivors[0]?.provider ?? '';
+// Only hasNewReleases moves. `releaseDetected` was set by the detector
+// before this step ran and is deliberately left alone: it records that a lab
+// shipped something, which stays true even when nothing here could reach it.
+// Collapsing the two is how "a lab moved its endpoint" ends up looking
+// exactly like "a quiet month" to everything downstream.
 release.hasNewReleases = survivors.length > 0;
 release.probeDropped = dropped;
 

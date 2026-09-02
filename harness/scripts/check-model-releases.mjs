@@ -91,6 +91,11 @@ console.log(
   JSON.stringify(
     {
       hasNewReleases: result.hasNewReleases,
+      // Emitted separately from hasNewReleases and never overwritten by the
+      // probe step — see model-release-detector.mjs. A workflow gating a
+      // "quiet month" message must read THIS, or a month where every
+      // candidate was unreachable reports as a month where nothing shipped.
+      releaseDetected: result.releaseDetected,
       selectedModels: result.selectedModels,
       selectedModel: result.selectedModel,
       selectedProvider: result.selectedProvider,

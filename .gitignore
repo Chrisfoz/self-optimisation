@@ -33,3 +33,7 @@ node_modules/
 # of the portable harness this repository ships. Kept local, same as
 # carrotgame's are project-local to that repo rather than this one.
 .claude/agents/
+
+# VS Code Local History extension — snapshots of files as they were edited,
+# including copies of .claude/agents/ which is itself ignored above.
+.history/
