@@ -18,9 +18,10 @@ call.
 
 ## Start here
 
-**→ Tier 1.1, reconcile the merge model.** It is the only place where the
-generator this repository ships disagrees with this repository's own stated
-design, it is the prerequisite for the whole console, and it is small.
+**→ Tier 2.1, rehearse on a second project.** Tier 1 is done. 2.1 is now the
+highest-value item in the file: it decides whether 2.2 is urgent or
+theoretical, and nothing should claim multi-language support until it has
+happened.
 
 ---
 
@@ -29,7 +30,9 @@ design, it is the prerequisite for the whole console, and it is small.
 Everything here is a gap in shipped, tested code. None of it is new
 architecture. All of it blocks Tier 3.
 
-- [ ] **1.1 — Reconcile the merge model: pull request by default, autonomous merge as opt-in.**
+**1.1–1.3 are done** (2026-09-02). 1.4 is the one left.
+
+- [x] **1.1 — Reconcile the merge model: pull request by default, autonomous merge as opt-in.**
   `harness/templates/workflow.yml.tmpl` only ever does autonomous merge — it
   commits to the agent branch, guards, tests, merges, tags. It does not open a
   pull request, and it bakes `schedule:` in immediately. `console/DESIGN.md`
@@ -44,16 +47,37 @@ architecture. All of it blocks Tier 3.
   *Done when:* the template renders a PR-opening path, that path is the
   default, and `tests/lib/scaffold.test.mjs` parses both variants back with
   `js-yaml`.
+  **Done.** `{{MERGE_STEPS}}` in the template; `mergeSteps()` in
+  `scaffold.mjs` renders exactly one of the two paths, so which merge model
+  a repository got is answerable by reading its workflow. The PR path uses
+  `gh pr create` (no third-party action, no credential beyond the job's own
+  token), then `record-pull-request.mjs` — the first thing to call it — and
+  runs no deployment verification, because nothing is deployed until a
+  person merges. `{{SCHEDULE_BLOCK}}` closes the other half of the same gap:
+  `includeSchedule: false` renders a `workflow_dispatch`-only workflow with
+  a commented cron, so §Step 9's "the schedule stays off until a rehearsal
+  passes" is a fact about the file. Both variants are parsed back with
+  `js-yaml` in `tests/lib/scaffold.test.mjs`.
 
-- [ ] **1.2 — Make `approval_class` actually do something.**
+- [x] **1.2 — Make `approval_class` actually do something.**
   It is parsed by nothing — `grep -rn "approval_class\|approvalClass" harness/ tests/`
   returns zero hits. It is the field that 1.1's two paths should switch on, so
   build it as part of 1.1 rather than after it.
   *Done when:* the adapter exposes it, `scaffold.mjs` selects the merge path
   from it, and an unrecognised value fails closed to the PR path rather than
   to autonomous merge.
+  **Done,** as part of 1.1. `adapter.mjs` exports `approvalClass()`,
+  `normalizeApprovalClass()`, `APPROVAL_CLASSES` and
+  `DEFAULT_APPROVAL_CLASS`; it reads `constitution.approval_class` (where
+  carrotgame already put it) and accepts a top-level one, since the example
+  file documented it there while the field was RESERVED. Every value that
+  is not literally `autonomous-merge` resolves to the human path — a typo,
+  a boolean, an array, an older adapter, or something a future console
+  writes. It is read at scaffold time only, never at run time: a script
+  deciding its own merge model mid-run from a file the agent's branch could
+  in principle have edited is the wrong shape for this field.
 
-- [ ] **1.3 — Decide the fate of the other RESERVED fields.**
+- [x] **1.3 — Decide the fate of the other RESERVED fields.**
   `cadence` and `evaluation` are parsed and never read back out of an existing
   `project-adapter.yml` — cadence is baked into the workflow's cron at scaffold
   time. That may be the right answer permanently; if so, say so in the schema
@@ -62,6 +86,18 @@ architecture. All of it blocks Tier 3.
   §2.3 for the LIVE/RESERVED accounting.
   *Done when:* each field is either read by something or relabelled with the
   reason it never will be.
+  **Done — the answer was "permanently, and here's why".** Both are now
+  labelled RECORDED rather than RESERVED, in the closing section of
+  `harness/project-adapter.example.yml`: a value baked into a generated file
+  has exactly one source of truth at run time, which is that file. Reading
+  it back from the adapter as well would create two that can silently
+  disagree, and the disagreement would be invisible precisely when it
+  mattered — a run failing on the commands in a YAML file rather than the
+  ones CI actually ran. `buildAdapterObject()` now writes `cadence` as well
+  as `evaluation`, including `cadence.scheduled`, which says whether the
+  cron was rendered into the workflow or left commented out pending a
+  rehearsal. `cadence.trigger` is documentation of intent with no mechanism
+  behind it, and is described as such.
 
 - [ ] **1.4 — Build the themes-review CLI.**
   `harness/lib/generate-themes.mjs` holds a prompt and a parser that no script
@@ -124,15 +160,23 @@ gaps are solved by better documentation — they are missing code.
 ## Tier 3 — the console
 
 Phase 0 of `console/DESIGN.md` §5 is **effectively done** — the generator
-exists as pure functions with tests. The doc doesn't know it yet: it specifies
-`harness/lib/install.mjs`, and what was built is `harness/lib/scaffold.mjs` +
-`harness/cli/init.mjs`. §2.1's own title — *"the console is a front end for
-`init`, and `init` doesn't exist"* — is now false.
+exists as pure functions with tests — and as of 3.1 the document says so.
+What phase 0 is still missing is `validateAnswers()` (§2.1): the invariant
+checks over an answers object, which neither the CLI nor the console has.
+That is a prerequisite for 3.3, not for 3.2.
 
-- [ ] **3.1 — Update `console/DESIGN.md` to the code that exists.**
+- [x] **3.1 — Update `console/DESIGN.md` to the code that exists.**
   Correct §2.1, and point Phase 0 at `scaffold.mjs`/`init.mjs` by their real
   names. Cheap, and it stops the next reader planning work that is finished.
   *Done when:* no section of DESIGN.md describes the generator as unbuilt.
+  **Done.** The status line, §2.1's heading, §5's phase table and its
+  following paragraph, and §10 all now name `scaffold.mjs`/`init.mjs`. §2.1's
+  original argument is kept, explicitly marked as the record of the argument
+  that produced the code rather than a description of the tree. §2.3's table
+  and §Step 7 were updated in the same pass (1.2 made `approval_class` LIVE;
+  1.3 moved the other two rows to "recorded, by design"). What §2.1 says is
+  still genuinely missing — `validateAnswers()` — is now the only thing it
+  claims is missing.
 
 - [ ] **3.2 — Build the phase-1 backend.**
   §8.5 changed the connection to a real GitHub App, which means every
@@ -192,8 +236,12 @@ at fixing and never gets curious" — but do respect its own gate.
 
 ## Housekeeping, whenever a nearby file is open
 
-- [ ] Fold doc-drift fixes in as you touch things: `console/DESIGN.md` §2.1
+- [x] Fold doc-drift fixes in as you touch things: `console/DESIGN.md` §2.1
       (3.1 above), and any remaining place that describes `init` as unbuilt.
+      Done alongside 1.1–1.3 and 3.1: `ARCHITECTURE.md`'s diagram and its
+      "Known gap" section, `README.md`'s "one known seam", and
+      `Portable-Harness-Design.md`'s "one open seam" all described the merge
+      model as unreconciled and no longer do. Keep folding new ones in.
 - [ ] `Portable-Harness-Design.md`'s Status table and `ARCHITECTURE.md`'s prose
       hold the same information and are kept in sync by hand. If they ever
       disagree, trust whichever was edited more recently and fix the other.

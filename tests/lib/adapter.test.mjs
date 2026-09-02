@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadAdapter, watchedProviders, snapshotPath, maxFanout, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, deploymentConfig, notifyConfig } from '../../harness/lib/adapter.mjs';
+import { loadAdapter, watchedProviders, snapshotPath, maxFanout, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, deploymentConfig, notifyConfig, approvalClass, normalizeApprovalClass, DEFAULT_APPROVAL_CLASS } from '../../harness/lib/adapter.mjs';
 
 async function withTempFile(content, fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'adapter-test-'));
@@ -335,6 +335,48 @@ test('notifyConfig: escalationNotice defaults to true (the safer default), calib
   assert.equal(notifyConfig(null).escalationNotice, true);
   assert.equal(notifyConfig(null).channel, null);
   assert.deepEqual(notifyConfig(null).calibrationExamplesPaths, []);
+});
+
+// --- approval_class -----------------------------------------------------------
+// The one field where "unrecognised" must not mean "carry on": every value
+// that isn't literally `autonomous-merge` resolves to the human path, so a
+// typo, an older adapter, or a value written by some future console can
+// never be the reason a project starts merging its own changes unattended.
+
+test('approvalClass reads constitution.approval_class, where a real installation puts it', async () => {
+  await withTempFile('constitution:\n  approval_class: autonomous-merge\n', async (file) => {
+    assert.equal(approvalClass(await loadAdapter(file)), 'autonomous-merge');
+  });
+});
+
+test('approvalClass accepts a top-level approval_class too, as the example file documented it while RESERVED', async () => {
+  await withTempFile('approval_class: autonomous-merge\n', async (file) => {
+    assert.equal(approvalClass(await loadAdapter(file)), 'autonomous-merge');
+  });
+});
+
+test('approvalClass prefers constitution.approval_class over a top-level one, when both are set', async () => {
+  await withTempFile('approval_class: autonomous-merge\nconstitution:\n  approval_class: human-approval-required\n', async (file) => {
+    assert.equal(approvalClass(await loadAdapter(file)), 'human-approval-required');
+  });
+});
+
+test('approvalClass fails closed to the human path on an unset, misspelled, or non-string value', () => {
+  assert.equal(DEFAULT_APPROVAL_CLASS, 'human-approval-required');
+  assert.equal(approvalClass(null), 'human-approval-required');
+  assert.equal(approvalClass({}), 'human-approval-required');
+  assert.equal(approvalClass({ constitution: {} }), 'human-approval-required');
+  assert.equal(approvalClass({ constitution: { approval_class: 'autonomous_merge' } }), 'human-approval-required');
+  assert.equal(approvalClass({ constitution: { approval_class: 'auto' } }), 'human-approval-required');
+  assert.equal(approvalClass({ constitution: { approval_class: true } }), 'human-approval-required');
+  assert.equal(approvalClass({ constitution: { approval_class: ['autonomous-merge'] } }), 'human-approval-required');
+});
+
+test('normalizeApprovalClass tolerates surrounding whitespace but not a different value', () => {
+  assert.equal(normalizeApprovalClass('  autonomous-merge  '), 'autonomous-merge');
+  assert.equal(normalizeApprovalClass('  human-approval-required'), 'human-approval-required');
+  assert.equal(normalizeApprovalClass('autonomous merge'), 'human-approval-required');
+  assert.equal(normalizeApprovalClass(undefined), 'human-approval-required');
 });
 
 test('accessors return null/empty defaults on a null adapter, never throw', () => {

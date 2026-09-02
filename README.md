@@ -411,12 +411,14 @@ status marks below don't read as contradictions:
    no run history yet is unaffected — see "Cold start" in
    [`docs/curiosity/README.md`](docs/curiosity/README.md#cold-start-the-first-runs-must-work-with-none-of-this).
 
-**One known seam between stage 1 and stage 2, unresolved:** the generated
-workflow (stage 1's output) currently always auto-merges an approved change
-(`harness/lib/promote.mjs`); the console design calls for opening a pull
-request by default instead, with autonomous merge as an opt-in earned after
-a rehearsal. See ARCHITECTURE.md's "Known gap" for the full account — it
-affects real, generated code, not just a design disagreement on paper.
+**The seam between stage 1 and stage 2, now closed:** the generated workflow
+used to always auto-merge an approved change (`harness/lib/promote.mjs`),
+which is the opposite of what the console design calls for. It now renders
+one of two paths from `constitution.approval_class` — open a pull request
+(the default, and where any unrecognised value lands) or merge autonomously
+(the opt-in) — and the `schedule:` block is optional, so an installation can
+ship dispatch-only until a rehearsal has passed. See ARCHITECTURE.md's "The
+merge model, reconciled" for the full account.
 
 ## The bet this depends on
 

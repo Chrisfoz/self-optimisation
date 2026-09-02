@@ -576,13 +576,14 @@ in GitHub Actions rather than only against a local git repo and unit
 tests — the one kind of verification a repository working on itself can't
 provide from inside itself.
 
-**One open seam, named here so it's not only in `ARCHITECTURE.md`:**
-`workflow.yml.tmpl` always auto-merges an approved change; `console/DESIGN.md`
-(written afterward) argues for opening a pull request by default instead,
-autonomous merge as an opt-in. `orchestrator.mjs`'s `recordPullRequestUrl()`
-and `harness/scripts/record-pull-request.mjs` exist to support this; the
-template doesn't call them yet. See `ARCHITECTURE.md`'s "Known gap" for the
-full account.
+**That open seam, closed:** `workflow.yml.tmpl` used to always auto-merge an
+approved change, where `console/DESIGN.md` (written afterward) argued for
+opening a pull request by default and autonomous merge as an opt-in. The
+template now renders whichever of the two paths `constitution.approval_class`
+selects — the pull-request path calls `orchestrator.mjs`'s
+`recordPullRequestUrl()` through `harness/scripts/record-pull-request.mjs`,
+and anything unrecognised fails closed to it. See `ARCHITECTURE.md`'s "The
+merge model, reconciled" for the full account.
 
 Wiring the orchestrator's new adapter fields (`roles.*`, `context.*`) into
 `harness/project-adapter.example.yml` surfaced one more real bug the same

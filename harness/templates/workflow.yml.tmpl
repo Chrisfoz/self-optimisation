@@ -26,27 +26,32 @@
 # script-injection bug, not a style preference. See GitHub's own docs on
 # "Understanding the risk of script injection" if you extend this file.
 #
-# KNOWN GAP, worth fixing before this is the console's own output: this
-# template only ever does autonomous merge (harness/scripts/promote.mjs —
-# commit straight to the agent branch, guard, test, merge, tag). It does
-# not open a pull request, does not read `approval_class`, and always bakes
-# the `schedule:` cron in immediately. `console/DESIGN.md` §Step 7 makes a
-# different, more conservative call for exactly this file: "open a pull
-# request, I'll merge it" as the DEFAULT, autonomous merge as an advanced
-# opt-in — "defaulting a non-technical user into autonomous merge is the
-# single worst decision this console could make" — plus a two-phase
-# onboarding (§Step 9: ship with `workflow_dispatch` only, rehearse once,
-# THEN a second PR adds `schedule:`). `harness/lib/orchestrator.mjs`'s
-# `recordPullRequestUrl()` and `harness/scripts/record-pull-request.mjs`
-# already exist to support a PR-opening step here; nothing in this template
-# calls them yet. Reconcile these two designs before the console generates
-# (or links to) this file for a real user.
+# TWO THINGS THIS FILE IS RENDERED WITH, both chosen at scaffold time and
+# both visible below as ordinary YAML rather than as a runtime branch:
+#
+# 1. The MERGE MODEL, from `constitution.approval_class`.
+#    `human-approval-required` (the default, and what anything unrecognised
+#    falls back to) runs every gate against the agent branch and then opens
+#    a pull request for a person to merge — `console/DESIGN.md` §Step 7:
+#    "defaulting a non-technical user into autonomous merge is the single
+#    worst decision this console could make". `autonomous-merge` is the
+#    opt-in that merges and tags the branch itself
+#    (harness/scripts/promote.mjs). Exactly one of the two paths is
+#    rendered into this file; the other does not exist here at all, so
+#    which one a repository got is answerable by reading it.
+# 2. The SCHEDULE, which may be absent. §Step 9's two-phase onboarding
+#    ships `workflow_dispatch` only, rehearses once by hand, and adds the
+#    `schedule:` block afterward — so that "the schedule stays off until a
+#    rehearsal passes" is literally true rather than aspirational.
+#
+# `harness/lib/orchestrator.mjs`'s `recordPullRequestUrl()` and
+# `harness/scripts/record-pull-request.mjs` are what the pull-request path
+# calls to write the PR's URL back into that generation's attempts.json.
 
 name: Self-improvement loop
 
 on:
-  schedule:
-    - cron: '{{CRON}}'
+{{SCHEDULE_BLOCK}}
   workflow_dispatch:
     inputs:
       scope:
@@ -56,7 +61,7 @@ on:
         options: ['', focused, ambitious]
 
 permissions:
-  contents: write
+{{PERMISSION_LINES}}
 
 jobs:
   self-improve:
@@ -183,22 +188,7 @@ jobs:
         run: |
 {{TEST_COMMAND_LINES}}
 
-      - name: Merge and tag, if every gate passed
-        id: promote
-        if: steps.tests.outcome == 'success'
-        shell: bash
-        continue-on-error: true
-        env:
-          GEN_NUMBER: ${{ steps.gen.outputs.number }}
-          BASE_BRANCH: {{DEFAULT_BRANCH}}
-        run: node harness/scripts/promote.mjs
-
-      - name: Verify the deployment
-        id: verify
-        if: steps.promote.outcome == 'success'
-        shell: bash
-        continue-on-error: true
-        run: node harness/scripts/verify-deployment.mjs
+      {{MERGE_STEPS}}
 
       # Gate results only exist when a generation was actually attempted.
       # The digest step below is NOT gated on that — see its own comment.
@@ -211,6 +201,12 @@ jobs:
           REVIEW: ${{ steps.improve.outcome }}
           GUARD: ${{ steps.guard.outcome }}
           TESTS: ${{ steps.tests.outcome }}
+          # Exactly one of these two paths was rendered into this file (see
+          # the header). The other's step does not exist, so its `outcome`
+          # expression resolves to the empty string and `add` skips it —
+          # which is why this block can name both without either merge
+          # model having to know about the other.
+          PULL_REQUEST: ${{ steps.pr.outcome }}
           PROMOTE: ${{ steps.promote.outcome }}
           VERIFY: ${{ steps.verify.outcome }}
         run: |
@@ -220,6 +216,7 @@ jobs:
           add review "$REVIEW"
           add guard "$GUARD"
           add tests "$TESTS"
+          add pull-request "$PULL_REQUEST"
           add promote "$PROMOTE"
           add verify "$VERIFY"
           echo "json=$gates" >> "$GITHUB_OUTPUT"

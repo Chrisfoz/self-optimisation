@@ -43,9 +43,8 @@ flowchart TD
     adapter --> loop["suggest -> implement -> review -> refine<br/>-> guard -> test -> promote -> verify -> notify"]
   end
 
-  loop -->|"today, always"| merge["autonomous merge<br/>promote.mjs"]
-  loop -.->|"proposed by console/DESIGN.md,<br/>NOT wired into workflow.yml.tmpl yet"| pr["open a PR instead —<br/>recordPullRequestUrl() exists,<br/>nothing calls it"]
-  style pr fill:#F3E3D4,stroke:#9FB0BE,stroke-dasharray: 5 5
+  loop -->|"constitution.approval_class:<br/>human-approval-required (DEFAULT)"| pr["open a pull request —<br/>gh pr create, then<br/>recordPullRequestUrl()"]
+  loop -->|"approval_class:<br/>autonomous-merge (opt-in)"| merge["autonomous merge<br/>promote.mjs"]
 
   loop -.->|"every proposal's<br/>OPEN QUESTION field"| curiosity["PROPOSED · docs/curiosity/<br/>ledger, themes review, spikes —<br/>attaches onto escalations.mjs,<br/>themes.mjs, context-pack.mjs"]
   curiosity -.->|"read back<br/>next run, once built"| loop
@@ -165,18 +164,35 @@ README for a new project — verified against a real, fresh git repo end to
 end, and via `tests/lib/scaffold.test.mjs` parsing every strategy
 combination's generated YAML back with `js-yaml` to confirm it's valid.
 
-**Known gap, landed at the same time from a parallel stream of work:**
-`harness/templates/workflow.yml.tmpl` only ever does autonomous merge
-(`promote.mjs`) — no pull request, no `approval_class`, cron baked in
-immediately. `console/DESIGN.md` (the install-console proposal, merged
-into `main` the same day) makes a different, more conservative call for
-this exact file: pull-request-by-default, autonomous merge as an advanced
-opt-in, and a two-phase onboarding that ships the workflow with
-`workflow_dispatch` only until a rehearsal has passed. `orchestrator.mjs`'s
-`recordPullRequestUrl()` and `harness/scripts/record-pull-request.mjs`
-already exist to support a PR-opening step here; the template just doesn't
-call them yet. See the template's own header comment for the fuller note —
-reconcile before the console generates (or points a user at) this file.
+**The merge model, reconciled (was the known gap here):** the template used
+to render only autonomous merge. It now renders one of two paths, chosen at
+scaffold time from `constitution.approval_class` — a field that until this
+change was parsed by nothing.
+
+- **`human-approval-required`** is the default, and the fallback for any
+  unrecognised value. Every gate runs against the agent branch; then the
+  workflow opens a pull request with `gh pr create` and records its URL
+  back into that generation's `attempts.json` via
+  `harness/scripts/record-pull-request.mjs`. It runs no deployment
+  verification, because nothing is deployed until a person merges.
+- **`autonomous-merge`** is the opt-in: `promote.mjs` merges and tags, then
+  `verify-deployment.mjs` checks what that shipped.
+
+Exactly one path is written into the generated file, so which merge model a
+repository got is answerable by reading its workflow rather than by
+cross-referencing an adapter field against harness code. Unrecognised values
+fail closed to the pull-request path (`harness/lib/adapter.mjs`'s
+`normalizeApprovalClass()`), because a typo must never be the reason a
+project starts merging its own changes unattended — `console/DESIGN.md`
+§Step 7: "defaulting a non-technical user into autonomous merge is the
+single worst decision this console could make."
+
+The `schedule:` block is likewise now optional (`console/DESIGN.md` §Step 9's
+two-phase onboarding): rendered by default for `init`, omitted — leaving a
+`workflow_dispatch`-only workflow and a commented cron to add later — when
+the installer asks for it. Until then there is no cron in the repository to
+fire, which makes "the schedule stays off until a rehearsal passes" a fact
+about the file rather than a promise about the process.
 
 `Portable-Harness-Design.md`'s Status table has the same information as
 prose, kept in sync by hand — if the two ever disagree, trust whichever was

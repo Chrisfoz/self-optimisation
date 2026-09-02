@@ -163,7 +163,31 @@ async function main() {
       }
     }
 
+    // The merge model. Phrased as an opt-IN to autonomous merge rather than
+    // as a two-way choice with an equally-weighted alternative: a blank
+    // answer, an unrecognised answer, and a nervous answer all land on the
+    // pull-request path. console/DESIGN.md §Step 7 — "defaulting a
+    // non-technical user into autonomous merge is the single worst decision
+    // this console could make" — applies just as much to a CLI.
+    console.log('\nWhen a generation passes every gate, the workflow can either open a pull request for you');
+    console.log('to merge, or merge and tag it itself. Opening a pull request is the default.\n');
+    const wantsAutoMerge = (await ask(rl, 'Merge automatically once every gate passes, with no human step? (y/N)', { default: 'n' }))
+      .toLowerCase()
+      .startsWith('y');
+    const approvalClass = wantsAutoMerge ? 'autonomous-merge' : 'human-approval-required';
+    if (wantsAutoMerge) {
+      console.log('   ℹ️  Autonomous merge selected. Every generation is still tagged gen-NNN, so any merge');
+      console.log('      is revertible — but nothing will ask you first. Rehearse at least one run by hand.');
+    }
+
     const cadenceCron = await ask(rl, 'Cadence (cron, UTC)', { default: '0 0 1 * *' });
+    // Defaulted ON here and OFF for the console (console/DESIGN.md §Step 9):
+    // someone running this CLI in their own checkout has already done the
+    // equivalent of reviewing and merging the install, which is the step the
+    // console's two-phase onboarding is protecting.
+    const includeSchedule = !(await ask(rl, 'Leave the schedule off until you have rehearsed a run by hand? (y/N)', { default: 'n' }))
+      .toLowerCase()
+      .startsWith('y');
     const runner = await ask(rl, 'CI runner (ubuntu-latest / windows-latest / macos-latest)', { default: 'ubuntu-latest' });
     const contextStrategy = await ask(rl, 'Context strategy (full-dump / scoped — "scoped" has no implementation yet, see ARCHITECTURE.md)', { default: 'full-dump' });
 
@@ -210,7 +234,7 @@ async function main() {
       allowedPaths, createOnlyPaths: [], frozenPaths, appendOnlyPaths,
       testCommands, providers, roleProviders, snapshotPath: '.agent/model-snapshot.json',
       implementModel, reviewModel, rankModel,
-      cadenceCron, runner, contextStrategy,
+      approvalClass, cadenceCron, includeSchedule, runner, contextStrategy,
       agentBriefPath, reviewerBriefPath,
       deploymentStrategy, deploymentUrl, deploymentRegistry, deploymentArtifact,
       notify,

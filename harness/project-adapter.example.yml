@@ -79,6 +79,30 @@ constitution:
     max_files: 50
     max_lines: 10000
 
+  # --- LIVE: harness/lib/scaffold.mjs reads this when it renders your
+  # workflow, and harness/lib/adapter.mjs's approvalClass() is the accessor.
+  # What happens once a generation has passed every gate:
+  #
+  #   human-approval-required  the workflow opens a pull request and stops.
+  #                            You merge it, or you don't. (DEFAULT)
+  #   autonomous-merge         the workflow merges the agent branch into
+  #                            your default branch itself and tags the
+  #                            generation. Nobody is asked first.
+  #
+  # ANY OTHER VALUE — a typo, a blank, something a future tool wrote that
+  # this version doesn't know — resolves to human-approval-required. Fail
+  # closed: an unrecognised value must never be the reason a project starts
+  # merging its own changes unattended.
+  #
+  # This is read at SCAFFOLD time, not at run time: the choice is rendered
+  # into .github/workflows/self-improve.yml as one of two sets of steps, so
+  # changing it here does nothing until you re-run
+  # `node harness/cli/init.mjs --force` to regenerate the workflow. That is
+  # deliberate — which merge model a repository has should be answerable by
+  # reading its workflow file, not by trusting that a config file and a
+  # generated file still agree.
+  approval_class: human-approval-required
+
 # --- LIVE: harness/scripts/run-generation.mjs reads these three sections --
 # Everything below this point is what turns the pieces above into an actual
 # run of the loop — see ARCHITECTURE.md for the diagram this powers.
@@ -229,15 +253,33 @@ deployment:
 #     # - docs/calibration/example-1.md     # bodies from YOUR project's own history —
 #                                            # optional; omit until you have some
 
-# --- RESERVED: the workflow template and CI wiring exist now (see
-# ARCHITECTURE.md), but nothing reads these three fields back out of an
-# existing project-adapter.yml — cadence is baked into the generated
-# workflow's cron at scaffold time, not re-read later, and approval_class is
-# parsed by nothing yet (see console/DESIGN.md §2.3 for the current
-# LIVE/RESERVED accounting). Filling them in now is still free and
-# forward-compatible.
-
-# approval_class: autonomous-merge   # or human-approval-required
+# --- RECORDED, not reserved: these two sections are a written record of
+# what init.mjs baked into your generated workflow. Nothing reads them back
+# out of this file at run time, and — unlike approval_class, which used to
+# sit here — nothing ever will. That is the decision, not a gap:
+#
+#   cadence.schedule_cron   becomes `on.schedule.cron` in the generated
+#                           workflow. GitHub Actions is what actually runs
+#                           on a schedule; a cron here that Actions never
+#                           reads would produce a user who believes their
+#                           loop runs monthly when nothing schedules it
+#                           (console/DESIGN.md §2.3).
+#   evaluation.test_commands becomes the preflight and post-change test
+#                           steps in that same workflow. A run must fail on
+#                           the commands CI actually ran, not on a list in a
+#                           file the agent's own branch could in principle
+#                           have edited between the two.
+#
+# The shared reason: a value that is baked into a generated file has exactly
+# one source of truth at run time — the generated file. Reading it back from
+# here as well would create two, which can silently disagree, and the
+# disagreement would be invisible precisely when it mattered. Change either
+# of these and re-run `node harness/cli/init.mjs --force` to regenerate the
+# workflow; editing this file alone changes nothing.
+#
+# cadence.trigger is documentation of intent with no mechanism behind it at
+# all: the real trigger is a model release (learning/01-principles.md,
+# principle 1), and the cron is only how often the harness goes looking.
 
 # cadence:
 #   trigger: model-release

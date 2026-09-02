@@ -134,6 +134,63 @@ export function guardConfig(adapter) {
 }
 
 /**
+ * The two approval classes a project may choose between, and the one that
+ * anything unrecognised falls back to.
+ *
+ * `human-approval-required` means the loop pushes its agent branch, runs
+ * every gate against it, and then opens a pull request for a person to
+ * merge. `autonomous-merge` means the loop merges and tags the branch
+ * itself once every gate has passed (harness/lib/promote.mjs).
+ *
+ * DEFAULT_APPROVAL_CLASS is the human one on purpose, and every unknown
+ * value resolves to it rather than to autonomous merge: a typo, an older
+ * adapter written before this field was read by anything, or a value some
+ * future console writes that this version doesn't know must never be the
+ * reason a project starts merging its own changes unattended. Fail closed
+ * is the whole convention here (learning/01-principles.md, 13) — this is
+ * the field where it matters most.
+ */
+export const APPROVAL_CLASSES = ['human-approval-required', 'autonomous-merge'];
+export const DEFAULT_APPROVAL_CLASS = 'human-approval-required';
+
+/**
+ * Normalise any value into one of APPROVAL_CLASSES.
+ *
+ * Exported separately from approvalClass() below because
+ * harness/lib/scaffold.mjs needs the same fail-closed rule when it renders
+ * a workflow from an answers object that never went through a
+ * project-adapter.yml — one definition, one test, one behaviour.
+ *
+ * @param {unknown} value
+ * @returns {'human-approval-required'|'autonomous-merge'}
+ */
+export function normalizeApprovalClass(value) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  return APPROVAL_CLASSES.includes(trimmed) ? trimmed : DEFAULT_APPROVAL_CLASS;
+}
+
+/**
+ * Which approval class this project chose — read from
+ * `constitution.approval_class`, which is where
+ * examples/carrotgame/project-adapter.yml already puts it, with a
+ * top-level `approval_class` accepted as a fallback because
+ * harness/project-adapter.example.yml documented it there while the field
+ * was RESERVED.
+ *
+ * Consumed by harness/lib/scaffold.mjs, which selects between the generated
+ * workflow's pull-request and autonomous-merge paths from it. Deliberately
+ * NOT consumed at runtime by promote.mjs: which path exists is a property
+ * of the workflow file that got generated, not something a script decides
+ * mid-run from a file the agent's own branch could in principle have
+ * edited.
+ */
+export function approvalClass(adapter) {
+  return normalizeApprovalClass(
+    adapter?.constitution?.approval_class ?? adapter?.approval_class
+  );
+}
+
+/**
  * Memory config — where the escalation ledger and themes reviews live, and
  * the consensus bar. Consumed by harness/lib/orchestrator.mjs's
  * runGeneration() (the ledger path and consensus bar) and, for the read

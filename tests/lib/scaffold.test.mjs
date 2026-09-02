@@ -53,6 +53,17 @@ test('buildAdapterObject: echoes the answered test commands into evaluation.test
   assert.equal(adapter.evaluation.preflight_required, true);
 });
 
+test('buildAdapterObject: records the cadence that was baked into the workflow, and whether it was switched on', () => {
+  const on = buildAdapterObject(baseAnswers({ cadenceCron: '0 3 * * 1' }));
+  assert.equal(on.cadence.schedule_cron, '0 3 * * 1');
+  assert.equal(on.cadence.scheduled, true);
+  assert.equal(on.cadence.trigger, 'model-release');
+
+  const off = buildAdapterObject(baseAnswers({ cadenceCron: '0 3 * * 1', includeSchedule: false }));
+  assert.equal(off.cadence.schedule_cron, '0 3 * * 1');
+  assert.equal(off.cadence.scheduled, false, 'the cron is recorded, but is not in the workflow yet');
+});
+
 test('buildAdapterObject: fills unset numeric fields with the documented defaults', () => {
   const adapter = buildAdapterObject(baseAnswers());
   assert.equal(adapter.constitution.churn_ceiling.max_files, 50);
@@ -240,6 +251,131 @@ test('renderWorkflowTemplate: a summary/feedback value containing "$" or quotes 
   }
 });
 
+// --- the merge model: pull request by default, autonomous merge opt-in -------
+// The gap this closes: the template used to render only the autonomous-merge
+// path, which is the opposite of the call console/DESIGN.md §Step 7 makes for
+// this exact file. Both variants are parsed back with js-yaml here, because
+// "it renders" and "it is a workflow GitHub would accept" are different
+// claims and only the second one matters.
+
+test('buildAdapterObject: approval_class defaults to human-approval-required', () => {
+  const adapter = buildAdapterObject(baseAnswers());
+  assert.equal(adapter.constitution.approval_class, 'human-approval-required');
+});
+
+test('buildAdapterObject: approval_class records an explicit autonomous-merge choice', () => {
+  const adapter = buildAdapterObject(baseAnswers({ approvalClass: 'autonomous-merge' }));
+  assert.equal(adapter.constitution.approval_class, 'autonomous-merge');
+});
+
+test('buildAdapterObject: an unrecognised approval_class is normalised, not echoed', () => {
+  // Echoing it would leave an adapter claiming a merge model the workflow
+  // rendered beside it does not implement.
+  const adapter = buildAdapterObject(baseAnswers({ approvalClass: 'merge-it-please' }));
+  assert.equal(adapter.constitution.approval_class, 'human-approval-required');
+});
+
+test('renderWorkflowTemplate: the default is the pull-request path — no promote, no verify', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers());
+  const parsed = loadYaml(out);
+  const steps = parsed.jobs['self-improve'].steps;
+  const ids = steps.map((s) => s.id).filter(Boolean);
+  assert.ok(ids.includes('pr'), 'expected a pull-request step');
+  assert.ok(!ids.includes('promote'), 'the default must not merge autonomously');
+  assert.ok(!ids.includes('verify'), 'nothing is deployed until a human merges');
+  assert.match(out, /gh pr create/);
+  // The header comment names promote.mjs while explaining the two models, so
+  // assert on what the steps actually run rather than on the file's text.
+  assert.ok(steps.every((s) => !/promote\.mjs/.test(s.run || '')));
+});
+
+test('renderWorkflowTemplate: the pull-request path records the PR URL into the attempt record', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers());
+  assert.match(out, /record-pull-request\.mjs/);
+  const parsed = loadYaml(out);
+  const step = parsed.jobs['self-improve'].steps.find((s) => /Record the pull request URL/.test(s.name));
+  assert.ok(step, 'expected a step that records the PR URL');
+  assert.equal(step.if, 'steps.pr.outputs.url');
+  assert.equal(step.env.PR_URL, '${{ steps.pr.outputs.url }}');
+});
+
+test('renderWorkflowTemplate: the pull-request path asks for pull-requests: write, the merge path does not', () => {
+  const pr = loadYaml(renderWorkflowTemplate(template, baseAnswers()));
+  assert.deepEqual(pr.permissions, { contents: 'write', 'pull-requests': 'write' });
+
+  const auto = loadYaml(renderWorkflowTemplate(template, baseAnswers({ approvalClass: 'autonomous-merge' })));
+  assert.deepEqual(auto.permissions, { contents: 'write' });
+});
+
+test('renderWorkflowTemplate: autonomous-merge renders promote and verify, and no PR step', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers({ approvalClass: 'autonomous-merge' }));
+  const parsed = loadYaml(out);
+  const ids = parsed.jobs['self-improve'].steps.map((s) => s.id).filter(Boolean);
+  assert.ok(ids.includes('promote'));
+  assert.ok(ids.includes('verify'));
+  assert.ok(!ids.includes('pr'));
+  assert.match(out, /promote\.mjs/);
+  assert.doesNotMatch(out, /gh pr create/);
+});
+
+test('renderWorkflowTemplate: an unrecognised approval_class fails closed to the pull-request path', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers({ approvalClass: 'autonomous_merge' }));
+  assert.match(out, /gh pr create/);
+  const steps = loadYaml(out).jobs['self-improve'].steps;
+  assert.ok(steps.every((s) => !/promote\.mjs/.test(s.run || '')));
+});
+
+test('renderWorkflowTemplate: both merge paths leave no placeholder and still parse as a workflow', () => {
+  for (const approvalClass of ['human-approval-required', 'autonomous-merge']) {
+    const out = renderWorkflowTemplate(template, baseAnswers({ approvalClass }));
+    assert.doesNotMatch(out, /\{\{[A-Z_]+\}\}/, `${approvalClass} left a placeholder unfilled`);
+    const parsed = loadYaml(out);
+    assert.equal(parsed.name, 'Self-improvement loop');
+    assert.ok(parsed.jobs['self-improve'].steps.every((s) => typeof s === 'object'));
+  }
+});
+
+test('renderWorkflowTemplate: the gate list names both merge paths, so the digest reports whichever ran', () => {
+  // Only one of the two steps exists in any given rendering; the missing
+  // one's `outcome` expression resolves to an empty string, which the gates
+  // script skips. That's what lets this block be identical either way.
+  for (const approvalClass of ['human-approval-required', 'autonomous-merge']) {
+    const parsed = loadYaml(renderWorkflowTemplate(template, baseAnswers({ approvalClass })));
+    const gates = parsed.jobs['self-improve'].steps.find((s) => s.id === 'gates');
+    assert.equal(gates.env.PULL_REQUEST, '${{ steps.pr.outcome }}');
+    assert.equal(gates.env.PROMOTE, '${{ steps.promote.outcome }}');
+    assert.match(gates.run, /add pull-request "\$PULL_REQUEST"/);
+  }
+});
+
+test('renderWorkflowTemplate: the PR body and title only ever read model text from env, never ${{ }}', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers());
+  const parsed = loadYaml(out);
+  const pr = parsed.jobs['self-improve'].steps.find((s) => s.id === 'pr');
+  assert.equal(pr.env.SUMMARY, '${{ steps.improve.outputs.summary }}');
+  assert.doesNotMatch(pr.run, /\$\{\{/);
+});
+
+// --- the schedule, which may deliberately not be there yet -------------------
+
+test('renderWorkflowTemplate: a schedule is rendered by default, with the answered cron', () => {
+  const parsed = loadYaml(renderWorkflowTemplate(template, baseAnswers({ cadenceCron: '0 3 * * 1' })));
+  assert.deepEqual(parsed.on.schedule, [{ cron: '0 3 * * 1' }]);
+  assert.ok(parsed.on.workflow_dispatch);
+});
+
+test('renderWorkflowTemplate: includeSchedule false leaves no cron in the file at all', () => {
+  // console/DESIGN.md §Step 9: until the rehearsal has passed there should be
+  // nothing in the repository that could fire. A commented-out cron is fine —
+  // an uncommented one defeats the point — so assert on the parsed document,
+  // not on the text.
+  const out = renderWorkflowTemplate(template, baseAnswers({ includeSchedule: false }));
+  const parsed = loadYaml(out);
+  assert.equal(parsed.on.schedule, undefined);
+  assert.ok(parsed.on.workflow_dispatch, 'it must still be runnable by hand');
+  assert.match(out, /# schedule:/, 'and should say how to switch it on');
+});
+
 // --- renderReadme --------------------------------------------------------------
 
 test('renderReadme: names the project, the generated files, and every secret needed', () => {
@@ -257,4 +393,23 @@ test('renderReadme: without a notifier configured, says so rather than listing n
   const text = renderReadme(baseAnswers({ notify: null }));
   assert.match(text, /ANTHROPIC_API_KEY/); // provider secrets still listed
   assert.doesNotMatch(text, /undefined/);
+});
+
+test('renderReadme: says which merge model was installed, in the words of the person who ran init', () => {
+  const pr = renderReadme(baseAnswers());
+  assert.match(pr, /pull request/i);
+  assert.match(pr, /human-approval-required/);
+  assert.doesNotMatch(pr, /merges the agent\s*\n?branch/);
+
+  const auto = renderReadme(baseAnswers({ approvalClass: 'autonomous-merge' }));
+  assert.match(auto, /autonomous-merge/);
+  assert.match(auto, /Nobody is asked first/);
+  assert.match(auto, /git revert gen-NNN/);
+});
+
+test('renderReadme: with the schedule left off, says so rather than quoting a cron that is not there', () => {
+  const text = renderReadme(baseAnswers({ includeSchedule: false, cadenceCron: '0 3 * * 1' }));
+  assert.match(text, /There is no schedule yet/);
+  assert.match(text, /0 3 \* \* 1/); // shown as the thing to add later
+  assert.doesNotMatch(text, /Runs on `0 3 \* \* 1`/);
 });
