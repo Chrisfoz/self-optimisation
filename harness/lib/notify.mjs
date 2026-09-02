@@ -234,6 +234,116 @@ export async function buildGenerationDigestEmail(r, deps = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Cycles where no generation ran at all
+// ---------------------------------------------------------------------------
+
+/**
+ * The reasons a cycle can end without a generation. Ordered from "the loop
+ * worked and had nothing to do" to "the loop could not tell you anything".
+ *
+ * These are separate outcomes on purpose, and the separation is the entire
+ * value of this function. In the reference implementation they were collapsed
+ * three separate times, each collapse shipped, and each was found only after
+ * a month's email failed to arrive:
+ *
+ *   1. The digest was gated on "something new shipped", so a genuinely quiet
+ *      month sent nothing — and from an inbox, "nothing happened" and "the
+ *      pipeline silently stopped running" are the same observation.
+ *   2. A reachability probe dropping every candidate set the same flag the
+ *      quiet month sets, so "a lab shipped something we cannot reach" — the
+ *      case that most needs a human — reported as "nothing to do".
+ *   3. A crashed release check produced an empty flag, which the quiet-month
+ *      test read as false, so a cycle that checked nothing sent "checked
+ *      every lab, nothing new". That one is worse than silence: silence
+ *      prompts a question, a confident all-clear does not.
+ *
+ * Deliberately templated rather than model-written. There is no generation
+ * record to explain here, only a fact to state, and a template states it
+ * correctly for free — the plain-language pass exists for runs that have
+ * something to say.
+ */
+export const NO_GENERATION_REASONS = {
+  QUIET: 'quiet',
+  CHECK_FAILED: 'check-failed',
+  ALL_UNREACHABLE: 'all-unreachable',
+  PREFLIGHT_FAILED: 'preflight-failed',
+};
+
+/**
+ * Builds the email for a cycle that produced no generation.
+ *
+ * @param {object} opts
+ * @param {string} opts.reason        One of NO_GENERATION_REASONS.
+ * @param {string} [opts.runUrl]      Link to the CI run.
+ * @param {string[]} [opts.labs]      Names of the labs watched, for the quiet case.
+ * @param {string} [opts.detail]      Free text — e.g. the job result, or which
+ *                                    candidates were unreachable and why.
+ * @param {string} [opts.projectName]
+ * @returns {{subject: string, body: string}}
+ */
+export function buildNoGenerationEmail({ reason, runUrl, labs = [], detail = '', projectName = 'This project' }) {
+  const labList = labs.length ? ` (${labs.join(', ')})` : '';
+  const footer = ['', `${projectName} is unchanged.`, ...(runUrl ? ['', `Run: ${runUrl}`] : [])];
+
+  if (reason === NO_GENERATION_REASONS.CHECK_FAILED) {
+    return {
+      subject: '⚠️ The model release check did not complete — this cycle is unknown, not quiet',
+      body: [
+        `The cycle started, but the release check itself did not finish${detail ? ` (${detail})` : ''}.`,
+        ``,
+        `This is NOT the same as a quiet cycle. Nothing was compared against the`,
+        `snapshot, so whether any watched lab shipped something new is simply`,
+        `unknown — and none of that should be read as "there was nothing to do".`,
+        ``,
+        `A crashed release check is usually an expired key, a lab changing its`,
+        `models endpoint, or a network failure. The run log will say which.`,
+        ...footer,
+      ].join('\n'),
+    };
+  }
+
+  if (reason === NO_GENERATION_REASONS.ALL_UNREACHABLE) {
+    return {
+      subject: '⚠️ A new model shipped, but nothing could reach it',
+      body: [
+        `At least one watched lab released something new this cycle, and every`,
+        `candidate failed its reachability check — so no generation ran.`,
+        ``,
+        `This is not a quiet cycle. A lab shipping something the harness cannot`,
+        `call usually means a moved endpoint, a changed request shape, or an`,
+        `account-level block on that specific model.`,
+        ...(detail ? ['', detail] : []),
+        ...footer,
+      ].join('\n'),
+    };
+  }
+
+  if (reason === NO_GENERATION_REASONS.PREFLIGHT_FAILED) {
+    return {
+      subject: '⚠️ Preflight failed — no generation was attempted this cycle',
+      body: [
+        `A new model was detected and reachable, but the project's own preflight`,
+        `checks did not pass, so no generation was attempted${detail ? ` (${detail})` : ''}.`,
+        ``,
+        `Preflight failing means the project was already not in a shippable`,
+        `state before the loop touched anything — worth fixing directly, since`,
+        `every future cycle will stop here too.`,
+        ...footer,
+      ].join('\n'),
+    };
+  }
+
+  return {
+    subject: 'No new model this cycle — the loop checked in, nothing to do',
+    body: [
+      `Checked every watched lab on schedule${labList} — nothing new since the`,
+      `last run, so there was nothing to suggest, implement or review.`,
+      ...footer,
+    ].join('\n'),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Escalation-consensus notice
 // ---------------------------------------------------------------------------
 

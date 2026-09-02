@@ -184,12 +184,26 @@ export function renderWorkflowTemplate(template, answers) {
   let notifySteps = '';
   if (answers.notify) {
     const notifyEnvLine = `${answers.notify.envKey}: \${{ secrets.${answers.notify.envKey} }}`;
+    // Deliberately NOT gated on a generation number existing. The cycles
+    // with no generation are exactly the ones whose silence is hardest to
+    // read: a crashed release check, a lab shipping something nothing could
+    // reach, a preflight failure. send-digest.mjs picks the right message
+    // from CHECK_RESULT / PREFLIGHT_RESULT / RELEASE_DETECTED when
+    // GEN_NUMBER is absent. "It is visible as a red step in the Actions run"
+    // is not a substitute — nobody is watching the Actions tab, which is
+    // why the digest exists at all.
     notifySteps = `- name: Send the generation digest
-        if: always() && steps.gen.outputs.number
+        if: always()
         shell: bash
         env:
           ${notifyEnvLine}
           GEN_NUMBER: \${{ steps.gen.outputs.number }}
+          CHECK_RESULT: \${{ steps.check.outcome }}
+          PREFLIGHT_RESULT: \${{ steps.preflight.outcome }}
+          RELEASE_DETECTED: \${{ steps.check.outputs.release-detected }}
+          NO_GENERATION_DETAIL: \${{ steps.probe.outputs.dropped }}
+          LABS_WATCHED: ${answers.providers.map((p) => p.name).join(',')}
+          RUN_URL: \${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}
           GATES: \${{ steps.gates.outputs.json }}
           MERGED: \${{ steps.gates.outputs.merged }}
           SUGGEST_MODEL: \${{ steps.probe.outputs.model }}

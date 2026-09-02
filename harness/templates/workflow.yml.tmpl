@@ -74,9 +74,15 @@ jobs:
         shell: bash
         run: npm install --no-save js-yaml
 
+      # continue-on-error so a crashed release check cannot kill the job
+      # before the digest step gets to report that it crashed. Its outcome is
+      # read back below and passed to the digest as CHECK_RESULT — without
+      # that, "the check never ran" is indistinguishable from "the check ran
+      # and found nothing", and a broken cycle reports as a calm one.
       - name: Check for new model releases
         id: check
         shell: bash
+        continue-on-error: true
         env:
 {{PROVIDER_ENV_LINES}}
         run: |
@@ -84,6 +90,10 @@ jobs:
             --providers {{PROVIDERS_CSV}} \
             > "$RUNNER_TEMP/release-check.json"
           echo "has-new=$(jq -r '.hasNewReleases' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
+          # Set before any probe runs and never overwritten by one — see
+          # harness/lib/model-release-detector.mjs. This is what tells a
+          # cycle where the probe dropped everything apart from a quiet one.
+          echo "release-detected=$(jq -r '.releaseDetected' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
 
       - name: Commit the updated model snapshot
         shell: bash
@@ -101,6 +111,9 @@ jobs:
         run: |
           node harness/scripts/probe-models.mjs "$RUNNER_TEMP/release-check.json"
           echo "has-new=$(jq -r '.hasNewReleases' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
+          # Which candidates were dropped, and why — the difference between
+          # "nothing shipped" and "something shipped that we could not call".
+          echo "dropped=$(jq -c '[.probeDropped[]? | "\(.id): \(.reason)"] | join("; ")' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
           echo "models=$(jq -c '.selectedModels' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
           echo "model=$(jq -r '.selectedModel // "none"' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
           echo "provider=$(jq -r '.selectedProvider // "none"' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
@@ -187,15 +200,8 @@ jobs:
         continue-on-error: true
         run: node harness/scripts/verify-deployment.mjs
 
-      # Gated on a real generation number existing, i.e. preflight passed
-      # and a generation was actually attempted — a cycle with no new
-      # release, or one where preflight itself failed, sends no digest.
-      # The reference implementation's own workflow makes the same call for
-      # "no new release" (see examples/workflows/watch-releases.yml, which
-      # only opens an issue, never emails); a failed preflight is the one
-      # case this simplification under-reports — that failure is still
-      # visible as a red step in the Actions run itself, just not echoed to
-      # the digest's recipient.
+      # Gate results only exist when a generation was actually attempted.
+      # The digest step below is NOT gated on that — see its own comment.
       - name: Build this run's gate results
         id: gates
         if: always() && steps.gen.outputs.number

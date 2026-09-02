@@ -23,6 +23,19 @@
  *   SCOPE, SUGGEST_MODEL, SUGGEST_PROVIDER, IMPLEMENT_MODEL,
  *   SELF_IMPLEMENTED, SUMMARY, BRIEF_FEEDBACK, ESC_OPENED, ESC_FLAGGED
  *
+ * When GEN_NUMBER is ABSENT no generation ran, and this still sends an email
+ * saying which of the four no-generation outcomes occurred. Read in this
+ * order, first match wins:
+ *   CHECK_RESULT      != "success"  -> the release check never completed
+ *   PREFLIGHT_RESULT  != "success"  -> the project's own checks failed first
+ *   RELEASE_DETECTED  == "true"     -> something shipped, nothing was reachable
+ *   otherwise                        -> a genuinely quiet cycle
+ * With RUN_URL, LABS_WATCHED (comma-separated) and NO_GENERATION_DETAIL as
+ * optional context. Passing none of them yields the quiet-cycle email, which
+ * is the correct default only when the cycle really was quiet — a workflow
+ * that cannot distinguish these should pass CHECK_RESULT rather than let a
+ * failure report as calm.
+ *
  * Requires notify.recipient / notify.from in project-adapter.yml. The
  * sender is resolved from notify.provider (default "sendgrid") via
  * notify.mjs's registerSender()/getSender() — see that file's own doc
@@ -35,7 +48,7 @@ import fs from 'fs';
 import path from 'path';
 import { loadAdapter, notifyConfig, contextConfig } from '../lib/adapter.mjs';
 import { callModelWithHeadroom } from '../lib/llm-provider.mjs';
-import { buildGenerationDigestEmail, getSender } from '../lib/notify.mjs';
+import { buildGenerationDigestEmail, buildNoGenerationEmail, NO_GENERATION_REASONS, getSender } from '../lib/notify.mjs';
 
 function parseArgs(argv) {
   const out = {};
@@ -70,10 +83,44 @@ if (!apiKey) {
   process.exit(1);
 }
 
+// A cycle with no generation still sends an email, and WHICH email depends on
+// why there was no generation. Requiring GEN_NUMBER here used to make that
+// impossible: the four outcomes below all arrive with no generation number,
+// and the script exited before it could say anything about any of them.
+//
+// That is not a cosmetic gap. The one case most needing a human — a lab
+// shipped something and nothing could reach it — is inside this branch, and
+// so is a crashed release check, which is indistinguishable from a quiet
+// cycle unless something says otherwise. See notify.mjs's
+// NO_GENERATION_REASONS for the three times these were collapsed.
 const genNumber = process.env.GEN_NUMBER;
+
 if (!genNumber) {
-  console.error('GEN_NUMBER is required.');
-  process.exit(1);
+  const reason =
+    process.env.CHECK_RESULT && process.env.CHECK_RESULT !== 'success'
+      ? NO_GENERATION_REASONS.CHECK_FAILED
+      : process.env.PREFLIGHT_RESULT && process.env.PREFLIGHT_RESULT !== 'success'
+        ? NO_GENERATION_REASONS.PREFLIGHT_FAILED
+        : process.env.RELEASE_DETECTED === 'true'
+          ? NO_GENERATION_REASONS.ALL_UNREACHABLE
+          : NO_GENERATION_REASONS.QUIET;
+
+  const email = buildNoGenerationEmail({
+    reason,
+    runUrl: process.env.RUN_URL,
+    labs: (process.env.LABS_WATCHED || '').split(',').map((s) => s.trim()).filter(Boolean),
+    detail: process.env.NO_GENERATION_DETAIL || '',
+    projectName: adapter?.project?.description || adapter?.project?.id || 'This project',
+  });
+
+  try {
+    await sender(email, { apiKey, from: notify.from, to: notify.recipient });
+    console.error(`Email sent (${reason}): "${email.subject}"`);
+    process.exit(0);
+  } catch (err) {
+    console.error(`Digest email failed entirely: ${err.message}`);
+    process.exit(1);
+  }
 }
 
 let gates;
