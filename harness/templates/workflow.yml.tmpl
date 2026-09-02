@@ -154,8 +154,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           node harness/scripts/sync-pull-request-outcomes.mjs --generations-dir {{GENERATIONS_DIR}}
+          # The operational report — the paper's §7 metrics, generated from
+          # the records and never hand-edited. Regenerated here, after the
+          # read-back, so it reflects every fate known at the start of this
+          # cycle. See harness/lib/report.mjs.
+          node harness/scripts/report.mjs --generations-dir {{GENERATIONS_DIR}}
           git add -A -- {{GENERATIONS_DIR}}
-          git commit -m "Record pull request outcomes" || echo "Nothing to record"
+          git commit -m "Record pull request outcomes and regenerate the report" || echo "Nothing to record"
           git push
 
       - name: Probe reachability, then read the survivors

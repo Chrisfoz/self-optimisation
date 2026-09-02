@@ -544,3 +544,8 @@ test('renderReadme: tells the owner how to undo a generation, and which ambition
   assert.match(readme, /revert-generation\.mjs NNN --reason/);
   assert.match(readme, /context\.ambition`, currently\n?`ambitious`/);
 });
+
+test('renderWorkflowTemplate: regenerates the operational report in the same bookkeeping step as the pull-request read-back', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers());
+  assert.match(out, /sync-pull-request-outcomes\.mjs[\s\S]*?report\.mjs --generations-dir 'docs\/generations'/);
+});
