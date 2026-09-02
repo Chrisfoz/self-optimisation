@@ -109,4 +109,34 @@ export function buildThemesBrief(review) {
   );
 }
 
+/**
+ * The open questions a review raised — the UNKNOWN field per theme —
+ * rendered as their own section, not as a footnote to a lesson. A question
+ * needs to read as an invitation, which is why this is separate from
+ * buildThemesBrief() rather than a trailing sentence in it.
+ *
+ * Returns null when no theme carries a question, which is every review
+ * written before the field existed and any review whose principles are
+ * settled — so the section is dropped and the prompt is byte-identical to
+ * one from before (docs/curiosity/README.md, the byte-identity test).
+ *
+ * Each question is numbered `qN` against its review, so a later proposal
+ * can cite it — the label docs/curiosity/C9-retrospective-scoring.md's
+ * phase A′ check reads.
+ */
+export function buildOpenQuestionsBrief(review) {
+  if (!review || !Array.isArray(review.themes)) return null;
+  const questions = review.themes
+    .map((t, i) => ({ id: `q${i + 1}`, text: typeof t.unknown === 'string' ? t.unknown.trim() : '' }))
+    .filter((q) => q.text);
+  if (!questions.length) return null;
+
+  const lines = questions.map((q) => `- ${q.id}: ${q.text}`);
+  return (
+    `The last themes review (through generation ${review.throughGeneration}) also named what it could NOT tell — ` +
+    `questions its own principles raise and no generation has answered. These are invitations, not a to-do list: ` +
+    `if your proposal answers one, or is chosen because of one, say which (by its id) in your WHY THIS ONE field.\n\n${lines.join('\n')}`
+  );
+}
+
 export const __testing = { DEFAULT_THEMES_DIR };

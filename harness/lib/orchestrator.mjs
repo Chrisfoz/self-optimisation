@@ -240,8 +240,9 @@ export const DEFAULT_SCOPE_TEXT = {
  * @param {object} opts
  * @param {string} opts.genLabel
  * @param {object} opts.context  Named text blocks — sources, manifest,
- *   testIndex, generationIndex, history, themes, escalations, feedback,
- *   platform, qualityMetrics, runtime, workOrder, architectureNotes — any
+ *   testIndex, generationIndex, history, themes, openQuestions,
+ *   escalations, feedback, platform, qualityMetrics, runtime, workOrder,
+ *   architectureNotes — any
  *   of which may be null/undefined and is dropped from the prompt via
  *   section(). `runtime` is what the last runs actually observed rather than
  *   what the code says (context-pack.mjs's buildRuntimeEvidence()).
@@ -265,7 +266,7 @@ export function buildSuggestUserPrompt({ genLabel, context, screenshots = { imag
 
 # Repository map
 ${context.manifest ?? ''}
-${section('THIS GENERATION HAS BEEN ASSIGNED A DECIDED CHANGE', context.workOrder)}${section('Target platform', context.platform)}${section('Measured quality dimensions — non-gating', context.qualityMetrics)}${section('Frozen test invariants', context.testIndex)}${section('Every generation on record (compact — nothing here is ever dropped)', context.generationIndex)}${section('Most recent generations, in full detail (including what failed)', context.history)}${section('What the last runs actually observed at runtime', context.runtime)}${section('Recurring themes from the last review', context.themes)}${section('Open escalations — what earlier models asked us to change', context.escalations)}${section('Player feedback', context.feedback)}${section('How this project is built, and what it has learned building itself', context.architectureNotes)}
+${section('THIS GENERATION HAS BEEN ASSIGNED A DECIDED CHANGE', context.workOrder)}${section('Target platform', context.platform)}${section('Measured quality dimensions — non-gating', context.qualityMetrics)}${section('Frozen test invariants', context.testIndex)}${section('Every generation on record (compact — nothing here is ever dropped)', context.generationIndex)}${section('Most recent generations, in full detail (including what failed)', context.history)}${section('What the last runs actually observed at runtime', context.runtime)}${section('Recurring themes from the last review', context.themes)}${section('Open questions this project has not answered', context.openQuestions)}${section('Open escalations — what earlier models asked us to change', context.escalations)}${section('Player feedback', context.feedback)}${section('How this project is built, and what it has learned building itself', context.architectureNotes)}
 ${shots}
 # Current source
 ${context.sources ?? ''}

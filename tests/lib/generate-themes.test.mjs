@@ -178,3 +178,33 @@ test('buildThemesSystemPrompt tells the model how many generations it is actuall
   assert.match(buildThemesSystemPrompt('a project.', 1), /reviewing 1 generation of/);
   assert.match(buildThemesSystemPrompt('a project.'), /reviewing 10 generations/);
 });
+
+// --- UNKNOWN: the third field (docs/curiosity/C2, phase A) -------------------
+
+const WITH_UNKNOWN = `THEME 1
+NOTICED: generations 3, 7 and 9 each rejected a timing change on the first attempt
+MEANS: the reviewer cannot see elapsed time from a diff, so any change to timing reads as risk
+UNKNOWN: would attaching a recorded play session to the review change the verdict on timing changes?
+
+THEME 2
+NOTICED: every model proposed touching the landing page before either game
+MEANS: the landing page is the only file whose purpose is stated in the manifest`;
+
+test('parseThemesResponse: UNKNOWN is captured when present and absent when omitted, and MEANS stops before it', () => {
+  const { themes } = parseThemesResponse(WITH_UNKNOWN);
+  assert.equal(themes.length, 2);
+  assert.match(themes[0].unknown, /^would attaching a recorded play session/);
+  assert.doesNotMatch(themes[0].means, /UNKNOWN/);
+  assert.equal(themes[1].unknown, undefined);
+});
+
+test('parseThemesResponse: a present-but-empty or too-short UNKNOWN fails the review rather than being dropped', () => {
+  assert.throws(() => parseThemesResponse(WITH_UNKNOWN.replace(/UNKNOWN: .*$/m, 'UNKNOWN: why?')), /UNKNOWN is present but too short/);
+  assert.throws(() => parseThemesResponse(WITH_UNKNOWN.replace(/UNKNOWN: .*$/m, 'UNKNOWN:')), /UNKNOWN is present but too short/);
+});
+
+test('buildThemesSystemPrompt asks for UNKNOWN as optional, and says to omit rather than invent', () => {
+  const prompt = buildThemesSystemPrompt('a project');
+  assert.match(prompt, /UNKNOWN: optional/);
+  assert.match(prompt, /omit the line rather than invent one/);
+});

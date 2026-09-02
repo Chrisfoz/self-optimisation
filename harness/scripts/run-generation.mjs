@@ -38,7 +38,7 @@ import {
   buildSourceBundle, buildRepoManifest, buildTestIndex, buildArchitectureNotes,
   buildGenerationIndex, buildGenerationHistory, buildRuntimeEvidence, recommendScope, fenceUntrusted,
 } from '../lib/context-pack.mjs';
-import { loadLatestThemesReview, buildThemesBrief } from '../lib/themes.mjs';
+import { loadLatestThemesReview, buildThemesBrief, buildOpenQuestionsBrief } from '../lib/themes.mjs';
 import { buildMetricsBrief, loadLatestMetrics } from '../lib/evaluators.mjs';
 import { buildEscalationBrief, loadLedger } from '../lib/escalations.mjs';
 import { runGeneration } from '../lib/orchestrator.mjs';
@@ -168,6 +168,7 @@ const scope = scopeEnv === 'focused' || scopeEnv === 'ambitious'
 console.error(`🎚️  Scope: ${scope.scope} — ${scope.reason}`);
 
 // --- context ---
+const latestThemes = loadLatestThemesReview({ repoRoot, themesDir: memory.themesDir || 'docs/themes' });
 const context = {
   // Fenced (context-pack.mjs's fenceUntrusted()): the source and the
   // architecture notes are the two blocks a stranger with commit access to
@@ -185,7 +186,10 @@ const context = {
   generationIndex: buildGenerationIndex({ repoRoot, generationsDir }),
   history: buildGenerationHistory({ repoRoot, generationsDir, limit: 3 }),
   architectureNotes: fenceUntrusted('ARCHITECTURE NOTES', buildArchitectureNotes({ repoRoot, docPath: ctxConfig.architectureNotesPath, appendOnlyMarker: ctxConfig.architectureNotesMarker })),
-  themes: buildThemesBrief(loadLatestThemesReview({ repoRoot, themesDir: memory.themesDir || 'docs/themes' })),
+  themes: buildThemesBrief(latestThemes),
+  // The UNKNOWN field of the same review — docs/curiosity/C2, phase A. Null
+  // for every review written before the field existed, which drops it.
+  openQuestions: buildOpenQuestionsBrief(latestThemes),
   escalations: buildEscalationBrief(
     loadLedger({ repoRoot, ledgerPath: memory.ledgerPath || undefined }),
     { threshold: { models: memory.consensus.models ?? 3, labs: memory.consensus.labs ?? 2 } }

@@ -120,7 +120,7 @@ test('buildSuggestUserPrompt: a cold-start prompt is byte-identical whether the 
     context: {
       manifest: 'M', sources: 'S',
       qualityMetrics: null, runtime: null, workOrder: null, escalationReview: null,
-      themes: null, escalations: null, platform: null, feedback: null,
+      themes: null, escalations: null, platform: null, feedback: null, openQuestions: null,
     },
   });
   assert.equal(withNulls, buildSuggestUserPrompt(base));
