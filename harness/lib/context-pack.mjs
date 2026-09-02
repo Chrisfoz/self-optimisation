@@ -167,6 +167,30 @@ function generationDirs(repoRoot, generationsDir) {
   return listDir(repoRoot, generationsDir).filter((f) => /^gen-\d+$/.test(f)).sort();
 }
 
+/**
+ * What became of an approved generation AFTER the loop approved it — the
+ * part of the record the loop does not write itself.
+ *
+ * In the pull-request merge model a person merges or closes; in the
+ * autonomous model promote.mjs merges and a person may later revert. Both
+ * are read back into attempts.json (harness/lib/pull-requests.mjs,
+ * harness/lib/rollback.mjs). A record with neither field is a generation
+ * from before either existed, or an autonomous merge nobody reverted, and
+ * reads as MERGED — which keeps every existing record's rendering
+ * byte-identical.
+ *
+ * @returns {{label: string, clean: boolean, detail: string|null}}
+ */
+function fateOf(record) {
+  if (record?.reverted) {
+    return { label: 'REVERTED', clean: false, detail: `merged, then reverted by a person${record.reverted.reason ? ` — ${record.reverted.reason}` : ''}` };
+  }
+  const state = record?.pullRequest?.state;
+  if (state === 'closed') return { label: 'CLOSED UNMERGED', clean: false, detail: 'approved by review, but a person closed the pull request without merging it' };
+  if (state === 'open') return { label: 'PR OPEN', clean: true, detail: 'approved by review; the pull request is still waiting for a person' };
+  return { label: 'MERGED', clean: true, detail: null };
+}
+
 // ---------------------------------------------------------------------------
 // Runtime evidence — what the tests, the deploy check and the probes SAW
 // ---------------------------------------------------------------------------
@@ -349,7 +373,9 @@ export function buildGenerationIndex({ repoRoot = process.cwd(), generationsDir 
     if (proposal) {
       const p = summariseProposal(proposal);
       suggestedBy = p.suggestedBy ?? '—';
-      outcome = 'MERGED';
+      let record = null;
+      try { record = attemptsRaw ? JSON.parse(attemptsRaw) : null; } catch { /* the proposal alone still renders */ }
+      outcome = fateOf(record).label;
       change = p.summary ?? '—';
     } else if (attemptsRaw) {
       try {
@@ -405,9 +431,13 @@ export function buildGenerationHistory({ repoRoot = process.cwd(), generationsDi
     const lines = [`### ${dir}`];
 
     const proposal = read(repoRoot, `${generationsDir}/${dir}/proposal.md`);
+    const attemptsRaw = read(repoRoot, `${generationsDir}/${dir}/attempts.json`);
     if (proposal) {
       const p = summariseProposal(proposal);
-      lines.push(`- Outcome: MERGED`);
+      let record = null;
+      try { record = attemptsRaw ? JSON.parse(attemptsRaw) : null; } catch { /* rendered from the proposal alone */ }
+      const fate = fateOf(record);
+      lines.push(`- Outcome: ${fate.label}${fate.detail ? ` — ${fate.detail}` : ''}`);
       if (p.suggestedBy) lines.push(`- Suggested by: ${p.suggestedBy}`);
       if (p.implementedBy) lines.push(`- Implemented by: ${p.implementedBy}`);
       if (p.scope) lines.push(`- Scope: ${p.scope}`);
@@ -416,7 +446,6 @@ export function buildGenerationHistory({ repoRoot = process.cwd(), generationsDi
       if (p.rationale) lines.push(`- Rationale: ${p.rationale}`);
     }
 
-    const attemptsRaw = read(repoRoot, `${generationsDir}/${dir}/attempts.json`);
     if (attemptsRaw) {
       try {
         const record = JSON.parse(attemptsRaw);
@@ -616,7 +645,10 @@ function landedCleanly(repoRoot, generationsDir, dir) {
   if (raw) {
     try {
       const record = JSON.parse(raw);
-      return record.outcome === 'approved' && (record.attempts ?? []).length === 1;
+      // A person closing the pull request unmerged, or reverting the merge,
+      // is the one verdict in this loop that is not the harness grading
+      // itself — and it outranks "review approved on the first attempt".
+      return record.outcome === 'approved' && (record.attempts ?? []).length === 1 && fateOf(record).clean;
     } catch {
       // Fall through to the proposal.
     }
@@ -683,4 +715,4 @@ export function recommendScope({ repoRoot = process.cwd(), generationsDir = DEFA
   };
 }
 
-export const __testing = { summariseProposal, landedCleanly, hadRealProposal, generationDirs };
+export const __testing = { summariseProposal, landedCleanly, hadRealProposal, generationDirs, fateOf };

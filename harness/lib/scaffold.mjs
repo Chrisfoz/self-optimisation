@@ -492,6 +492,7 @@ export function renderWorkflowTemplate(template, answers) {
   out = sub(out, '{{RECORD_DIRS_GIT_ADD}}', recordDirsGitAdd);
   out = sub(out, '{{THEMES_CADENCE}}', String(Number.isFinite(answers.themesCadence) ? answers.themesCadence : 10));
   out = sub(out, '{{JS_YAML_VERSION}}', JS_YAML_VERSION);
+  out = sub(out, '{{GENERATIONS_DIR}}', shellQuote(answers.generationsDir || 'docs/generations'));
   out = sub(out, '{{DEFAULT_BRANCH}}', answers.defaultBranch || 'main');
   // Same first-line-unindented convention as {{NOTIFY_STEPS}} below: the
   // template supplies the 6 spaces before the token, so this block's own

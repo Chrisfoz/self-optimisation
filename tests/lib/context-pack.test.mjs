@@ -274,3 +274,42 @@ test('recommendScope: a no-proposal generation (vendor flakiness) does not count
   const result = recommendScope({ repoRoot, required: 2 });
   assert.equal(result.scope, 'ambitious');
 });
+
+// --- The fate of a pull request, read back (harness/lib/pull-requests.mjs) ---
+
+const CLEAN = { outcome: 'approved', attempts: [{ attempt: 1, outcome: 'approved' }] };
+const PROPOSAL = `# Generation 001 — proposal\n\n- **Suggested by:** \`m\` (lab)\n- **Attempts:** 1\n- **Summary:** Added a thing\n`;
+
+test('recommendScope: a pull request a person closed unmerged breaks the clean streak', (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  writeGen(repoRoot, 'gen-001', { attempts: CLEAN });
+  writeGen(repoRoot, 'gen-002', { attempts: { ...CLEAN, pullRequestUrl: 'https://github.com/o/r/pull/2', pullRequest: { state: 'closed' } } });
+  assert.equal(recommendScope({ repoRoot, required: 2 }).scope, 'focused');
+  writeGen(repoRoot, 'gen-002', { attempts: { ...CLEAN, pullRequestUrl: 'https://github.com/o/r/pull/2', pullRequest: { state: 'merged' } } });
+  assert.equal(recommendScope({ repoRoot, required: 2 }).scope, 'ambitious');
+});
+
+test('buildGenerationIndex and buildGenerationHistory say when a person closed or is still holding a pull request', (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  writeGen(repoRoot, 'gen-001', { proposal: PROPOSAL, attempts: { ...CLEAN, pullRequest: { state: 'closed' } } });
+  writeGen(repoRoot, 'gen-002', { proposal: PROPOSAL, attempts: { ...CLEAN, pullRequest: { state: 'open' } } });
+  writeGen(repoRoot, 'gen-003', { proposal: PROPOSAL, attempts: CLEAN });
+  const index = buildGenerationIndex({ repoRoot });
+  assert.match(index, /\| 001 \| .* \| CLOSED UNMERGED \|/);
+  assert.match(index, /\| 002 \| .* \| PR OPEN \|/);
+  assert.match(index, /\| 003 \| .* \| MERGED \|/);
+  const history = buildGenerationHistory({ repoRoot, limit: 3 });
+  assert.match(history, /gen-001\n- Outcome: CLOSED UNMERGED — approved by review, but a person closed/);
+  assert.match(history, /gen-003\n- Outcome: MERGED\n/);
+});
+
+test('a record with no pull-request state renders exactly as before (byte-identity for existing history)', (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  writeGen(repoRoot, 'gen-001', { proposal: PROPOSAL });
+  const before = buildGenerationHistory({ repoRoot, limit: 1 });
+  writeGen(repoRoot, 'gen-001', { proposal: PROPOSAL, attempts: CLEAN });
+  assert.equal(buildGenerationHistory({ repoRoot, limit: 1 }), before);
+});

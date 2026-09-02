@@ -139,6 +139,25 @@ jobs:
           git commit -m "Update model snapshot" || echo "No change to commit"
           git push
 
+      # The fate of earlier generations' pull requests, read back into their
+      # records before this cycle decides anything: a person merging or
+      # closing is the one verdict in the loop that is not the harness
+      # grading itself, and it feeds the next prompt's history and the
+      # earned-ambition check. Finds nothing on the autonomous-merge path,
+      # which is fine. continue-on-error: bookkeeping must not stop a cycle.
+      - name: Read back the fate of earlier pull requests
+        id: prs
+        if: steps.pause.outputs.paused != 'true'
+        shell: bash
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node harness/scripts/sync-pull-request-outcomes.mjs --generations-dir {{GENERATIONS_DIR}}
+          git add -A -- {{GENERATIONS_DIR}}
+          git commit -m "Record pull request outcomes" || echo "Nothing to record"
+          git push
+
       - name: Probe reachability, then read the survivors
         id: probe
         if: steps.check.outputs.has-new == 'true'

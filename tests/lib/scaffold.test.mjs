@@ -522,3 +522,13 @@ test('buildAdapterObject: a per-generation token budget is written by default, a
   assert.equal(buildAdapterObject(baseAnswers()).budget.max_generation_tokens, 2000000);
   assert.equal(buildAdapterObject(baseAnswers({ maxGenerationTokens: 750000 })).budget.max_generation_tokens, 750000);
 });
+
+test('renderWorkflowTemplate: reads pull-request outcomes back at the top of every cycle, before the agent branch exists', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers({ generationsDir: 'history/gens' }));
+  const syncAt = out.indexOf('sync-pull-request-outcomes.mjs');
+  const branchAt = out.indexOf('Create the agent branch');
+  assert.ok(syncAt > 0 && syncAt < branchAt);
+  assert.match(out, /sync-pull-request-outcomes\.mjs --generations-dir 'history\/gens'/);
+  assert.match(out, /id: prs\n\s+if: steps\.pause\.outputs\.paused != 'true'/);
+  assert.doesNotThrow(() => loadYaml(out));
+});
