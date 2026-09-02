@@ -368,3 +368,13 @@ test('fenceUntrusted: wraps text in explicit data-not-instructions markers, and 
   assert.equal(fenceUntrusted('SOURCE', null), null);
   assert.equal(fenceUntrusted('SOURCE', ''), null);
 });
+
+test('buildGenerationIndex marks a campaign generation, and a normal one renders as before', (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  writeGen(repoRoot, 'gen-001', { attempts: { ...CLEAN, campaign: true, proposalSummary: 'x' } });
+  writeGen(repoRoot, 'gen-002', { attempts: { ...CLEAN, proposalSummary: 'y' } });
+  const index = buildGenerationIndex({ repoRoot });
+  assert.match(index, /\| 001 \(campaign\) \|/);
+  assert.match(index, /\| 002 \| /);
+});

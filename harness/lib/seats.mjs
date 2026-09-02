@@ -105,3 +105,39 @@ export function describeSeats({ implementModel, reviewModel, rankModel }) {
   }
   return { line, warnings, ...f };
 }
+
+/**
+ * Seat promotion by track record — the bet on the curve, extended from
+ * the suggest seat to the implement seat.
+ *
+ * The implement and review seats are pinned to a model the project chose,
+ * which will age. A rotating model that keeps writing its own edit blocks
+ * and having them approved AND kept (merged, not closed, not reverted) has
+ * earned the implement seat on the same "earned, not scheduled" principle
+ * as ambitious scope. The review seat is never promoted this way: it is
+ * the gate, and a gate is not a prize.
+ *
+ * Pure. `records` are attempts.json objects, any order; `threshold` is the
+ * adapter's roles.promotion.implement_after_self_implemented_approvals.
+ *
+ * @returns {{model: string, provider: string|null, kept: number}|null}
+ */
+export function promotionCandidate({ records = [], threshold, hasKey = () => true } = {}) {
+  if (!Number.isFinite(threshold) || threshold < 1) return null;
+  const tally = new Map();
+  for (const r of records) {
+    if (r?.outcome !== 'approved' || !r.selfImplemented || !r.implementedBy) continue;
+    if (r.reverted || r.pullRequest?.state === 'closed') continue;
+    const m = String(r.implementedBy).match(/^(.*?)\s*(?:\(([^)]+)\))?$/);
+    const model = m?.[1]?.trim();
+    const provider = m?.[2] ?? familyOf(model);
+    if (!model) continue;
+    const entry = tally.get(model) ?? { model, provider, kept: 0 };
+    entry.kept += 1;
+    tally.set(model, entry);
+  }
+  const eligible = [...tally.values()]
+    .filter((e) => e.kept >= threshold && (!e.provider || hasKey(e.provider)))
+    .sort((a, b) => b.kept - a.kept || a.model.localeCompare(b.model));
+  return eligible[0] ?? null;
+}

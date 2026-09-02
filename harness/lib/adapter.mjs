@@ -250,6 +250,12 @@ export function rolesConfig(adapter) {
     maxAttempts: Number.isFinite(adapter?.roles?.refine?.max_attempts)
       ? adapter.roles.refine.max_attempts
       : null,
+    // Seat promotion by track record (harness/lib/seats.mjs's
+    // promotionCandidate()). Null means never promote — the default, since
+    // this hands the implement seat to a model nobody pinned.
+    promotionThreshold: Number.isFinite(adapter?.roles?.promotion?.implement_after_self_implemented_approvals) && adapter.roles.promotion.implement_after_self_implemented_approvals > 0
+      ? adapter.roles.promotion.implement_after_self_implemented_approvals
+      : null,
   };
 }
 

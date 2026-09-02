@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import '../../harness/providers/index.mjs';
-import { familyOf, seatFamilies, pickCrossFamilyRanker, describeSeats } from '../../harness/lib/seats.mjs';
+import { familyOf, seatFamilies, pickCrossFamilyRanker, describeSeats, promotionCandidate } from '../../harness/lib/seats.mjs';
 
 test('familyOf resolves a registered id and returns null for an unknown one', () => {
   assert.equal(familyOf('claude-opus-5'), 'anthropic');
@@ -45,4 +45,21 @@ test('describeSeats warns about a shared review family, and is quiet when the se
   assert.match(shared.line, /rank gpt-5 \(openai\)/);
   const split = describeSeats({ implementModel: 'claude-opus-5', reviewModel: 'gpt-5', rankModel: 'gpt-5' });
   assert.deepEqual(split.warnings, []);
+});
+
+test('promotionCandidate: a rotating model whose own edits were approved and kept N times takes the seat; closed or reverted ones do not count', () => {
+  const kept = (by) => ({ outcome: 'approved', selfImplemented: true, implementedBy: by });
+  const records = [
+    kept('gpt-5 (openai)'), kept('gpt-5 (openai)'), { ...kept('gpt-5 (openai)'), reverted: {} },
+    kept('gemini-3-pro (google)'), kept('gemini-3-pro (google)'), kept('gemini-3-pro (google)'),
+    { ...kept('gemini-3-pro (google)'), pullRequest: { state: 'closed' } },
+    { outcome: 'approved', selfImplemented: false, implementedBy: 'claude-opus-5' },
+    { outcome: 'abandoned', selfImplemented: true, implementedBy: 'grok-5 (xai)' },
+  ];
+  assert.deepEqual(promotionCandidate({ records, threshold: 3 }), { model: 'gemini-3-pro', provider: 'google', kept: 3 });
+  assert.deepEqual(promotionCandidate({ records, threshold: 2 }), { model: 'gemini-3-pro', provider: 'google', kept: 3 });
+  assert.equal(promotionCandidate({ records, threshold: 3, hasKey: (p) => p !== 'google' }), null);
+  assert.equal(promotionCandidate({ records, threshold: 4 }), null);
+  assert.equal(promotionCandidate({ records, threshold: 0 }), null);
+  assert.equal(promotionCandidate({ records: [], threshold: 1 }), null);
 });

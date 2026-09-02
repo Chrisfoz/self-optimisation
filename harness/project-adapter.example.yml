@@ -147,6 +147,15 @@ roles:
   refine:
     max_attempts: 3            # on the pinned implementer; a direct edit from the
                                 # suggesting model is tried first and doesn't count against this
+  # Seat promotion by track record — the bet on the curve, extended from the
+  # suggest seat to the implement seat. A rotating model whose OWN edit
+  # blocks were approved and kept (merged, not closed, not reverted) this
+  # many times takes the implement seat from the pinned model above, for as
+  # long as it holds the record and its lab's key is present. The review
+  # seat is never promoted: it is the gate, and a gate is not a prize. Omit
+  # or set 0 to never promote (the default).
+  # promotion:
+  #   implement_after_self_implemented_approvals: 3
 
 memory:
   escalation_ledger: docs/escalations/ledger.json

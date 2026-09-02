@@ -401,6 +401,7 @@ export function buildGenerationIndex({ repoRoot = process.cwd(), generationsDir 
     let suggestedBy = '—';
     let outcome = 'unknown';
     let change = '—';
+    let campaign = false;
 
     if (proposal) {
       const p = summariseProposal(proposal);
@@ -408,10 +409,12 @@ export function buildGenerationIndex({ repoRoot = process.cwd(), generationsDir 
       let record = null;
       try { record = attemptsRaw ? JSON.parse(attemptsRaw) : null; } catch { /* the proposal alone still renders */ }
       outcome = fateOf(record).label;
+      campaign = Boolean(record?.campaign);
       change = p.summary ?? '—';
     } else if (attemptsRaw) {
       try {
         const record = JSON.parse(attemptsRaw);
+        campaign = Boolean(record.campaign);
         // suggestModel is only set once a model actually produced a
         // proposal — on a no-proposal outcome it is always null, even
         // though we know exactly who was asked. fanOut.asked has that;
@@ -430,7 +433,7 @@ export function buildGenerationIndex({ repoRoot = process.cwd(), generationsDir 
       }
     }
 
-    return `| ${dir.replace('gen-', '')} | ${modelOnly(suggestedBy)} | ${outcome} | ${cell(change)} |`;
+    return `| ${dir.replace('gen-', '')}${campaign ? ' (campaign)' : ''} | ${modelOnly(suggestedBy)} | ${outcome} | ${cell(change)} |`;
   });
 
   return [

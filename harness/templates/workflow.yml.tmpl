@@ -59,6 +59,10 @@ on:
         required: false
         type: choice
         options: ['', focused, ambitious]
+      models:
+        description: 'Campaign mode: comma-separated model ids to run a generation on NOW, instead of waiting for a release. Recorded as campaign: true.'
+        required: false
+        type: string
 
 permissions:
 {{PERMISSION_LINES}}
@@ -112,9 +116,24 @@ jobs:
       # read back below and passed to the digest as CHECK_RESULT — without
       # that, "the check never ran" is indistinguishable from "the check ran
       # and found nothing", and a broken cycle reports as a calm one.
+      # Campaign mode (harness/lib/campaign.mjs): the owner named models from
+      # the Actions tab, so the release check is skipped and the same
+      # release-check.json is written by hand. Everything downstream — probe,
+      # preflight, improve — runs unchanged, and the record is stamped
+      # campaign: true so release-driven history stays distinguishable.
+      - name: Use the models named by hand (campaign mode)
+        id: campaign
+        if: steps.pause.outputs.paused != 'true' && github.event.inputs.models
+        shell: bash
+        env:
+          CAMPAIGN_MODELS: ${{ github.event.inputs.models }}
+        run: |
+          node harness/scripts/campaign-models.mjs > "$RUNNER_TEMP/release-check.json"
+          echo "has-new=true" >> "$GITHUB_OUTPUT"
+
       - name: Check for new model releases
         id: check
-        if: steps.pause.outputs.paused != 'true'
+        if: steps.pause.outputs.paused != 'true' && !github.event.inputs.models
         shell: bash
         continue-on-error: true
         env:
@@ -130,7 +149,7 @@ jobs:
           echo "release-detected=$(jq -r '.releaseDetected' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
 
       - name: Commit the updated model snapshot
-        if: steps.pause.outputs.paused != 'true'
+        if: steps.pause.outputs.paused != 'true' && !github.event.inputs.models
         shell: bash
         run: |
           git config user.email "self-improvement-bot@github-actions.local"
@@ -165,7 +184,7 @@ jobs:
 
       - name: Probe reachability, then read the survivors
         id: probe
-        if: steps.check.outputs.has-new == 'true'
+        if: steps.check.outputs.has-new == 'true' || steps.campaign.outputs.has-new == 'true'
         shell: bash
         run: |
           node harness/scripts/probe-models.mjs "$RUNNER_TEMP/release-check.json"
@@ -213,6 +232,7 @@ jobs:
           GEN_NUMBER: ${{ steps.gen.outputs.number }}
           SUGGEST_MODELS: ${{ steps.probe.outputs.models }}
           SCOPE: ${{ github.event.inputs.scope }}
+          CAMPAIGN: ${{ steps.campaign.outputs.has-new }}
         run: node harness/scripts/run-generation.mjs
 
       # The measurements that are NOT gates — quality dimensions beyond

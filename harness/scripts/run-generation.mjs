@@ -31,7 +31,8 @@ import '../providers/index.mjs';
 import { setOutput, oneLine } from '../lib/gh-output.mjs';
 import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig, snapshotPath as adapterSnapshotPath } from '../lib/adapter.mjs';
 import { getProvider } from '../lib/llm-provider.mjs';
-import { pickCrossFamilyRanker, describeSeats } from '../lib/seats.mjs';
+import { pickCrossFamilyRanker, describeSeats, promotionCandidate } from '../lib/seats.mjs';
+import { loadRecords } from '../lib/report.mjs';
 import { compileAllowlist } from '../lib/edit-format.mjs';
 import { globToRegExp } from '../lib/glob.mjs';
 import {
@@ -117,7 +118,24 @@ const readRequired = (relative, what) => {
 const agentBrief = readRequired(briefs.agentBriefPath, 'agent brief');
 const reviewerBrief = readRequired(briefs.reviewerBriefPath, 'reviewer brief');
 
-const implementModel = process.env.IMPLEMENT_MODEL || roles.implementModel || 'claude-opus-5';
+const generationsDir = ctxConfig.generationsDir || 'docs/generations';
+
+// The implement seat: the env override, else a rotating model that EARNED
+// it (roles.promotion — a model whose own edits were approved and kept N
+// times), else the pinned model. The review seat is never promoted.
+const pinnedImplement = roles.implementModel || 'claude-opus-5';
+const promoted = process.env.IMPLEMENT_MODEL || !roles.promotionThreshold
+  ? null
+  : promotionCandidate({
+      records: loadRecords({ repoRoot, generationsDir }).records,
+      threshold: roles.promotionThreshold,
+      hasKey: (provider) => Boolean(process.env[getProvider(provider)?.envKey ?? '']),
+    });
+const seatPromotion = promoted && promoted.model !== pinnedImplement
+  ? { model: promoted.model, provider: promoted.provider, basis: `${promoted.kept} self-implemented change(s) approved and kept; threshold ${roles.promotionThreshold}` }
+  : null;
+if (seatPromotion) console.error(`🏅 Implement seat promoted to ${seatPromotion.model} — ${seatPromotion.basis}`);
+const implementModel = process.env.IMPLEMENT_MODEL || seatPromotion?.model || pinnedImplement;
 const reviewModel = process.env.REVIEW_MODEL || roles.reviewModel || 'claude-opus-5';
 
 // The rank seat: the adapter's choice if it made one, otherwise a model
@@ -146,8 +164,8 @@ console.error(`🪑 Seats: ${seats.line}`);
 for (const warning of seats.warnings) console.error(`   ⚠️  ${warning}`);
 const maxAttempts = Number(process.env.MAX_ATTEMPTS || roles.maxAttempts || 3);
 const suggestMaxTokens = Number(process.env.SUGGEST_MAX_TOKENS || roles.suggestMaxTokens || 32000);
-
-const generationsDir = ctxConfig.generationsDir || 'docs/generations';
+const campaign = process.env.CAMPAIGN === 'true';
+if (campaign) console.error('🧪 Campaign generation — models named by hand; recorded as campaign: true');
 
 // --- scope ---
 // Precedence, highest first: SCOPE for this one run (the Actions tab's
@@ -246,6 +264,8 @@ try {
       consensus: { models: memory.consensus.models ?? 3, labs: memory.consensus.labs ?? 2 },
       resurfaceAfter: memory.resurfaceAfter ?? undefined,
       budget,
+      campaign,
+      seatPromotion,
     },
     { log: (msg) => console.error(msg) }
   );

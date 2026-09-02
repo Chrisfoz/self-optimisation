@@ -571,7 +571,7 @@ Implement the proposal above using the required edit format.`,
  * since the next generation reads this back and can see which ideas
  * already died and why.
  */
-export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize, apiIssues = [], pullRequestUrl = null, spend = null }) {
+export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize, apiIssues = [], pullRequestUrl = null, spend = null, campaign = false, seatPromotion = null }) {
   const dir = path.join(repoRoot, generationsDir, `gen-${genNumber}`);
   fs.mkdirSync(dir, { recursive: true });
   const relative = `${generationsDir}/gen-${genNumber}/attempts.json`;
@@ -593,6 +593,14 @@ export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generation
         outcome,
         scope: scope?.scope ?? null,
         scopeReason: scope?.reason ?? null,
+        // True for a generation the owner ran on models named by hand
+        // (harness/lib/campaign.mjs) rather than on a detected release.
+        // Kept so release-driven history stays distinguishable.
+        campaign: Boolean(campaign),
+        // Set when the implement seat was filled by a rotating model that
+        // earned it (harness/lib/seats.mjs's promotionCandidate()), not the
+        // pinned default. Null otherwise.
+        seatPromotion: seatPromotion ?? null,
         suggestModel: suggestResult ? `${suggestResult.model} (${suggestResult.provider})` : null,
         fanOut: fanOut ?? null,
         screenshotsSent: suggestResult?.sentImages ?? 0,
@@ -975,6 +983,8 @@ export async function runGeneration(config, deps = {}) {
     captureVisual,
     implementationNotes = null,
     budget = {},
+    campaign = false,
+    seatPromotion = null,
   } = config;
 
   const rawCall = deps.call ?? callModelWithHeadroom;
@@ -1044,7 +1054,7 @@ export async function runGeneration(config, deps = {}) {
       const detail = `projected ${projected.estimatedTokens.toLocaleString()} input tokens across ${asking.length} model(s) exceeds budget.max_generation_tokens (${maxGenerationTokens.toLocaleString()}); nothing was called`;
       log(`💸 Over budget before the fan-out — ${detail}`);
       const recordPath = writeAttemptRecord({
-        repoRoot, generationsDir, genNumber,
+        repoRoot, generationsDir, genNumber, campaign, seatPromotion,
         outcome: 'over-budget',
         suggestResult: null,
         proposal: null,
@@ -1072,7 +1082,7 @@ export async function runGeneration(config, deps = {}) {
 
   if (proposals.length === 0) {
     const recordPath = writeAttemptRecord({
-      repoRoot, generationsDir, genNumber,
+      repoRoot, generationsDir, genNumber, campaign, seatPromotion,
       outcome: 'no-proposal',
       suggestResult: null,
       proposal: null,
@@ -1228,7 +1238,7 @@ export async function runGeneration(config, deps = {}) {
       });
 
       const attemptRecordPath = writeAttemptRecord({
-        repoRoot, generationsDir, genNumber,
+        repoRoot, generationsDir, genNumber, campaign, seatPromotion,
         outcome: 'approved', suggestResult, proposal, attempts: attemptLog,
         fanOut, implementedBy, implementModel, scope, escalations: escalationRound,
         apiIssues: summarizeApiIssues(failures),
@@ -1270,7 +1280,7 @@ export async function runGeneration(config, deps = {}) {
     // failed run.
     restoreSnapshot(repoRoot, pristine, createdLastAttempt);
     const attemptRecordPath = writeAttemptRecord({
-      repoRoot, generationsDir, genNumber,
+      repoRoot, generationsDir, genNumber, campaign, seatPromotion,
       outcome: 'abandoned', suggestResult, proposal, attempts: attemptLog,
       fanOut, implementedBy: null, implementModel, scope, escalations: escalationRound,
       apiIssues: summarizeApiIssues(failures),
@@ -1301,7 +1311,7 @@ export async function runGeneration(config, deps = {}) {
     // see this function's own doc comment for the incident this guards
     // against.
     const attemptRecordPath = writeAttemptRecord({
-      repoRoot, generationsDir, genNumber,
+      repoRoot, generationsDir, genNumber, campaign, seatPromotion,
       outcome: 'crashed',
       suggestResult: crashState.suggestResult,
       proposal: crashState.proposal,
