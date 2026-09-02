@@ -396,3 +396,12 @@ test('accessors return null/empty defaults on an adapter missing that section', 
     assert.deepEqual(constitutionAllowlist(adapter), { allowedPaths: [], createOnlyPaths: [] });
   });
 });
+
+test('budgetConfig: reads a positive cap, and treats absent, zero or junk as no cap', async () => {
+  const { budgetConfig } = await import('../../harness/lib/adapter.mjs');
+  assert.deepEqual(budgetConfig({ budget: { max_generation_tokens: 500000 } }), { maxGenerationTokens: 500000 });
+  assert.deepEqual(budgetConfig({ budget: { max_generation_tokens: 0 } }), { maxGenerationTokens: null });
+  assert.deepEqual(budgetConfig({ budget: { max_generation_tokens: 'lots' } }), { maxGenerationTokens: null });
+  assert.deepEqual(budgetConfig({}), { maxGenerationTokens: null });
+  assert.deepEqual(budgetConfig(null), { maxGenerationTokens: null });
+});

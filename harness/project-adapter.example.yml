@@ -216,6 +216,24 @@ context:
   history_limit: 3       # how many recent generations get full detail in the prompt
   scope_required: 2      # clean first-attempt merges in a row before "ambitious" unlocks
 
+# --- LIVE: harness/scripts/run-generation.mjs reads this (via
+# harness/lib/adapter.mjs's budgetConfig()) --------------------------------
+# The most tokens one generation may spend, input plus output, across every
+# model call it makes. Checked twice: projected before the fan-out (the
+# suggestion prompt's size times the number of newly released models — if
+# that alone exceeds the cap the run is refused, recorded as `over-budget`,
+# and nothing is called) and actually, between refine attempts (the loop
+# stops with a `budget-exhausted` attempt and the generation is abandoned).
+# Every attempts.json carries a `spend` block with the real totals per model
+# and per stage, from the usage the provider reported.
+#
+# Tokens, not money: a price table in this file would rot, and a wrong price
+# is worse than none. This bounds ONE run. It does not bound a month in
+# which nine labs each ship something — set a spending limit at each
+# provider as well. Delete the section, or set it to 0, for no cap.
+budget:
+  max_generation_tokens: 2000000
+
 # --- LIVE: harness/scripts/verify-deployment.mjs and promote.mjs read this
 # section (via harness/lib/adapter.mjs's deploymentConfig()). Neither is
 # wired to run automatically after run-generation.mjs yet — each is a

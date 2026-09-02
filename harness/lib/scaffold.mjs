@@ -15,6 +15,14 @@
 import { dump as dumpYaml } from 'js-yaml';
 import { normalizeApprovalClass } from './adapter.mjs';
 
+/**
+ * The exact js-yaml version the generated workflow installs at run time.
+ * Exact, not a range: the job installing it holds a write token, and a
+ * floating version is a supply-chain door into every gate. Kept beside
+ * package.json's own pin — bump both together.
+ */
+export const JS_YAML_VERSION = '5.3.0';
+
 /** Single-quote a path/command for safe use in a bash argument list — the same escaping bash itself expects. */
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -87,6 +95,13 @@ export function buildAdapterObject(a) {
       repository: a.repository || undefined,
       default_branch: a.defaultBranch || 'main',
     },
+    // Provenance: which harness produced this file. Read by nothing at run
+    // time; written so `init --check-upgrade` and a human can tell whether
+    // this installation carries a fix that shipped after it was scaffolded.
+    // init.mjs supplies it from harness/VERSION via harness/lib/version.mjs.
+    harness: {
+      version: a.harnessVersion || 'unknown',
+    },
     providers: {
       watched: a.providers.map((p) => p.name),
       snapshot_path: a.snapshotPath || '.agent/model-snapshot.json',
@@ -143,6 +158,14 @@ export function buildAdapterObject(a) {
     deployment: {
       verify_strategy: a.deploymentStrategy || 'none',
       ci: { runner: a.runner || 'ubuntu-latest' },
+    },
+    // LIVE: run-generation.mjs reads it. A per-generation token cap, set by
+    // default because an unattended loop's cost scales with other people's
+    // release schedules — a busy month is N proposers, and nothing else in
+    // the pipeline bounds it. 2,000,000 is a few times a typical generation
+    // with three proposers; a project with a large source bundle raises it.
+    budget: {
+      max_generation_tokens: Number.isFinite(a.maxGenerationTokens) ? a.maxGenerationTokens : 2000000,
     },
     // RECORDED, and deliberately never read back — see the closing section
     // of harness/project-adapter.example.yml for the reasoning. Both of
@@ -408,6 +431,7 @@ export function renderWorkflowTemplate(template, answers) {
         env:
           ${notifyEnvLine}
           GEN_NUMBER: \${{ steps.gen.outputs.number }}
+          PAUSED: \${{ steps.pause.outputs.paused }}
           CHECK_RESULT: \${{ steps.check.outcome }}
           PREFLIGHT_RESULT: \${{ steps.preflight.outcome }}
           RELEASE_DETECTED: \${{ steps.check.outputs.release-detected }}
@@ -424,6 +448,7 @@ export function renderWorkflowTemplate(template, answers) {
           BRIEF_FEEDBACK: \${{ steps.improve.outputs.brief-feedback }}
           ESC_OPENED: \${{ steps.improve.outputs.escalations-opened }}
           ESC_FLAGGED: \${{ steps.improve.outputs.escalations-flagged }}
+          SPEND_TOKENS: \${{ steps.improve.outputs.spend-tokens }}
         run: node harness/scripts/send-digest.mjs
 
       - name: Send an escalation notice, if anything was flagged
@@ -462,6 +487,7 @@ export function renderWorkflowTemplate(template, answers) {
   out = sub(out, '{{ALLOWED_PATHS_GIT_ADD}}', allowedPathsGitAdd);
   out = sub(out, '{{RECORD_DIRS_GIT_ADD}}', recordDirsGitAdd);
   out = sub(out, '{{THEMES_CADENCE}}', String(Number.isFinite(answers.themesCadence) ? answers.themesCadence : 10));
+  out = sub(out, '{{JS_YAML_VERSION}}', JS_YAML_VERSION);
   out = sub(out, '{{DEFAULT_BRANCH}}', answers.defaultBranch || 'main');
   // Same first-line-unindented convention as {{NOTIFY_STEPS}} below: the
   // template supplies the 6 spaces before the token, so this block's own

@@ -1,5 +1,7 @@
 # Self-Optimisation
 
+MIT licensed — see [`LICENSE`](LICENSE).
+
 A portable harness for model-release-driven software improvement: point it at
 a project, and a governed suggest → implement → review → gate → promote loop
 lets each newly released frontier model propose one improvement, gated by
@@ -311,8 +313,9 @@ npm test
 ```
 
 Zero dependencies here too: `node:test` and `node:assert` are Node
-built-ins, so there's no test framework to install. 434 checks as of
-2026-09-02, all passing.
+built-ins, so there's no test framework to install. The count is whatever
+`npm test` prints — it is not repeated here, because a hand-typed number
+drifted three ways before this sentence replaced it.
 
 **Why this exists, and why it's worth keeping current:** every check here
 was, at first, a throwaway script written to confirm one piece of

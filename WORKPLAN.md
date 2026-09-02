@@ -378,7 +378,7 @@ from it.
   pluggable sender registry.
 - `harness/cli/init.mjs` + `harness/templates/workflow.yml.tmpl` chain the
   whole thing into one generated workflow (§10 step 5).
-- 434 tests (as of 2026-09-02), including `tests/e2e/full-loop.test.mjs` driving the real chain
+- A test suite (`npm test` prints the count; it is not repeated here on purpose), including `tests/e2e/full-loop.test.mjs` driving the real chain
   against a real git remote and a real child-process test run.
 - Pinned implement/review/rank seats get their lab's API key wired even when
   that lab is not in `providers.watched`.

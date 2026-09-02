@@ -375,3 +375,17 @@ export function notifyConfig(adapter) {
     calibrationExamplesPaths: adapter?.notify?.calibration_examples ?? [],
   };
 }
+
+/**
+ * The token cap one generation may spend, or null for no cap. Consumed by
+ * harness/lib/orchestrator.mjs's runGeneration(): projected before the
+ * fan-out and checked between attempts. Tokens rather than money on
+ * purpose — see harness/lib/spend.mjs for why — and a cap here bounds one
+ * run, not a month: set a spending limit at each provider as well.
+ */
+export function budgetConfig(adapter) {
+  const raw = adapter?.budget?.max_generation_tokens;
+  return {
+    maxGenerationTokens: Number.isFinite(raw) && raw > 0 ? raw : null,
+  };
+}

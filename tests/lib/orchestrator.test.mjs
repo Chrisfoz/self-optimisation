@@ -602,3 +602,92 @@ test('runGeneration: applyEdits failure retries without consuming the implemente
   // Both attempts count against maxAttempts since neither was a direct edit.
   assert.equal(result.attempts, 2);
 });
+
+test('writeAttemptRecord: stamps the harness version that wrote it', (t) => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'orch-ver-'));
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  const rel = writeAttemptRecord({ repoRoot, genNumber: '001', outcome: 'no-proposal', suggestResult: null, proposal: null, attempts: [], fanOut: null, implementedBy: null, implementModel: 'm', scope: { scope: 'focused', reason: 'r' } });
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, rel), 'utf8'));
+  assert.match(record.harnessVersion, /^\d+\.\d+\.\d+$/);
+});
+
+// --- Cost accounting and the budget cap (harness/lib/spend.mjs) --------------
+
+test('runGeneration: every stage\'s usage lands in attempts.json as spend, by model and by site', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', model, sentImages: 0, usage: { input_tokens: 1000, output_tokens: 300 } };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false, model, usage: { prompt_tokens: 500, completion_tokens: 100 } };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.', model, usage: null };
+    throw new Error('unexpected call: ' + model);
+  };
+
+  const result = await runGeneration(baseConfig(repoRoot), { call });
+  assert.equal(result.outcome, 'approved');
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.equal(record.spend.calls, 3);
+  assert.equal(record.spend.estimatedCalls, 1, 'the review call reported no usage, so it is an estimate');
+  assert.deepEqual(record.spend.byModel['suggest-model'], { calls: 1, inputTokens: 1000, outputTokens: 300 });
+  assert.deepEqual(record.spend.bySite.implement, { calls: 1, inputTokens: 500, outputTokens: 100 });
+  assert.ok(record.spend.totalTokens > 1900);
+  assert.equal(result.spend.totalTokens, record.spend.totalTokens);
+});
+
+test('runGeneration: a fan-out projected over the cap is refused before any model is called', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  let calls = 0;
+  const call = async () => { calls += 1; throw new Error('must not be called'); };
+
+  const result = await runGeneration(baseConfig(repoRoot, { budget: { maxGenerationTokens: 10 } }), { call });
+  assert.equal(result.outcome, 'over-budget');
+  assert.equal(result.hasChanges, false);
+  assert.equal(calls, 0);
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.equal(record.outcome, 'over-budget');
+  assert.equal(record.attempts[0].outcome, 'over-budget');
+  assert.match(record.attempts[0].detail, /max_generation_tokens/);
+  assert.equal(record.spend.calls, 0);
+});
+
+test('runGeneration: the running cap stops the refine loop with a budget-exhausted attempt, and the run is abandoned', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  let implementCalls = 0;
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', model, sentImages: 0, usage: { input_tokens: 1000, output_tokens: 500 } };
+    if (model === 'implement-model') { implementCalls += 1; return { text: VALID_IMPLEMENTATION, truncated: false, model, usage: { input_tokens: 100, output_tokens: 100 } }; }
+    if (model === 'review-model') return { text: 'VERDICT: REJECTED\n\nREASON: no.\n\nREQUIRED FIXES:\n- x', model, usage: { input_tokens: 50, output_tokens: 10 } };
+    throw new Error('unexpected call: ' + model);
+  };
+
+  // 1500 after suggest, 1760 after the first implement+review: the second
+  // attempt must not start.
+  const result = await runGeneration(baseConfig(repoRoot, { budget: { maxGenerationTokens: 1600 } }), { call });
+  assert.equal(result.outcome, 'abandoned');
+  assert.equal(implementCalls, 1);
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.deepEqual(record.attempts.map((a) => a.outcome), ['rejected-by-review', 'budget-exhausted']);
+  assert.equal(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), 'original content', 'tree restored');
+});
+
+test('runGeneration: with no budget configured, nothing is refused and spend is still recorded', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: suggestionWithDirectEdits(), truncated: false, provider: 'anthropic', model, sentImages: 0 };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.', model };
+    throw new Error('unexpected call: ' + model);
+  };
+  const result = await runGeneration(baseConfig(repoRoot, { budget: { maxGenerationTokens: null } }), { call });
+  assert.equal(result.outcome, 'approved');
+  assert.equal(result.spend.estimatedCalls, 2);
+});

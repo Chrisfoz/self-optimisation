@@ -29,7 +29,7 @@ import fs from 'fs';
 import path from 'path';
 import '../providers/index.mjs';
 import { setOutput, oneLine } from '../lib/gh-output.mjs';
-import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig } from '../lib/adapter.mjs';
+import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig } from '../lib/adapter.mjs';
 import { compileAllowlist } from '../lib/edit-format.mjs';
 import { globToRegExp } from '../lib/glob.mjs';
 import {
@@ -92,6 +92,7 @@ const memory = memoryConfig(adapter);
 const briefs = briefPaths(adapter);
 const roles = rolesConfig(adapter);
 const ctxConfig = contextConfig(adapter);
+const budget = budgetConfig(adapter);
 
 if (editableFiles.length === 0) {
   console.error('project-adapter.yml has no constitution.allowed_paths — nothing for the agent to edit.');
@@ -198,6 +199,7 @@ try {
       ledgerPath: memory.ledgerPath || undefined,
       consensus: { models: memory.consensus.models ?? 3, labs: memory.consensus.labs ?? 2 },
       resurfaceAfter: memory.resurfaceAfter ?? undefined,
+      budget,
     },
     { log: (msg) => console.error(msg) }
   );
@@ -210,6 +212,8 @@ try {
 
 setOutput('has-changes', String(result.hasChanges));
 setOutput('scope', result.scope?.scope ?? '');
+// Tokens, input plus output, across every call this generation made.
+setOutput('spend-tokens', String(result.spend?.totalTokens ?? 0));
 if (result.attemptRecordPath) setOutput('attempt-record', result.attemptRecordPath);
 
 // Escalations, if any were recorded this run — feeds send-digest.mjs's
@@ -244,6 +248,13 @@ if (result.outcome === 'no-proposal') {
   console.error(`\n⚠️  No model produced a usable proposal.`);
   setOutput('summary', result.summary);
   setOutput('review-verdict', 'no-proposal');
+  process.exit(1);
+}
+
+if (result.outcome === 'over-budget') {
+  console.error(`\n💸 Refused before the fan-out: ${result.summary}`);
+  setOutput('summary', result.summary);
+  setOutput('review-verdict', 'over-budget');
   process.exit(1);
 }
 

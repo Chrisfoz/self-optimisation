@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { load as loadYaml } from 'js-yaml';
-import { buildAdapterObject, renderAdapterYaml, renderWorkflowTemplate, renderReadme, requiredProviders } from '../../harness/lib/scaffold.mjs';
+import { buildAdapterObject, renderAdapterYaml, renderWorkflowTemplate, renderReadme, requiredProviders, JS_YAML_VERSION } from '../../harness/lib/scaffold.mjs';
 
 const TEMPLATE_PATH = path.join(import.meta.dirname, '../../harness/templates/workflow.yml.tmpl');
 const template = fs.readFileSync(TEMPLATE_PATH, 'utf8');
@@ -484,4 +484,41 @@ test('renderReadme: with the schedule left off, says so rather than quoting a cr
   assert.match(text, /There is no schedule yet/);
   assert.match(text, /0 3 \* \* 1/); // shown as the thing to add later
   assert.doesNotMatch(text, /Runs on `0 3 \* \* 1`/);
+});
+
+// --- Tier 0: supply-chain pins, the kill switch, provenance ---------------
+
+test('renderWorkflowTemplate: actions are pinned by commit SHA and js-yaml by exact version with scripts disabled', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers());
+  assert.match(out, /uses: actions\/checkout@[0-9a-f]{40} # v4/);
+  assert.match(out, /uses: actions\/setup-node@[0-9a-f]{40} # v4/);
+  assert.doesNotMatch(out, /uses: actions\/[a-z-]+@v\d/);
+  assert.match(out, new RegExp(`npm install --no-save --ignore-scripts js-yaml@${JS_YAML_VERSION.replace(/\\./g, '\\\\.')}`));
+  assert.match(JS_YAML_VERSION, /^\d+\.\d+\.\d+$/);
+});
+
+test('JS_YAML_VERSION matches the version package.json pins for the harness itself', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
+  assert.equal(`^${JS_YAML_VERSION}`, pkg.dependencies['js-yaml']);
+});
+
+test('renderWorkflowTemplate: the kill switch runs first, gates the release check, and reaches the digest', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers({ notify: { provider: 'sendgrid', envKey: 'SENDGRID_API_KEY', recipient: 'a@b.c', fromEmail: 'x@y.z' } }));
+  const pauseAt = out.indexOf('id: pause');
+  const checkAt = out.indexOf('id: check');
+  assert.ok(pauseAt > 0 && pauseAt < checkAt, 'pause step precedes the release check');
+  assert.match(out, /PAUSED: \$\{\{ vars\.SELF_IMPROVE_PAUSED \}\}/);
+  assert.match(out, /id: check\n\s+if: steps\.pause\.outputs\.paused != 'true'/);
+  assert.match(out, /PAUSED: \$\{\{ steps\.pause\.outputs\.paused \}\}/);
+  assert.doesNotThrow(() => loadYaml(out));
+});
+
+test('buildAdapterObject: records the harness version it was scaffolded by, and "unknown" when none was supplied', () => {
+  assert.equal(buildAdapterObject(baseAnswers({ harnessVersion: '0.1.0' })).harness.version, '0.1.0');
+  assert.equal(buildAdapterObject(baseAnswers()).harness.version, 'unknown');
+});
+
+test('buildAdapterObject: a per-generation token budget is written by default, and an answered one is honoured', () => {
+  assert.equal(buildAdapterObject(baseAnswers()).budget.max_generation_tokens, 2000000);
+  assert.equal(buildAdapterObject(baseAnswers({ maxGenerationTokens: 750000 })).budget.max_generation_tokens, 750000);
 });

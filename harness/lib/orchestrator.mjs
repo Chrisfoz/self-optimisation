@@ -60,6 +60,8 @@ import {
   buildEscalationReviewField, buildEscalationBrief, loadLedger, saveLedger, renderForNotification,
 } from './escalations.mjs';
 import { summarizeApiIssues } from './api-errors.mjs';
+import { harnessVersion } from './version.mjs';
+import { createSpendLedger, withSpend, projectedFanOut } from './spend.mjs';
 
 // ---------------------------------------------------------------------------
 // Pure text-processing helpers — ported verbatim, no genericisation needed.
@@ -544,7 +546,7 @@ Implement the proposal above using the required edit format.`,
  * since the next generation reads this back and can see which ideas
  * already died and why.
  */
-export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize, apiIssues = [], pullRequestUrl = null }) {
+export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize, apiIssues = [], pullRequestUrl = null, spend = null }) {
   const dir = path.join(repoRoot, generationsDir, `gen-${genNumber}`);
   fs.mkdirSync(dir, { recursive: true });
   const relative = `${generationsDir}/gen-${genNumber}/attempts.json`;
@@ -560,6 +562,9 @@ export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generation
       {
         generation: genNumber,
         date: new Date().toISOString().slice(0, 10),
+        // Which harness wrote this record — provenance for a vendored copy
+        // that has no package manifest of its own. See harness/lib/version.mjs.
+        harnessVersion: harnessVersion(),
         outcome,
         scope: scope?.scope ?? null,
         scopeReason: scope?.reason ?? null,
@@ -572,6 +577,10 @@ export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generation
         proposalSummary,
         escalations: escalations ?? null,
         contextSize: contextSize ?? null,
+        // What this generation cost, in tokens, per model and per stage —
+        // see harness/lib/spend.mjs. Null only for a record written by
+        // something other than runGeneration().
+        spend: spend ?? null,
         attempts,
         // Actionable API failures only — "you need to fix a key or your
         // billing" — deduplicated by provider+kind. See api-errors.mjs.
@@ -871,6 +880,11 @@ export function restoreSnapshot(repoRoot, snapshot, createdPaths = []) {
  * @param {{models: number, labs: number}} [config.consensus]
  * @param {() => Promise<object>} [config.captureVisual]  Passed to review.mjs.
  * @param {string} [config.implementationNotes]
+ * @param {{maxGenerationTokens?: number|null}} [config.budget]  A token cap
+ *   for the whole generation (harness/lib/adapter.mjs's budgetConfig()).
+ *   Checked twice: projected before the fan-out (outcome 'over-budget',
+ *   nothing called), and actually between attempts (the loop stops with a
+ *   'budget-exhausted' attempt and the run is abandoned). Null means no cap.
  * @param {{call?: Function, log?: (msg: string) => void}} [deps]
  * @returns {Promise<object>}
  */
@@ -901,10 +915,19 @@ export async function runGeneration(config, deps = {}) {
     resurfaceAfter,
     captureVisual,
     implementationNotes = null,
+    budget = {},
   } = config;
 
-  const call = deps.call ?? callModelWithHeadroom;
+  const rawCall = deps.call ?? callModelWithHeadroom;
   const log = deps.log ?? (() => {});
+
+  // Every model call this generation makes goes through the ledger, tagged
+  // with the stage that made it, so the attempt record can say what the
+  // run cost and the cap below has something real to compare against.
+  const spend = createSpendLedger();
+  const callFor = (site) => withSpend(rawCall, spend, site);
+  const maxGenerationTokens = Number.isFinite(budget?.maxGenerationTokens) && budget.maxGenerationTokens > 0 ? budget.maxGenerationTokens : null;
+  const budgetExhausted = () => maxGenerationTokens !== null && spend.total() > maxGenerationTokens;
 
   if (!agentBrief || !agentBrief.trim()) throw new Error('runGeneration requires a non-empty agentBrief.');
   if (!reviewerBrief || !reviewerBrief.trim()) throw new Error('runGeneration requires a non-empty reviewerBrief.');
@@ -951,7 +974,42 @@ export async function runGeneration(config, deps = {}) {
 
   const pristine = snapshotEditableFiles(repoRoot, editableFiles);
 
-  const { proposals, failures } = await gatherProposals(promptConfig, asking, { call, log });
+  // Projected, before anything is spent: the suggestion prompt is the same
+  // for every model, so its size times the fan-out is the floor of what
+  // this run will cost. A run that cannot fit under the cap is refused
+  // here, recorded, and reported — not discovered after N labs were paid.
+  if (maxGenerationTokens !== null) {
+    const promptChars = buildSuggestSystemPrompt(promptConfig).length + buildSuggestUserPrompt(promptConfig).length;
+    const projected = projectedFanOut({ promptChars, models: asking.length, maxTokens: maxGenerationTokens });
+    if (projected.over) {
+      const detail = `projected ${projected.estimatedTokens.toLocaleString()} input tokens across ${asking.length} model(s) exceeds budget.max_generation_tokens (${maxGenerationTokens.toLocaleString()}); nothing was called`;
+      log(`💸 Over budget before the fan-out — ${detail}`);
+      const recordPath = writeAttemptRecord({
+        repoRoot, generationsDir, genNumber,
+        outcome: 'over-budget',
+        suggestResult: null,
+        proposal: null,
+        attempts: [{ attempt: 1, by: null, outcome: 'over-budget', detail: oneLine(detail, 400) }],
+        fanOut: { asked: asking.map((m) => `${m.id} (${m.provider})`), proposed: [], failed: [] },
+        implementedBy: null,
+        implementModel,
+        scope,
+        spend: spend.summary(),
+      });
+      finishWorkOrder({ repoRoot, ledgerPath, genNumber, outcome: 'over-budget' });
+      return {
+        outcome: 'over-budget',
+        hasChanges: false,
+        scope,
+        attemptRecordPath: recordPath,
+        summary: oneLine(detail, 200),
+        askedModels: asking,
+        spend: spend.summary(),
+      };
+    }
+  }
+
+  const { proposals, failures } = await gatherProposals(promptConfig, asking, { call: callFor('suggest'), log });
 
   if (proposals.length === 0) {
     const recordPath = writeAttemptRecord({
@@ -965,6 +1023,7 @@ export async function runGeneration(config, deps = {}) {
       implementModel,
       scope,
       apiIssues: summarizeApiIssues(failures),
+      spend: spend.summary(),
     });
 
     // Assigned before the fan-out, so an order can be outstanding even on a
@@ -979,6 +1038,7 @@ export async function runGeneration(config, deps = {}) {
       summary: oneLine(`no usable proposal — ${failures.map((f) => `${f.id}: ${f.reason}`).join('; ')}`, 200),
       askedModels: asking,
       failures,
+      spend: spend.summary(),
     };
   }
 
@@ -993,7 +1053,7 @@ export async function runGeneration(config, deps = {}) {
   const crashState = { suggestResult: null, proposal: null, fanOut: null, attempts: [], by: null };
 
   try {
-    const ranking = await rankProposals({ projectDescription, manifest: context.manifest, testIndex: context.testIndex, proposals, rankModel }, { call, log });
+    const ranking = await rankProposals({ projectDescription, manifest: context.manifest, testIndex: context.testIndex, proposals, rankModel }, { call: callFor('rank'), log });
     const winner = proposals[ranking.index];
     const suggestResult = winner.result;
     const proposal = winner.text;
@@ -1029,6 +1089,17 @@ export async function runGeneration(config, deps = {}) {
       const attempt = index + 1;
       crashState.by = step.by;
 
+      // The running check. The first attempt always runs — the fan-out was
+      // already projected to fit — but a refine loop can spend the cap
+      // several times over, and a cap that only ever counted the first call
+      // would not be one.
+      if (attempt > 1 && budgetExhausted()) {
+        const detail = `spent ${spend.total().toLocaleString()} tokens, over budget.max_generation_tokens (${maxGenerationTokens.toLocaleString()}); no further attempts`;
+        log(`💸 Attempt ${attempt} (${step.by}) not started: ${detail}`);
+        attemptLog.push({ attempt, by: step.by, outcome: 'budget-exhausted', detail: oneLine(detail, 400) });
+        break;
+      }
+
       restoreSnapshot(repoRoot, pristine, createdLastAttempt);
 
       let parsed;
@@ -1040,7 +1111,7 @@ export async function runGeneration(config, deps = {}) {
           { ...promptConfig, implementModel, implementationNotes },
           proposal,
           { applyErrors, reviewFeedback, rejectedRender, attempt, author: `${winner.id} (${winner.provider})` },
-          { call, log, maxAttempts }
+          { call: callFor('implement'), log, maxAttempts }
         );
         parsed = parseResponse(implemented.text, ['PILLAR']);
       }
@@ -1069,7 +1140,7 @@ export async function runGeneration(config, deps = {}) {
         testDescription,
         captureVisual,
         reviewModel,
-        call,
+        call: callFor('review'),
       });
 
       if (!review.approved) {
@@ -1097,10 +1168,12 @@ export async function runGeneration(config, deps = {}) {
         outcome: 'approved', suggestResult, proposal, attempts: attemptLog,
         fanOut, implementedBy, implementModel, scope, escalations: escalationRound,
         apiIssues: summarizeApiIssues(failures),
+        spend: spend.summary(),
       });
 
       log(`\n✅ Approved on attempt ${attempt}: ${review.reason}`);
       log(`   implemented by ${implementedBy}`);
+      log(`💸 ${spend.total().toLocaleString()} tokens across ${spend.calls.length} call(s)`);
 
       // The outcome label this generation's work order was waiting for.
       const workOrder = finishWorkOrder({ repoRoot, ledgerPath, genNumber, outcome: 'approved' });
@@ -1124,6 +1197,7 @@ export async function runGeneration(config, deps = {}) {
         briefFeedback: winner.briefFeedback,
         escalations: escalationRound,
         fanOut,
+        spend: spend.summary(),
       };
     }
 
@@ -1136,6 +1210,7 @@ export async function runGeneration(config, deps = {}) {
       outcome: 'abandoned', suggestResult, proposal, attempts: attemptLog,
       fanOut, implementedBy: null, implementModel, scope, escalations: escalationRound,
       apiIssues: summarizeApiIssues(failures),
+      spend: spend.summary(),
     });
 
     const workOrder = finishWorkOrder({ repoRoot, ledgerPath, genNumber, outcome: 'abandoned' });
@@ -1148,11 +1223,12 @@ export async function runGeneration(config, deps = {}) {
       scope,
       suggestModel: suggestResult.model,
       suggestProvider: suggestResult.provider,
-      attempts: plan.length,
+      attempts: attemptLog.length,
       attemptRecordPath,
       briefFeedback: winner.briefFeedback,
       escalations: escalationRound,
       fanOut,
+      spend: spend.summary(),
     };
   } catch (err) {
     // A genuinely unexpected failure. Write down whatever state had
@@ -1184,6 +1260,7 @@ export async function runGeneration(config, deps = {}) {
         ...failures,
         { id: crashState.by, provider: err?.provider, kind: err?.kind, statusCode: err?.statusCode },
       ]),
+      spend: spend.summary(),
     });
     log(`📓 Recorded the crash in ${attemptRecordPath}`);
     // A run that was handed a work order and died still completes it, with

@@ -67,17 +67,45 @@ jobs:
   self-improve:
     runs-on: {{RUNNER}}
     steps:
-      - uses: actions/checkout@v4
+      # Actions pinned by commit SHA, not by tag, and the one npm package
+      # pinned to an exact version with lifecycle scripts disabled. This
+      # job holds a token that can write to the repository; a tag can be
+      # moved and a floating version can be replaced, and either would run
+      # inside every gate rather than having to defeat one. See
+      # learning/03-failure-modes.md Part 9, "Supply chain, on the build
+      # side". Bump the SHA and the version together, on purpose.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20'
 
       - name: Install harness dependencies
         shell: bash
-        run: npm install --no-save js-yaml
+        run: npm install --no-save --ignore-scripts js-yaml@{{JS_YAML_VERSION}}
+
+      # The kill switch. A repository VARIABLE (not a secret — it is not
+      # sensitive, and a variable can be read back and seen in the UI),
+      # settable by anyone with settings access and requiring no edit to
+      # this file. When it is "true" the run stops here: no lab is polled,
+      # no model is called, nothing is spent — and the digest step at the
+      # bottom still runs, so the inbox says "paused" rather than nothing.
+      # Settings -> Secrets and variables -> Actions -> Variables ->
+      # SELF_IMPROVE_PAUSED = true.
+      - name: Is the loop paused?
+        id: pause
+        shell: bash
+        env:
+          PAUSED: ${{ vars.SELF_IMPROVE_PAUSED }}
+        run: |
+          if [ "$PAUSED" = "true" ]; then
+            echo "paused=true" >> "$GITHUB_OUTPUT"
+            echo "SELF_IMPROVE_PAUSED is set. Stopping before anything is polled or spent."
+          else
+            echo "paused=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # continue-on-error so a crashed release check cannot kill the job
       # before the digest step gets to report that it crashed. Its outcome is
@@ -86,6 +114,7 @@ jobs:
       # and found nothing", and a broken cycle reports as a calm one.
       - name: Check for new model releases
         id: check
+        if: steps.pause.outputs.paused != 'true'
         shell: bash
         continue-on-error: true
         env:
@@ -101,6 +130,7 @@ jobs:
           echo "release-detected=$(jq -r '.releaseDetected' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
 
       - name: Commit the updated model snapshot
+        if: steps.pause.outputs.paused != 'true'
         shell: bash
         run: |
           git config user.email "self-improvement-bot@github-actions.local"

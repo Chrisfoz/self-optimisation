@@ -46,6 +46,7 @@ import readline from 'node:readline/promises';
 import '../providers/index.mjs';
 import { getProvider, registeredProviders, resolveProvider } from '../lib/llm-provider.mjs';
 import { renderAdapterYaml, renderWorkflowTemplate, renderReadme } from '../lib/scaffold.mjs';
+import { harnessVersion, checkUpgrade } from '../lib/version.mjs';
 
 // path.join(..., '../x'), not import.meta.dirname — that global needs Node
 // 20.11+, and package.json's engines field only promises 20.6.0.
@@ -58,6 +59,32 @@ const AUTO_YES = process.argv.includes('--yes') || process.argv.includes('-y');
 // already-filled-in brief or adapter is exactly the kind of thing that
 // should need its own explicit flag, not fall out of "accept defaults."
 const FORCE = process.argv.includes('--force');
+
+// Two informational flags that never write anything. `--version` says which
+// harness this vendored copy is; `--check-upgrade` fetches upstream's
+// VERSION and says whether this copy is behind. Both exist because "copy one
+// folder" is the install, and a folder carries no manifest to ask.
+if (process.argv.includes('--version')) {
+  console.log(harnessVersion());
+  process.exit(0);
+}
+if (process.argv.includes('--check-upgrade')) {
+  const result = await checkUpgrade();
+  if (result.error) {
+    console.log(`Local harness ${result.local}; could not read upstream (${result.error}).`);
+    process.exit(2);
+  }
+  if (result.behind === null) {
+    console.log(`Local harness ${result.local}; upstream ${result.upstream} — could not compare.`);
+    process.exit(2);
+  }
+  console.log(
+    result.behind
+      ? `Local harness ${result.local} is behind upstream ${result.upstream}. Re-copy harness/ from the repository and re-run init with --force to regenerate the workflow.`
+      : `Local harness ${result.local} is current (upstream ${result.upstream}).`
+  );
+  process.exit(result.behind ? 1 : 0);
+}
 
 // stdio: 'pipe' for every stream, explicitly — git's stderr streams to our
 // own stderr by default when unspecified, and "no remote configured" is an
@@ -230,6 +257,7 @@ async function main() {
     rl.close();
 
     const answers = {
+      harnessVersion: harnessVersion(),
       projectId, repository, defaultBranch,
       allowedPaths, createOnlyPaths: [], frozenPaths, appendOnlyPaths,
       testCommands, providers, roleProviders, snapshotPath: '.agent/model-snapshot.json',

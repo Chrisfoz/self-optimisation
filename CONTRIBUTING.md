@@ -200,10 +200,8 @@ mechanical traps" before spending an afternoon on Mermaid.
 
 Raising these is welcome; assuming an answer is not.
 
-- **There is no `LICENSE` file yet.** Until there is, the default applies —
-  contributors should know that nothing here is licensed for reuse yet, and
-  that this needs settling before the project is meaningfully open to outside
-  code.
+- **The licence is MIT** (`LICENSE`, added 2026-09-02). Contributions are
+  accepted under the same terms.
 - **`console/DESIGN.md` §1.1 names governance as open**: branch protection, who
   gets merge rights, and how outside contributions get reviewed are all
   deliberately unsettled rather than rushed.
