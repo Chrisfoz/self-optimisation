@@ -91,6 +91,19 @@ roles:
   agent_brief_path: .claude/agents/improve.md
   reviewer_brief_path: .claude/agents/review.md
 
+  # The three PINNED seats. Only the suggest seat rotates (to whichever
+  # watched lab shipped something new); these stay on a model you chose.
+  # Any registered lab's model id works here — the provider is resolved
+  # from the id itself, so `gpt-5` or `gemini-3-pro` are as valid as the
+  # Anthropic default.
+  #
+  # IMPORTANT: a pinned model's lab does NOT have to appear in
+  # providers.watched above — watching is the detector's scope, pinning is
+  # a separate choice. But that lab's API key still has to be a repository
+  # secret, or the run fails when it reaches that seat. `init.mjs` works
+  # this out for you and wires the union of both sets into the generated
+  # workflow; if you change a model here by hand afterward, add the secret
+  # yourself.
   suggest:
     max_output_tokens: 32000   # covers a full analysis plus an ambitious edit set
   implement:

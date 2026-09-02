@@ -44,7 +44,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import readline from 'node:readline/promises';
 import '../providers/index.mjs';
-import { getProvider, registeredProviders } from '../lib/llm-provider.mjs';
+import { getProvider, registeredProviders, resolveProvider } from '../lib/llm-provider.mjs';
 import { renderAdapterYaml, renderWorkflowTemplate, renderReadme } from '../lib/scaffold.mjs';
 
 // path.join(..., '../x'), not import.meta.dirname — that global needs Node
@@ -129,6 +129,40 @@ async function main() {
     }
     const providers = providerNames.map((name) => ({ name, envKey: getProvider(name).envKey }));
 
+    // The three pinned seats. The suggest seat rotates — whichever watched
+    // lab shipped something new wins it — but implement, review and rank
+    // stay on a model the project chose and trusts, which is the whole
+    // point of pinning them (see learning/01-principles.md). Defaulting all
+    // three to claude-opus-5 matches the reference implementation; a
+    // project is free to point any of them at any registered lab's model.
+    console.log('\nThe pinned seats — the suggest seat rotates to whichever watched lab ships something new,');
+    console.log('but these three stay on a model you choose. Blank accepts the default.\n');
+    const implementModel = await ask(rl, 'Implement model — writes the actual edit when the suggester offers none', { default: 'claude-opus-5' });
+    const reviewModel = await ask(rl, 'Review model — the independent gate; fails closed', { default: 'claude-opus-5' });
+    const rankModel = await ask(rl, 'Rank model — only called when more than one lab proposed', { default: implementModel || 'claude-opus-5' });
+
+    // Resolve each pinned model back to the lab that serves it, so the
+    // generated workflow gets that lab's API-key secret even when nobody is
+    // watching it for releases. Resolution happens here, in the CLI, rather
+    // than in scaffold.mjs, so that file stays pure data-in/string-out with
+    // no dependency on the provider registry being loaded.
+    const roleProviders = [];
+    for (const [seat, model] of [['implement', implementModel], ['review', reviewModel], ['rank', rankModel]]) {
+      if (!model) continue;
+      try {
+        const name = resolveProvider(model);
+        roleProviders.push({ name, envKey: getProvider(name).envKey });
+        if (!providerNames.includes(name)) {
+          console.log(`   ℹ️  ${seat} model "${model}" is served by ${name}, which you are not watching.`);
+          console.log(`      That's fine — but the workflow will need ${getProvider(name).envKey} set as a repository secret too.`);
+        }
+      } catch {
+        console.log(`   ⚠️  Could not resolve a provider for the ${seat} model "${model}".`);
+        console.log(`      No secret will be wired for it, and the run will fail when it calls that model.`);
+        console.log(`      Known labs: ${known.join(', ')}. Fix roles.${seat}.model in project-adapter.yml before running.`);
+      }
+    }
+
     const cadenceCron = await ask(rl, 'Cadence (cron, UTC)', { default: '0 0 1 * *' });
     const runner = await ask(rl, 'CI runner (ubuntu-latest / windows-latest / macos-latest)', { default: 'ubuntu-latest' });
     const contextStrategy = await ask(rl, 'Context strategy (full-dump / scoped — "scoped" has no implementation yet, see ARCHITECTURE.md)', { default: 'full-dump' });
@@ -174,7 +208,8 @@ async function main() {
     const answers = {
       projectId, repository, defaultBranch,
       allowedPaths, createOnlyPaths: [], frozenPaths, appendOnlyPaths,
-      testCommands, providers, snapshotPath: '.agent/model-snapshot.json',
+      testCommands, providers, roleProviders, snapshotPath: '.agent/model-snapshot.json',
+      implementModel, reviewModel, rankModel,
       cadenceCron, runner, contextStrategy,
       agentBriefPath, reviewerBriefPath,
       deploymentStrategy, deploymentUrl, deploymentRegistry, deploymentArtifact,
