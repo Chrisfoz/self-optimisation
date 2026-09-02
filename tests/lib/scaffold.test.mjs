@@ -403,6 +403,31 @@ test('renderWorkflowTemplate: commits the harness\'s own record dirs, not only t
   assert.match(custom, /for d in 'history'; do/, 'one directory named twice should be added once');
 });
 
+test('renderWorkflowTemplate: records runtime evidence last, on both merge paths, and never fails the job for it', () => {
+  for (const approvalClass of ['human-approval-required', 'autonomous-merge']) {
+    const parsed = loadYaml(renderWorkflowTemplate(template, baseAnswers({ approvalClass })));
+    const steps = parsed.jobs['self-improve'].steps;
+    const evidence = steps.find((s) => s.id === 'evidence');
+    assert.ok(evidence, `${approvalClass} should record what it observed`);
+    assert.match(evidence.run, /record-runtime-evidence\.mjs/);
+    assert.equal(evidence['continue-on-error'], true);
+    // always(), because the observations arrive at different points and a
+    // run that failed is exactly the one worth having a record of.
+    assert.match(evidence.if, /always\(\)/);
+
+    // and it lands on the default branch, not the agent branch: the next run
+    // has to be able to read it whether or not this generation ever merged.
+    const commit = steps.find((s) => /^Commit the runtime evidence/.test(s.name || ''));
+    assert.match(commit.run, /git checkout main/);
+    assert.match(commit.run, /git push origin main/);
+  }
+});
+
+test('renderWorkflowTemplate: the autonomous path asks the deploy check for its observations, not just its verdict', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers({ approvalClass: 'autonomous-merge' }));
+  assert.match(out, /verify-deployment\.mjs --evidence "\$RUNNER_TEMP\/deploy-evidence\.json"/);
+});
+
 // --- the schedule, which may deliberately not be there yet -------------------
 
 test('renderWorkflowTemplate: a schedule is rendered by default, with the answered cron', () => {

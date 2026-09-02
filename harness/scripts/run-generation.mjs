@@ -34,7 +34,7 @@ import { compileAllowlist } from '../lib/edit-format.mjs';
 import { globToRegExp } from '../lib/glob.mjs';
 import {
   buildSourceBundle, buildRepoManifest, buildTestIndex, buildArchitectureNotes,
-  buildGenerationIndex, buildGenerationHistory, recommendScope,
+  buildGenerationIndex, buildGenerationHistory, buildRuntimeEvidence, recommendScope,
 } from '../lib/context-pack.mjs';
 import { loadLatestThemesReview, buildThemesBrief } from '../lib/themes.mjs';
 import { buildMetricsBrief, loadLatestMetrics } from '../lib/evaluators.mjs';
@@ -154,6 +154,9 @@ const context = {
   // back into this one. Null for a project with no evaluators configured,
   // which drops the section from the prompt entirely.
   qualityMetrics: buildMetricsBrief(loadLatestMetrics({ repoRoot, generationsDir })),
+  // What the last few runs actually SAW — not a verdict and not a score.
+  // Null for a project that has never written any, which is today's prompt.
+  runtime: buildRuntimeEvidence({ repoRoot, evidenceDir: ctxConfig.runtimeEvidenceDir || undefined }),
 };
 
 console.error(
@@ -162,7 +165,8 @@ console.error(
   `generation index ${context.generationIndex ? 'included' : 'unavailable'}, ` +
   `architecture notes ${context.architectureNotes ? 'included' : 'unavailable'}, ` +
   `themes review ${context.themes ? 'included' : 'none yet'}, ` +
-  `measured quality dimensions ${context.qualityMetrics ? 'included' : 'none configured'}\n`
+  `measured quality dimensions ${context.qualityMetrics ? 'included' : 'none configured'}, ` +
+  `runtime evidence ${context.runtime ? 'included' : 'none recorded'}\n`
 );
 
 const projectDescription = adapter.project?.description || adapter.project?.id || 'this project';

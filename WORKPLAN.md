@@ -275,9 +275,25 @@ at fixing and never gets curious" — but do respect its own gate.
   byte-identical with the new blocks absent or null — 4.5's assertion, on the
   first component it applies to.
 
-- [ ] **4.2 — C10, runtime evidence.**
+- [x] **4.2 — C10, runtime evidence.**
   Also independent and buildable today. Pure `context-pack.mjs` work, and it
   improves every proposal the harness makes, curiosity or not.
+  **Done.** Not quite pure `context-pack.mjs` work in the end: the read side
+  is (`buildRuntimeEvidence()`, the spec's interface exactly), but something
+  has to write the file, so `harness/lib/runtime-evidence.mjs` +
+  `harness/scripts/record-runtime-evidence.mjs` are the write side, and
+  `verify-deployment.mjs` gained `--evidence` so the deploy check contributes
+  what it *observed* rather than only its verdict.
+  Two rules the tests pin down, both from incidents rather than taste:
+  a composite score is dropped at the point of WRITING as well as rendering
+  (a score that never reaches the file cannot leak into a prompt through some
+  later reader that forgot the rule), and when the 2,000-character budget
+  runs out it is the totals that go, never a skipped test's name — "98
+  passed" changes no decision, "3 skipped, named X, Y, Z" might change
+  several.
+  What a project has to do itself, stated rather than assumed: tee a TAP
+  stream to `$RUNNER_TEMP/tests.tap`, or write a JSON fragment. A project
+  that does neither records less and the section shrinks; it never lies.
 
 - [ ] **4.3 — Run the A′ go/no-go experiment before building anything else here.**
   `docs/curiosity/C9-retrospective-scoring.md` §"Phase A′, the cheap version".

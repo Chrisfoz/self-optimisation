@@ -221,7 +221,8 @@ test('briefPaths, rolesConfig and contextConfig return null/empty defaults on a 
   assert.deepEqual(briefPaths(null), { agentBriefPath: null, reviewerBriefPath: null });
   assert.deepEqual(rolesConfig(null), { suggestMaxTokens: null, implementModel: null, reviewModel: null, rankModel: null, maxAttempts: null });
   assert.deepEqual(contextConfig(null), {
-    generationsDir: null, architectureNotesPath: null, architectureNotesMarker: null,
+    generationsDir: null, runtimeEvidenceDir: null,
+    architectureNotesPath: null, architectureNotesMarker: null,
     testFiles: [], purposes: {}, platformNotes: null, historyLimit: null, scopeRequired: null,
   });
 });

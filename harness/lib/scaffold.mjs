@@ -133,6 +133,7 @@ export function buildAdapterObject(a) {
     },
     context: {
       generations_dir: a.generationsDir || 'docs/generations',
+      runtime_evidence_dir: a.runtimeEvidenceDir || 'docs/runtime',
       strategy: a.contextStrategy || 'full-dump',
       test_files: a.testFiles || [],
       purposes: a.purposes || {},
@@ -300,7 +301,7 @@ function mergeSteps(answers) {
         if: steps.promote.outcome == 'success'
         shell: bash
         continue-on-error: true
-        run: node harness/scripts/verify-deployment.mjs`;
+        run: node harness/scripts/verify-deployment.mjs --evidence "$RUNNER_TEMP/deploy-evidence.json"`;
   }
 
   // `gh` is pre-installed on GitHub-hosted runners and authenticates from

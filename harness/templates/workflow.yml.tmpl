@@ -242,6 +242,55 @@ jobs:
 
       {{MERGE_STEPS}}
 
+      # What this run actually SAW, as opposed to what it decided. Written
+      # so the NEXT generation's prompt can read it: every other signal in
+      # that prompt describes what the project IS, and until this step
+      # existed nothing described what it DID. See
+      # docs/curiosity/C10-runtime-evidence.md, and the incident behind it —
+      # a defect 239 green checks had never noticed, found on the first run
+      # of something that actually looked at the running product.
+      #
+      # Runs last, and `always()`, because the observations arrive at
+      # different points: the tests early, the deployment check at the very
+      # end. It commits to {{DEFAULT_BRANCH}} rather than to the agent
+      # branch, for the same reason the model snapshot does — this is the
+      # harness's own bookkeeping, and it has to be readable by the next run
+      # whether or not this generation's pull request is ever merged.
+      #
+      # HOW YOUR TESTS CONTRIBUTE: this records a TAP stream at
+      # $RUNNER_TEMP/tests.tap if one is there. Nothing writes it for you,
+      # because your test command is yours — a project whose runner can emit
+      # TAP (`node --test --test-reporter=tap`, pytest --tap, and others)
+      # tees it there; any other project writes a JSON fragment instead and
+      # passes it with --fragment. Contributing nothing is also fine: the
+      # section shrinks rather than lying.
+      - name: Record what this run observed at runtime
+        id: evidence
+        if: always() && steps.gen.outputs.number
+        shell: bash
+        continue-on-error: true
+        env:
+          GEN_NUMBER: ${{ steps.gen.outputs.number }}
+        run: |
+          args=()
+          if [ -f "$RUNNER_TEMP/tests.tap" ]; then args+=(--tap "$RUNNER_TEMP/tests.tap" --tap-name "this project's own tests"); fi
+          if [ -f "$RUNNER_TEMP/deploy-evidence.json" ]; then args+=(--fragment "$RUNNER_TEMP/deploy-evidence.json"); fi
+          node harness/scripts/record-runtime-evidence.mjs "${args[@]}"
+
+      - name: Commit the runtime evidence
+        if: always() && steps.evidence.outputs.ran == 'true'
+        shell: bash
+        env:
+          EVIDENCE_PATH: ${{ steps.evidence.outputs.path }}
+          GEN_NUMBER: ${{ steps.gen.outputs.number }}
+        run: |
+          git config user.email "self-improvement-bot@github-actions.local"
+          git config user.name "Self-Improvement Bot"
+          git checkout {{DEFAULT_BRANCH}}
+          git add -- "$EVIDENCE_PATH"
+          git commit -m "Runtime evidence for generation $GEN_NUMBER" || echo "No evidence to commit"
+          git push origin {{DEFAULT_BRANCH}}
+
       # Gate results only exist when a generation was actually attempted.
       # The digest step below is NOT gated on that — see its own comment.
       - name: Build this run's gate results

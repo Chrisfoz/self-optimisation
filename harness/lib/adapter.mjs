@@ -264,6 +264,12 @@ export function rolesConfig(adapter) {
 export function contextConfig(adapter) {
   return {
     generationsDir: adapter?.context?.generations_dir ?? null,
+    // Where the record of what each run actually OBSERVED lives — see
+    // context-pack.mjs's buildRuntimeEvidence() and
+    // docs/curiosity/C10-runtime-evidence.md. Null means "use the default";
+    // a project that never writes any evidence simply never gets the
+    // section, which is exactly today's prompt.
+    runtimeEvidenceDir: adapter?.context?.runtime_evidence_dir ?? null,
     architectureNotesPath: adapter?.context?.architecture_notes?.path ?? null,
     architectureNotesMarker: adapter?.context?.architecture_notes?.append_only_marker ?? null,
     testFiles: adapter?.context?.test_files ?? [],

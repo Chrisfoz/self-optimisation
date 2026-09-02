@@ -9,7 +9,7 @@
  * verify-deployment.mjs's own doc comment for the incident that made this
  * worth having.
  *
- * Usage: node harness/scripts/verify-deployment.mjs [--adapter <path>] [--version <v>]
+ * Usage: node harness/scripts/verify-deployment.mjs [--adapter <path>] [--version <v>] [--evidence <path>]
  *
  * Reads deployment.verify_strategy and its strategy-specific fields from
  * project-adapter.yml (via harness/lib/adapter.mjs's deploymentConfig()). A
@@ -29,12 +29,18 @@ import fs from 'fs';
 import path from 'path';
 import { loadAdapter, deploymentConfig } from '../lib/adapter.mjs';
 import { verifyDeployment } from '../lib/verify-deployment.mjs';
+import { deployFragment } from '../lib/runtime-evidence.mjs';
 
 function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--adapter') out.adapter = argv[++i];
     else if (argv[i] === '--version') out.version = argv[++i];
+    // Where to leave a runtime-evidence fragment describing what this check
+    // actually observed — see docs/curiosity/C10-runtime-evidence.md. The
+    // verdict already goes to the exit code; this is the observation behind
+    // it, which is the part a later generation can learn something from.
+    else if (argv[i] === '--evidence') out.evidence = argv[++i];
   }
   return out;
 }
@@ -91,6 +97,17 @@ try {
     { strategy: config.strategy, repoRoot, siteUrl: config.siteUrl, watchedFiles: config.watchedFiles, registry: config.registry, artifact: config.artifact },
     { log: (msg) => console.error(msg) }
   );
+  if (args.evidence) {
+    const fragment = deployFragment(result, { url: config.siteUrl });
+    try {
+      fs.mkdirSync(path.dirname(args.evidence), { recursive: true });
+      fs.writeFileSync(args.evidence, JSON.stringify(fragment, null, 2) + '\n', 'utf8');
+    } catch (err) {
+      // Never the reason a deployment check fails: the check's own verdict
+      // is what this script is for, and a note about it is a bonus.
+      console.error(`(could not write the evidence fragment: ${err.message})`);
+    }
+  }
   process.exit(result.ok ? 0 : 1);
 } catch (err) {
   console.error(`❌ ${err.message}`);

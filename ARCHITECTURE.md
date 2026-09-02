@@ -96,6 +96,7 @@ flowchart TD
     refine["✅ Refine<br/>rejected? restore to pristine,<br/>retry up to maxAttempts"]
     memory["✅ Memory<br/>escalations.mjs + themes.mjs<br/>folded in every run;<br/>generate-themes-review.mjs writes<br/>a new review every N generations;<br/>an accepted escalation becomes a<br/>work order a later run carries out"]
     evaluators["✅ Quality dimensions<br/>evaluators.mjs + plugins/evaluators/<br/>measured, never gating"]
+    runtime["✅ Runtime evidence<br/>runtime-evidence.mjs — what the tests<br/>and the deploy check actually SAW"]
 
     adapter --> context --> propose
     propose --> router
@@ -105,6 +106,7 @@ flowchart TD
     memory -.->|"read back next run"| context
     reviewer -.-> evaluators
     evaluators -.->|"metrics.json, read back next run"| context
+    runtime -.->|"docs/runtime/gen-NNN.json,<br/>read back next run"| context
   end
 
   rungen -.->|"composes all of this"| adapter

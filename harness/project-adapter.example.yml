@@ -175,6 +175,14 @@ context:
   # directory per run.
   generations_dir: docs/generations
 
+  # Where the record of what each run actually OBSERVED goes — see
+  # harness/scripts/record-runtime-evidence.mjs and
+  # docs/curiosity/C10-runtime-evidence.md. Every other block in the
+  # suggestion prompt describes what this project IS; this is the only one
+  # that describes what it DID. Optional: a project that records none simply
+  # never gets the section.
+  runtime_evidence_dir: docs/runtime
+
   # Optional: a doc with standing context about how this project's loop is
   # built, sent to the suggestion stage in full. append_only_marker, if your
   # doc has a growing log at the bottom, truncates there rather than sending
