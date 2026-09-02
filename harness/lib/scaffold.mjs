@@ -603,6 +603,23 @@ ${approvalSection}
 
 ${cadenceSection}
 
+## Undoing a generation
+
+Every gate is a prediction; this is the correction. From a checkout with
+push access to \`${answers.defaultBranch || 'main'}\`:
+
+\`\`\`bash
+node harness/scripts/revert-generation.mjs NNN --reason "why"
+\`\`\`
+
+It reverts the merge that shipped generation NNN (the \`gen-NNN\` tag on the
+autonomous path, the pull request's merge commit on the default path),
+pushes, and records the revert in that generation's \`attempts.json\` so
+the next run reads it as a failure rather than a success. It rewrites no
+history. See \`docs/Ambition-Control.md\` in the harness repository for why
+this exists beside the ambition setting (\`context.ambition\`, currently
+\`${answers.ambition || 'earned'}\`).
+
 ## Rehearse before turning the schedule on
 
 1. Fill in the two brief files above.

@@ -538,3 +538,9 @@ test('buildAdapterObject: the ambition dial defaults to earned and is normalised
   assert.equal(buildAdapterObject(baseAnswers({ ambition: 'ambitious' })).context.ambition, 'ambitious');
   assert.equal(buildAdapterObject(baseAnswers({ ambition: 'AMBITIOUS!' })).context.ambition, 'earned');
 });
+
+test('renderReadme: tells the owner how to undo a generation, and which ambition setting they chose', () => {
+  const readme = renderReadme(baseAnswers({ ambition: 'ambitious' }));
+  assert.match(readme, /revert-generation\.mjs NNN --reason/);
+  assert.match(readme, /context\.ambition`, currently\n?`ambitious`/);
+});
