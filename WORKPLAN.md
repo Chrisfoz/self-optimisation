@@ -327,6 +327,24 @@ at fixing and never gets curious" — but do respect its own gate.
 
 ---
 
+## Proposed additions — from the 2026-09-02 review, not yet adopted
+
+[`docs/Review-SWOT-2026-09.md`](docs/Review-SWOT-2026-09.md) §6 proposes
+a Tier 0 (adoptability: licence, version, supply-chain pinning, kill
+switch), a Tier 5 (operationalisation: cost accounting, a
+different-family judge, reading the pull request's fate back, scope-aware
+ranking, seat promotion, a generated ops report, source fencing,
+rollback), and amendments to Tiers 2 and 4 — including one sequencing
+hole: **4.3 depends on the `UNKNOWN` field, which is not built**, and the
+review proposes running A′ retrospectively on carrotgame's history rather
+than waiting for a fresh project to accumulate twenty generations.
+
+Each proposed item is written in this file's *done when* style so that
+adopting one is a copy into the tier above, not a rewrite. Nothing in
+that document is a tick until it is here.
+
+---
+
 ## Housekeeping, whenever a nearby file is open
 
 - [x] Fold doc-drift fixes in as you touch things: `console/DESIGN.md` §2.1
@@ -360,7 +378,7 @@ from it.
   pluggable sender registry.
 - `harness/cli/init.mjs` + `harness/templates/workflow.yml.tmpl` chain the
   whole thing into one generated workflow (§10 step 5).
-- 302 tests, including `tests/e2e/full-loop.test.mjs` driving the real chain
+- 434 tests (as of 2026-09-02), including `tests/e2e/full-loop.test.mjs` driving the real chain
   against a real git remote and a real child-process test run.
 - Pinned implement/review/rank seats get their lab's API key wired even when
   that lab is not in `providers.watched`.
