@@ -1,0 +1,225 @@
+# Workplan
+
+**The sequenced build plan for finishing the portable harness.** Written
+2026-09-02 from the state of the repo at that date, and intended to be worked
+from top to bottom — the order is the argument, not the tiers.
+
+This file is the *plan of record*. The reasoning behind each item lives in the
+document named beside it; those documents stay authoritative for **why**, this
+one is authoritative for **what's next**. `Portable-Harness-Design.md` §10 is
+now the historical build order — steps 1–5 are done. It isn't superseded, but
+start here rather than there.
+
+**How to use it:** tick a box only when the item's *done when* line is
+actually true. Items are written so that a tick is a fact, not a judgement
+call.
+
+---
+
+## Start here
+
+**→ Tier 1.1, reconcile the merge model.** It is the only place where the
+generator this repository ships disagrees with this repository's own stated
+design, it is the prerequisite for the whole console, and it is small.
+
+---
+
+## Tier 1 — close the gaps inside what's already built
+
+Everything here is a gap in shipped, tested code. None of it is new
+architecture. All of it blocks Tier 3.
+
+- [ ] **1.1 — Reconcile the merge model: pull request by default, autonomous merge as opt-in.**
+  `harness/templates/workflow.yml.tmpl` only ever does autonomous merge — it
+  commits to the agent branch, guards, tests, merges, tags. It does not open a
+  pull request, and it bakes `schedule:` in immediately. `console/DESIGN.md`
+  §Step 7 makes the opposite call for this exact file ("defaulting a
+  non-technical user into autonomous merge is the single worst decision this
+  console could make"), plus a two-phase onboarding (§Step 9: ship with
+  `workflow_dispatch` only, rehearse once, then a second PR adds the cron).
+  `harness/lib/orchestrator.mjs`'s `recordPullRequestUrl()` and
+  `harness/scripts/record-pull-request.mjs` already exist to support the
+  PR-opening step; nothing calls them.
+  *See:* the template's own header comment, which states this gap in full.
+  *Done when:* the template renders a PR-opening path, that path is the
+  default, and `tests/lib/scaffold.test.mjs` parses both variants back with
+  `js-yaml`.
+
+- [ ] **1.2 — Make `approval_class` actually do something.**
+  It is parsed by nothing — `grep -rn "approval_class\|approvalClass" harness/ tests/`
+  returns zero hits. It is the field that 1.1's two paths should switch on, so
+  build it as part of 1.1 rather than after it.
+  *Done when:* the adapter exposes it, `scaffold.mjs` selects the merge path
+  from it, and an unrecognised value fails closed to the PR path rather than
+  to autonomous merge.
+
+- [ ] **1.3 — Decide the fate of the other RESERVED fields.**
+  `cadence` and `evaluation` are parsed and never read back out of an existing
+  `project-adapter.yml` — cadence is baked into the workflow's cron at scaffold
+  time. That may be the right answer permanently; if so, say so in the schema
+  rather than leaving them labelled RESERVED as though work were pending.
+  *See:* `harness/project-adapter.example.yml:232`, and `console/DESIGN.md`
+  §2.3 for the LIVE/RESERVED accounting.
+  *Done when:* each field is either read by something or relabelled with the
+  reason it never will be.
+
+- [ ] **1.4 — Build the themes-review CLI.**
+  `harness/lib/generate-themes.mjs` holds a prompt and a parser that no script
+  calls, and `memory.themes_review.cadence_generations` is parsed, unit-tested,
+  and read by nothing. The blocker was never the compiler — it was real
+  generation records existing, which `run-generation.mjs` now produces.
+  *See:* `harness/lib/adapter.mjs:142`, `docs/curiosity/C2-themes-review-cli.md`.
+  *Done when:* `harness/scripts/generate-themes-review.mjs` exists, follows the
+  pure-logic-in-lib / model-calls-in-scripts split, and is the prerequisite
+  Tier 4 needs it to be.
+
+---
+
+## Tier 2 — turn "portable" from a claim into a fact
+
+The largest outstanding body of work, and the one the design document is most
+insistent about. `Portable-Harness-Design.md` §8.4 is explicit: none of these
+gaps are solved by better documentation — they are missing code.
+
+- [ ] **2.1 — Rehearse on a second project, chosen to be different on purpose.**
+  `Portable-Harness-Design.md` §10 step 6. Different language, no visual
+  surface, and a file count large enough to force the `context.strategy:
+  scoped` question rather than let `full-dump` quietly keep working. This is
+  the highest-value item in the file: it decides whether 2.2 is urgent or
+  theoretical, and nothing should claim multi-language support until it has
+  happened.
+  *Done when:* `init` has been run against that repo and one generation has
+  been rehearsed end to end, with the result written up honestly — including
+  whatever broke.
+
+- [ ] **2.2 — Implement `context.strategy: scoped`.**
+  It has no implementation at all; `harness/cli/init.mjs:168` warns the user to
+  their face when they pick it. `context-pack.mjs` sends every editable file in
+  full because carrotgame's editable surface is ~7 files. §8.2 names the two
+  candidate shapes: a lightweight per-ecosystem symbol index, or a two-pass
+  pattern where stage 1 asks which files matter and only those are sent in
+  full on the real call.
+  *Depends on:* 2.1, which decides which shape is warranted.
+  *Done when:* the strategy runs on the 2.1 project and `init` stops warning
+  about it.
+
+- [ ] **2.3 — Verify Mac and Linux, and a non-`ubuntu-latest` runner.**
+  §8.3: this has only ever been exercised on Windows. Node makes portability
+  *plausible*, not *verified*. `shell: bash` is already pinned on every step,
+  which is what makes this a test rather than a rewrite.
+  *Done when:* `init` plus one rehearsed generation have run on each of the
+  three dev OSes and on at least one non-Ubuntu CI runner.
+
+- [ ] **2.4 — Reframe the evaluator plugins as a documented extension point.**
+  §8.2: "visual/wordless-play" was never the general case — it is one instance
+  of *domain-specific quality dimensions beyond pass/fail, evaluated
+  non-gating*. Ship one example plugin and document the interface (input:
+  working tree + generation record; output: a named metric, never gating
+  unless a human later promotes it). Leave Checkstyle/mypy/Roslyn as
+  documented extension points, not v1 code.
+  *Done when:* the interface is documented and one plugin implements it.
+
+---
+
+## Tier 3 — the console
+
+Phase 0 of `console/DESIGN.md` §5 is **effectively done** — the generator
+exists as pure functions with tests. The doc doesn't know it yet: it specifies
+`harness/lib/install.mjs`, and what was built is `harness/lib/scaffold.mjs` +
+`harness/cli/init.mjs`. §2.1's own title — *"the console is a front end for
+`init`, and `init` doesn't exist"* — is now false.
+
+- [ ] **3.1 — Update `console/DESIGN.md` to the code that exists.**
+  Correct §2.1, and point Phase 0 at `scaffold.mjs`/`init.mjs` by their real
+  names. Cheap, and it stops the next reader planning work that is finished.
+  *Done when:* no section of DESIGN.md describes the generator as unbuilt.
+
+- [ ] **3.2 — Build the phase-1 backend.**
+  §8.5 changed the connection to a real GitHub App, which means every
+  privileged call needs a short-lived installation token minted server-side
+  from the App's own private key — and that key must never reach the browser.
+  One function: holds one secret, mints a token, proxies the call it was asked
+  for. §5 is explicit that "almost no backend" stopped being accurate the
+  moment §8.5 was adopted.
+  *Depends on:* Tier 1 — the console must not generate a workflow whose merge
+  model contradicts its own §Step 7.
+
+- [ ] **3.3 — Build the console front end.**
+  All nine steps, sealed-box secrets, the PR, dispatch, and the run view
+  (§8.4). `console/mockup.html` is the clickable sketch to build against.
+  *Depends on:* 3.2.
+
+---
+
+## Tier 4 — curiosity
+
+Ten specs in `docs/curiosity/`, **none built**. Every one is additive to a loop
+that already runs, and renders nothing when its input is absent. Don't treat
+this tier as optional-forever work — it is the answer to "the loop gets better
+at fixing and never gets curious" — but do respect its own gate.
+
+- [ ] **4.1 — C8, escalation follow-through.**
+  Independent of everything else and buildable today. The smallest and the
+  highest value: an escalation that reaches consensus and is accepted
+  currently changes a `status` field and schedules no work. Wiring acceptance
+  to a work order produces this project's first genuine outcome label — *did
+  the thing three models agreed on actually work?*
+
+- [ ] **4.2 — C10, runtime evidence.**
+  Also independent and buildable today. Pure `context-pack.mjs` work, and it
+  improves every proposal the harness makes, curiosity or not.
+
+- [ ] **4.3 — Run the A′ go/no-go experiment before building anything else here.**
+  `docs/curiosity/C9-retrospective-scoring.md` §"Phase A′, the cheap version".
+  If the questions C2 produces are never cited by any subsequent generation,
+  the ledger is a filing cabinet for noise and **the rest of the folder should
+  not be built**. Honour this.
+  *Depends on:* 1.4 (C2 needs the themes CLI) and enough real generations to
+  score.
+
+- [ ] **4.4 — C3 → C4 → C5 → C6 → C7 → C9, in that dependency order.**
+  Only if 4.3 says yes.
+
+- [ ] **4.5 — The cold-start byte-identity test, on every component built.**
+  With no goal, no questions, no principles and no runtime evidence, the
+  assembled suggestion prompt must be **byte-identical** to the one the harness
+  produces today. It is the only assertion that proves the design is additive
+  rather than merely intended to be, and its failure mode is why it's worth the
+  effort: a stray newline is invisible in review, costs nothing measurable, and
+  silently changes the prompt every model in the rotation has been answering.
+
+---
+
+## Housekeeping, whenever a nearby file is open
+
+- [ ] Fold doc-drift fixes in as you touch things: `console/DESIGN.md` §2.1
+      (3.1 above), and any remaining place that describes `init` as unbuilt.
+- [ ] `Portable-Harness-Design.md`'s Status table and `ARCHITECTURE.md`'s prose
+      hold the same information and are kept in sync by hand. If they ever
+      disagree, trust whichever was edited more recently and fix the other.
+- [ ] Every commit is written as though the repository is already public.
+
+---
+
+## Done — do not re-litigate
+
+Recorded here so the list above can be read without wondering what's missing
+from it.
+
+- Bucket A (`learning/`) ported; `examples/carrotgame/` reconstructed as the
+  adapter-schema test case (§10 steps 2–3).
+- Bucket B genericised in dependency order: provider router, edit-format,
+  release detector, reachability probe, adapter loader, guard, escalations,
+  themes (read side), context-pack, orchestrator, independent reviewer
+  (§10 step 4).
+- The loop runs end to end — suggest → rank → implement → review → refine —
+  via `harness/scripts/run-generation.mjs`.
+- Staging and promotion, all four `deployment.verify_strategy` values
+  (`url` / `registry` / `artifact` / `none`), and the notifier with its
+  pluggable sender registry.
+- `harness/cli/init.mjs` + `harness/templates/workflow.yml.tmpl` chain the
+  whole thing into one generated workflow (§10 step 5).
+- 302 tests, including `tests/e2e/full-loop.test.mjs` driving the real chain
+  against a real git remote and a real child-process test run.
+- Pinned implement/review/rank seats get their lab's API key wired even when
+  that lab is not in `providers.watched`.
