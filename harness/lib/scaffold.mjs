@@ -94,6 +94,9 @@ export function buildAdapterObject(a) {
       id: a.projectId,
       repository: a.repository || undefined,
       default_branch: a.defaultBranch || 'main',
+      // The committed goal (docs/curiosity/C1) — present only when the
+      // owner wrote one. Frozen: the guard refuses a diff that changes it.
+      ...(a.goalStatement ? { goal: { statement: a.goalStatement, holds: a.goalHolds || [], away_from: a.goalAwayFrom || [] } } : {}),
     },
     // Provenance: which harness produced this file. Read by nothing at run
     // time; written so `init --check-upgrade` and a human can tell whether

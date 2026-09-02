@@ -172,10 +172,39 @@ ESCALATION DISSENT: <none, or the id of one you think is wrong, and why.>
 Then, optionally, the edit blocks implementing your change.`;
 
 /**
+ * The committed goal, rendered as the one thing that does not change —
+ * above the brief, labelled as such. Null drops it entirely, which is what
+ * keeps a project with no goal on the prompt it had before (the
+ * byte-identity test). See docs/curiosity/C1-committed-goal.md.
+ *
+ * Direction plus constraints, never a metric (principle 22b): the reviewer
+ * judges alignment to it in prose; nothing scores it.
+ *
+ * @param {{statement: string, holds?: string[], awayFrom?: string[]}|null} goal
+ * @returns {string|null}
+ */
+export function buildGoalSection(goal) {
+  if (!goal || !goal.statement) return null;
+  const holds = (goal.holds ?? []).map((h) => `- ${h}`).join('\n');
+  const away = (goal.awayFrom ?? []).map((a) => `- ${a}`).join('\n');
+  return [
+    `# The goal — the one thing in this prompt that does not change`,
+    ``,
+    `A person committed this project to the following, once. It is frozen: you may argue against it through the ESCALATION fields, and a person may change it; nothing else may. Every proposal is judged against it — a change that is correct, safe and tested but moves the project away from it is a rejection.`,
+    ``,
+    goal.statement,
+    ...(holds ? [``, `What must hold, in every generation:`, holds] : []),
+    ...(away ? [``, `What counts as drifting away from it:`, away] : []),
+    ``,
+  ].join('\n');
+}
+
+/**
  * Build the suggestion stage's system prompt. The project's agent brief
  * (in full) IS the prompt — this only adds the two things that vary per
  * run and are the same mechanical shape for any project: which scope this
- * generation may attempt, and the optional edit-format contract.
+ * generation may attempt, and the optional edit-format contract. A
+ * committed goal, when the project has one, goes ABOVE the brief.
  *
  * @param {object} opts
  * @param {string} opts.agentBrief  Required — the project's filled-in
@@ -186,14 +215,15 @@ Then, optionally, the edit blocks implementing your change.`;
  * @param {string} [opts.createOnlyDescription]
  * @param {number} [opts.suggestMaxTokens]
  */
-export function buildSuggestSystemPrompt({ agentBrief, scopeText, editableFiles, createOnlyDescription, suggestMaxTokens = 32000 }) {
+export function buildSuggestSystemPrompt({ agentBrief, scopeText, editableFiles, createOnlyDescription, suggestMaxTokens = 32000, goal = null }) {
   const editSpec = buildEditFormatSpec({
     createSection: createOnlyDescription
       ? { pathDescription: createOnlyDescription, examplePath: '<a new path matching that pattern>' }
       : null,
   });
 
-  return `${agentBrief}
+  const goalSection = buildGoalSection(goal);
+  return `${goalSection ? `${goalSection}\n` : ''}${agentBrief}
 
 # Scope for this generation
 
@@ -985,6 +1015,7 @@ export async function runGeneration(config, deps = {}) {
     budget = {},
     campaign = false,
     seatPromotion = null,
+    goal = null,
   } = config;
 
   const rawCall = deps.call ?? callModelWithHeadroom;
@@ -1026,6 +1057,7 @@ export async function runGeneration(config, deps = {}) {
 
   const promptConfig = {
     agentBrief,
+    goal,
     scopeText: scopeText[scope.scope] ?? scopeText.focused,
     editableFiles,
     createOnlyDescription,
@@ -1214,6 +1246,7 @@ export async function runGeneration(config, deps = {}) {
         testDescription,
         captureVisual,
         reviewModel,
+        goal,
         call: callFor('review'),
       });
 

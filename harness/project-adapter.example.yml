@@ -24,6 +24,25 @@ project:
   repository: <https://github.com/you/your-project>
   default_branch: main
 
+  # --- LIVE: the committed goal (docs/curiosity/C1-committed-goal.md).
+  # What this project is trying to BECOME, stated once by a person. Shown
+  # above the brief to every suggesting model, and the reviewer rejects a
+  # change that is correct, safe and tested but moves away from it. Frozen:
+  # harness/scripts/check-guarded-paths.mjs refuses a diff that changes it;
+  # a model may argue against it through the escalation ledger only.
+  # Direction plus constraints, never a metric — a number here would be
+  # optimised the way readingLevel was. Optional; delete the block for the
+  # goal-free behaviour. `holds` and `away_from` are optional, up to 8 each.
+  # goal:
+  #   statement: >
+  #     Become the thing a nurse reaches for when a frightened child needs
+  #     ten minutes of calm, on a shared hospital tablet, with nobody
+  #     available to help them use it.
+  #   holds:
+  #     - A child who has never seen it before can start playing without being told how.
+  #   away_from:
+  #     - Anything that rewards speed over calm.
+
 # --- LIVE: harness/scripts/check-model-releases.mjs reads this section ----
 providers:
   # Which labs to watch for new releases. Delete any you don't have a key

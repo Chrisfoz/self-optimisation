@@ -732,3 +732,39 @@ test('runGeneration: every fan-out proposal is written under gen-NNN/proposals/,
   const { buildGenerationIndex } = await import('../../harness/lib/context-pack.mjs');
   assert.equal(buildGenerationIndex({ repoRoot }).split('\n').length, 3, 'header, rule, one row');
 });
+
+// --- The committed goal (docs/curiosity/C1) -----------------------------------
+
+test('buildGoalSection renders statement, holds and away-from, and null drops it', async () => {
+  const { buildGoalSection } = await import('../../harness/lib/orchestrator.mjs');
+  assert.equal(buildGoalSection(null), null);
+  const text = buildGoalSection({ statement: 'Become calm.', holds: ['h1'], awayFrom: ['a1'] });
+  assert.match(text, /does not change/);
+  assert.match(text, /Become calm\./);
+  assert.match(text, /must hold[\s\S]*- h1/);
+  assert.match(text, /drifting away[\s\S]*- a1/);
+});
+
+test('buildSuggestSystemPrompt: with no goal is byte-identical to before; with one, the goal sits above the brief', () => {
+  const base = { agentBrief: 'THE BRIEF', scopeText: 'scope', editableFiles: ['a.js'] };
+  assert.equal(buildSuggestSystemPrompt({ ...base, goal: null }), buildSuggestSystemPrompt(base));
+  const withGoal = buildSuggestSystemPrompt({ ...base, goal: { statement: 'Become calm.', holds: [], awayFrom: [] } });
+  assert.ok(withGoal.indexOf('Become calm.') < withGoal.indexOf('THE BRIEF'));
+});
+
+test('runGeneration: the reviewer is told the goal and to reject drift; without a goal its system prompt is the brief alone', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  const systems = [];
+  const call = async ({ model, system }) => {
+    if (model === 'suggest-model') return { text: suggestionWithDirectEdits(), truncated: false, provider: 'anthropic', model, sentImages: 0 };
+    if (model === 'review-model') { systems.push(system); return { text: 'VERDICT: APPROVED\n\nREASON: fine.' }; }
+    throw new Error('unexpected call: ' + model);
+  };
+  await runGeneration(baseConfig(repoRoot, { goal: { statement: 'Become calm.', holds: ['quiet'], awayFrom: [] } }), { call });
+  assert.match(systems[0], /committed goal[\s\S]*Become calm\.[\s\S]*- quiet[\s\S]*is a REJECTION/);
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  await runGeneration(baseConfig(repoRoot, { genNumber: '002' }), { call });
+  assert.equal(systems[1], baseConfig(repoRoot).reviewerBrief);
+});

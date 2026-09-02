@@ -74,6 +74,45 @@ export async function loadAdapter(filePath = path.join(process.cwd(), 'project-a
 }
 
 /**
+ * Parse adapter YAML from a string — for callers that hold the text of a
+ * particular git ref rather than a file on disk (the guard comparing the
+ * goal before and after a change). Same lazy js-yaml import, same
+ * fail-loud-on-malformed rule as loadAdapter().
+ */
+export async function parseAdapterText(text) {
+  const { load: parseYaml } = await import('js-yaml');
+  const parsed = parseYaml(text);
+  if (parsed === null || typeof parsed !== 'object') throw new Error('adapter text did not parse to an object');
+  return parsed;
+}
+
+/**
+ * The committed goal (docs/curiosity/C1-committed-goal.md): what this
+ * project is trying to become, stated once by a human, frozen, and shown
+ * to every stage. `Usefulness` has no referent without it.
+ *
+ * Returns null when no goal is configured — everything then works exactly
+ * as before, and the byte-identity tests hold. Throws when `project.goal`
+ * is present without a `statement`: a half-specified goal silently ignored
+ * is worse than none. `holds` and `away_from` are capped at 8 entries of
+ * 300 characters each, so a goal cannot quietly become a second brief.
+ *
+ * @returns {{statement: string, holds: string[], awayFrom: string[]}|null}
+ */
+export function goalConfig(adapter) {
+  const goal = adapter?.project?.goal;
+  if (goal === undefined || goal === null) return null;
+  const statement = typeof goal === 'string' ? goal.trim() : typeof goal.statement === 'string' ? goal.statement.trim() : '';
+  if (!statement) throw new Error('project.goal is present but has no statement — write one, or remove the goal.');
+  const list = (v) => (Array.isArray(v) ? v : []).map((x) => String(x).trim()).filter(Boolean).slice(0, 8).map((x) => x.slice(0, 300));
+  return {
+    statement: statement.slice(0, 1000),
+    holds: typeof goal === 'string' ? [] : list(goal.holds),
+    awayFrom: typeof goal === 'string' ? [] : list(goal.away_from),
+  };
+}
+
+/**
  * Provider names this adapter says to watch, or null if the adapter has no
  * opinion (missing file, or no `providers.watched` section) — callers
  * should fall back to their own default (e.g. "every registered provider")

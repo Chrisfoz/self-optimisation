@@ -560,3 +560,8 @@ test('renderWorkflowTemplate: campaign mode replaces the release check when mode
   assert.match(out, /CAMPAIGN: \$\{\{ steps\.campaign\.outputs\.has-new \}\}/);
   assert.doesNotThrow(() => loadYaml(out));
 });
+
+test('buildAdapterObject: a goal is written under project.goal only when the owner gave one', () => {
+  assert.equal(buildAdapterObject(baseAnswers()).project.goal, undefined);
+  assert.deepEqual(buildAdapterObject(baseAnswers({ goalStatement: 'Become calm.' })).project.goal, { statement: 'Become calm.', holds: [], away_from: [] });
+});

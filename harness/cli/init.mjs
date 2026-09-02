@@ -129,6 +129,13 @@ async function main() {
     const repository = await ask(rl, 'Repository URL', { default: detectGitRemote() });
     const defaultBranch = await ask(rl, 'Default branch', { default: detectGitBranch() || 'main' });
 
+    // The committed goal (docs/curiosity/C1). Optional, strongly
+    // recommended, and the one thing every stage is judged against once it
+    // exists. Direction, not a metric — a number here would be gamed.
+    console.log('\nWhat is this project trying to become? One or two sentences of direction, not a metric.');
+    console.log('Optional, but every proposal and every review is judged against it once it exists.\n');
+    const goalStatement = await ask(rl, 'Goal (blank to skip)');
+
     const allowedPathsRaw = await ask(rl, 'Editable paths (comma-separated globs, e.g. index.html,src/**/*.js)');
     const allowedPaths = splitList(allowedPathsRaw);
     if (allowedPaths.length === 0) {
@@ -294,6 +301,7 @@ async function main() {
     const answers = {
       harnessVersion: harnessVersion(),
       ambition: answersAmbitionOverride ?? ambition,
+      goalStatement: goalStatement || undefined,
       projectId, repository, defaultBranch,
       allowedPaths, createOnlyPaths: [], frozenPaths, appendOnlyPaths,
       testCommands, providers, roleProviders, snapshotPath: '.agent/model-snapshot.json',

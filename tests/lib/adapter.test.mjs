@@ -427,3 +427,15 @@ test('rolesConfig: the promotion threshold is read when positive and null otherw
   assert.equal(rolesConfig({ roles: { promotion: { implement_after_self_implemented_approvals: 0 } } }).promotionThreshold, null);
   assert.equal(rolesConfig({}).promotionThreshold, null);
 });
+
+test('goalConfig: null with no goal, throws on a goal without a statement, caps the lists', async () => {
+  const { goalConfig } = await import('../../harness/lib/adapter.mjs');
+  assert.equal(goalConfig({}), null);
+  assert.equal(goalConfig(null), null);
+  assert.throws(() => goalConfig({ project: { goal: { holds: ['x'] } } }), /no statement/);
+  assert.deepEqual(goalConfig({ project: { goal: 'Be calm.' } }), { statement: 'Be calm.', holds: [], awayFrom: [] });
+  const g = goalConfig({ project: { goal: { statement: ' Become X. ', holds: Array.from({ length: 10 }, (_, i) => `h${i}`), away_from: ['a'.repeat(400)] } } });
+  assert.equal(g.statement, 'Become X.');
+  assert.equal(g.holds.length, 8);
+  assert.equal(g.awayFrom[0].length, 300);
+});

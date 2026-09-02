@@ -29,7 +29,7 @@ import fs from 'fs';
 import path from 'path';
 import '../providers/index.mjs';
 import { setOutput, oneLine } from '../lib/gh-output.mjs';
-import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig, snapshotPath as adapterSnapshotPath } from '../lib/adapter.mjs';
+import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig, goalConfig, snapshotPath as adapterSnapshotPath } from '../lib/adapter.mjs';
 import { getProvider } from '../lib/llm-provider.mjs';
 import { pickCrossFamilyRanker, describeSeats, promotionCandidate } from '../lib/seats.mjs';
 import { loadRecords } from '../lib/report.mjs';
@@ -96,6 +96,9 @@ const briefs = briefPaths(adapter);
 const roles = rolesConfig(adapter);
 const ctxConfig = contextConfig(adapter);
 const budget = budgetConfig(adapter);
+// Throws on a goal with no statement — a half-specified goal silently
+// ignored is worse than none (docs/curiosity/C1).
+const goal = goalConfig(adapter);
 
 if (editableFiles.length === 0) {
   console.error('project-adapter.yml has no constitution.allowed_paths — nothing for the agent to edit.');
@@ -231,7 +234,8 @@ console.error(
   `architecture notes ${context.architectureNotes ? 'included' : 'unavailable'}, ` +
   `themes review ${context.themes ? 'included' : 'none yet'}, ` +
   `measured quality dimensions ${context.qualityMetrics ? 'included' : 'none configured'}, ` +
-  `runtime evidence ${context.runtime ? 'included' : 'none recorded'}\n`
+  `runtime evidence ${context.runtime ? 'included' : 'none recorded'}, ` +
+  `committed goal ${goal ? 'set' : 'none'}\n`
 );
 
 const projectDescription = adapter.project?.description || adapter.project?.id || 'this project';
@@ -266,6 +270,7 @@ try {
       budget,
       campaign,
       seatPromotion,
+      goal,
     },
     { log: (msg) => console.error(msg) }
   );

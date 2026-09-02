@@ -24,7 +24,8 @@
 
 import path from 'path';
 import { checkGuardedPaths } from '../lib/guard.mjs';
-import { loadAdapter, guardConfig } from '../lib/adapter.mjs';
+import { execFileSync } from 'child_process';
+import { loadAdapter, guardConfig, goalConfig, parseAdapterText } from '../lib/adapter.mjs';
 import { globToRegExp } from '../lib/glob.mjs';
 
 function parseArgs(argv) {
@@ -58,6 +59,30 @@ const result = checkGuardedPaths({
   maxFiles,
   maxLines,
 });
+
+// The committed goal (docs/curiosity/C1) is frozen in the constitution
+// the same way frozen_paths are: a model may argue with it through the
+// escalation ledger and may never edit it. The adapter is YAML, which
+// guard.mjs's frozen_fields (JSON) cannot read, so the comparison lives
+// here: parse project.goal at the base ref and at HEAD, and refuse a
+// difference. Checked only when the adapter file is in the diff.
+const adapterRelative = path.relative(process.cwd(), adapterPath).split(path.sep).join('/');
+try {
+  const changed = execFileSync('git', ['diff', '--name-only', `${baseRef}...HEAD`, '--', adapterRelative], { encoding: 'utf8' }).trim();
+  if (changed) {
+    const show = (ref) => { try { return execFileSync('git', ['show', `${ref}:${adapterRelative}`], { encoding: 'utf8' }); } catch { return null; } };
+    const [beforeText, afterText] = [show(baseRef), show('HEAD')];
+    const goalOf = async (text) => { try { return text === null ? null : goalConfig(await parseAdapterText(text)); } catch { return { unparseable: true }; } };
+    const before = JSON.stringify(await goalOf(beforeText));
+    const after = JSON.stringify(await goalOf(afterText));
+    if (before !== after) {
+      result.violations.push(`${adapterRelative}: project.goal is frozen — a model may argue against it through the escalation ledger, never edit it`);
+      result.pass = false;
+    }
+  }
+} catch (err) {
+  console.error(`⚠️  Could not compare project.goal across refs: ${err.message}`);
+}
 
 console.log(`Guarded-path check against ${baseRef}`);
 console.log(`  ${result.filesChanged} file(s) changed, ${result.linesChanged} line(s)\n`);

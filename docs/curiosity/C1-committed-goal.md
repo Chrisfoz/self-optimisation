@@ -1,6 +1,14 @@
 # C1 — The committed goal
 
-**Status:** PROPOSED · **Phase:** −1 · **Depends on:** nothing · **Blocks:** C4, C5, C9
+**Status:** BUILT (2026-09-02) · **Phase:** −1 · **Depends on:** nothing · **Blocks:** C4, C5, C9
+
+Built as specified, with two departures: the guard check lives in
+`harness/scripts/check-guarded-paths.mjs` rather than `guard.mjs`, because
+the adapter is YAML and `guard.mjs`'s `frozen_fields` compares JSON — the
+script parses `project.goal` at both refs via `adapter.mjs`'s
+`parseAdapterText()` and refuses a difference; and `init` asks for the
+statement only (`holds` / `away_from` are added by hand). The open
+question below is decided.
 **Drawn in:** [D1](../../learning/diagrams/proposed-curiosity-run.mmd), node `cons`
 
 ---
@@ -129,6 +137,11 @@ about something that does. This decides whether the reviewer asks *"is this
 good?"* or *"does this move us toward the stated goal?"*, and it decides
 whether C8's work orders are gated on goal-alignment or only on consensus.
 
-The recommendation is **the goal wins and consensus becomes evidence rather
-than authority** — but it should be decided deliberately here, not
-discovered the first time they conflict.
+**Decided (2026-09-02): the goal wins, and consensus is evidence rather
+than authority.** The reviewer asks "does this move us toward the stated
+goal?" and rejects a correct, safe, tested change that does not — that is
+what `review.mjs`'s goal clause says in as many words. C8's work orders are
+not gated on goal-alignment at queueing time (a human accepting an
+escalation is the human's judgement), but the generation that carries one
+is still reviewed against the goal like any other, so an accepted
+escalation that drifts is rejected at the gate rather than at the queue.
