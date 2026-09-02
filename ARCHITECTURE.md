@@ -40,13 +40,13 @@ flowchart TD
   scaffoldReal ==>|"writes"| adapter["project-adapter.yml +<br/>.github/workflows/self-improve.yml"]
 
   subgraph harnessloop["BUILT · the harness loop — detailed below"]
-    adapter --> loop["suggest -> implement -> review -> refine<br/>-> guard -> test -> promote -> verify -> notify"]
+    adapter --> loop["suggest -> implement -> review -> refine<br/>-> themes -> guard -> test -> notify"]
   end
 
   loop -->|"constitution.approval_class:<br/>human-approval-required (DEFAULT)"| pr["open a pull request —<br/>gh pr create, then<br/>recordPullRequestUrl()"]
-  loop -->|"approval_class:<br/>autonomous-merge (opt-in)"| merge["autonomous merge<br/>promote.mjs"]
+  loop -->|"approval_class:<br/>autonomous-merge (opt-in)"| merge["autonomous merge<br/>promote.mjs, then verify"]
 
-  loop -.->|"every proposal's<br/>OPEN QUESTION field"| curiosity["PROPOSED · docs/curiosity/<br/>ledger, themes review, spikes —<br/>attaches onto escalations.mjs,<br/>themes.mjs, context-pack.mjs"]
+  loop -.->|"every proposal's<br/>OPEN QUESTION field"| curiosity["PROPOSED · docs/curiosity/<br/>curiosity ledger, open questions, spikes —<br/>attaches onto escalations.mjs,<br/>themes.mjs, context-pack.mjs"]
   curiosity -.->|"read back<br/>next run, once built"| loop
   style curiosity fill:#F3E3D4,stroke:#9FB0BE,stroke-dasharray: 5 5
 ```
@@ -94,7 +94,7 @@ flowchart TD
     executor["✅ Implement<br/>edit-format.mjs — targeted edits,<br/>all-or-nothing"]
     reviewer["✅ Review<br/>review.mjs — fresh context,<br/>fails closed"]
     refine["✅ Refine<br/>rejected? restore to pristine,<br/>retry up to maxAttempts"]
-    memory["✅ Memory<br/>escalations.mjs + themes.mjs<br/>folded in every run"]
+    memory["✅ Memory<br/>escalations.mjs + themes.mjs<br/>folded in every run;<br/>generate-themes-review.mjs writes<br/>a new review every N generations"]
 
     adapter --> context --> propose
     propose --> router
@@ -154,7 +154,7 @@ plain-language digest with a reliable terse fallback, delivery behind a
 `registerSender()` registry so SendGrid is one registered sender, not a
 hardcoded dependency. What used to be "each piece real but nothing chains
 them" is now chained: `harness/templates/workflow.yml.tmpl` renders detect
--> probe -> preflight -> improve -> guard -> test -> promote -> verify ->
+-> probe -> preflight -> improve -> themes -> guard -> test -> promote -> verify ->
 notify as one sequential-steps GitHub Actions job (Actions can't loop or
 dynamically branch jobs — see the reference-implementation diagram below
 for what that constrains), and `harness/cli/init.mjs` asks the

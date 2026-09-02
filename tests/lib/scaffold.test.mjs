@@ -356,6 +356,41 @@ test('renderWorkflowTemplate: the PR body and title only ever read model text fr
   assert.doesNotMatch(pr.run, /\$\{\{/);
 });
 
+// --- the themes review, and the records that make it possible ----------------
+
+test('renderWorkflowTemplate: runs the themes-review CLI every generation, letting it decide the cadence', () => {
+  // Every merge path gets it: it runs before the commit, which is upstream
+  // of where the two paths diverge.
+  for (const approvalClass of ['human-approval-required', 'autonomous-merge']) {
+    const parsed = loadYaml(renderWorkflowTemplate(template, baseAnswers({ approvalClass })));
+    const step = parsed.jobs['self-improve'].steps.find((s) => s.id === 'themes');
+    assert.ok(step, `${approvalClass} should still run the themes review`);
+    assert.match(step.run, /generate-themes-review\.mjs/);
+    assert.equal(step['continue-on-error'], true, 'a missed review must not roll back the generation');
+    assert.ok(step.env.ANTHROPIC_API_KEY, 'it calls a model, so it needs the provider secrets');
+  }
+});
+
+test('renderWorkflowTemplate: the themes step runs before the commit, so the review rides the same commit', () => {
+  const parsed = loadYaml(renderWorkflowTemplate(template, baseAnswers()));
+  const steps = parsed.jobs['self-improve'].steps;
+  const themes = steps.findIndex((s) => s.id === 'themes');
+  const commit = steps.findIndex((s) => /^Commit and push the agent branch/.test(s.name || ''));
+  assert.ok(themes >= 0 && commit >= 0);
+  assert.ok(themes < commit, 'a review written after the commit would never be committed');
+});
+
+test('renderWorkflowTemplate: commits the harness\'s own record dirs, not only the agent\'s editable paths', () => {
+  // The bug this closes: docs/generations is not the agent's editable
+  // surface, so a project that (rightly) keeps it out of allowed_paths never
+  // committed its own history — and every future run read an empty one.
+  const out = renderWorkflowTemplate(template, baseAnswers());
+  assert.match(out, /for d in 'docs\/generations' 'docs\/themes'; do/);
+
+  const custom = renderWorkflowTemplate(template, baseAnswers({ generationsDir: 'history', themesDir: 'history' }));
+  assert.match(custom, /for d in 'history'; do/, 'one directory named twice should be added once');
+});
+
 // --- the schedule, which may deliberately not be there yet -------------------
 
 test('renderWorkflowTemplate: a schedule is rendered by default, with the answered cron', () => {

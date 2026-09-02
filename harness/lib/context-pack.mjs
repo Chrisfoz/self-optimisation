@@ -168,6 +168,21 @@ function generationDirs(repoRoot, generationsDir) {
 }
 
 /**
+ * The generation numbers on record, oldest first, as the padded strings
+ * their directory names carry (`['001', '002', ...]`).
+ *
+ * Exported because more than one caller now needs "which generations exist"
+ * without needing their contents — `generate-themes-review.mjs` uses it to
+ * default GEN_NUMBER to the newest one and to size its window honestly. The
+ * sort is lexicographic on the directory name, which is correct precisely
+ * because the padding is consistent; see generate-themes.mjs's
+ * padGeneration() for the same constraint stated where it can be violated.
+ */
+export function generationNumbers({ repoRoot = process.cwd(), generationsDir = DEFAULT_GENERATIONS_DIR } = {}) {
+  return generationDirs(repoRoot, generationsDir).map((d) => d.slice('gen-'.length));
+}
+
+/**
  * A one-line-per-generation index covering every generation on record —
  * not just the recent window buildGenerationHistory() below sends in full.
  *

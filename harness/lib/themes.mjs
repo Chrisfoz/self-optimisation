@@ -66,6 +66,31 @@ export function loadLatestThemesReview({ repoRoot = process.cwd(), themesDir = D
 }
 
 /**
+ * Which generations already have a themes review on disk, as the padded
+ * numbers in their filenames.
+ *
+ * Read from the filenames rather than by opening each file: the filename is
+ * what `loadLatestThemesReview()` sorts on, so it is the thing that must be
+ * unique, and a review whose `throughGeneration` disagreed with its own
+ * filename would be a different bug from the one this guards against.
+ *
+ * Returns `[]` for a directory that doesn't exist yet — the normal state of
+ * a project that has never reached a cadence boundary.
+ */
+export function reviewedGenerations({ repoRoot = process.cwd(), themesDir = DEFAULT_THEMES_DIR } = {}) {
+  let files;
+  try {
+    files = fs.readdirSync(path.join(repoRoot, themesDir));
+  } catch {
+    return [];
+  }
+  return files
+    .map((f) => f.match(/^review-(\d+)\.json$/)?.[1])
+    .filter(Boolean)
+    .sort();
+}
+
+/**
  * Format a review for the suggestion-stage prompt. Returns null to drop the
  * section entirely when there is nothing to show yet.
  */

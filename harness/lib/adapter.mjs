@@ -193,11 +193,11 @@ export function approvalClass(adapter) {
 /**
  * Memory config — where the escalation ledger and themes reviews live, and
  * the consensus bar. Consumed by harness/lib/orchestrator.mjs's
- * runGeneration() (the ledger path and consensus bar) and, for the read
- * side, harness/lib/themes.mjs's loadLatestThemesReview() (themesDir).
- * Nothing yet triggers a themes review AT a cadence boundary — that's
- * still `generate-themes-review.mjs`'s unbuilt CLI (see
- * Portable-Harness-Design.md's Bucket B table for why).
+ * runGeneration() (the ledger path and consensus bar), by
+ * harness/lib/themes.mjs's loadLatestThemesReview() on the read side
+ * (themesDir), and by harness/scripts/generate-themes-review.mjs on the
+ * write side — which is what finally reads `themesCadence`, previously
+ * parsed here, unit-tested, and used by nothing.
  */
 export function memoryConfig(adapter) {
   return {

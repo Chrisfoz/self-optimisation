@@ -9,8 +9,8 @@
 # "reference implementation, concretely" diagram, which names this
 # explicitly), and passing state between jobs would mean serialising it
 # through artifacts for no real benefit here. Every gate still runs, in the
-# same order: detect -> probe -> preflight -> improve -> guard -> test ->
-# promote -> verify -> notify. A gate that fails does not fail the whole job
+# same order: detect -> probe -> preflight -> improve -> themes -> guard ->
+# test -> promote (or open a pull request) -> verify -> notify. A gate that fails does not fail the whole job
 # (`continue-on-error: true`) — it fails CLOSED further down instead, via the
 # `if:` on the step that depends on it, so the digest step still runs and
 # reports exactly what happened either way.
@@ -161,6 +161,32 @@ jobs:
           SCOPE: ${{ github.event.inputs.scope }}
         run: node harness/scripts/run-generation.mjs
 
+      # Every {{THEMES_CADENCE}} generations, one model reads the same
+      # history window every suggesting model reads and is asked what
+      # principle explains it — abstraction rather than association. The
+      # script decides for itself whether this run is a cadence boundary
+      # and exits 0 saying so when it isn't, which is why it can run every
+      # generation instead of needing a second schedule kept in sync with
+      # this one. continue-on-error because a missed review is a missed
+      # review: the generation itself already succeeded, and this must not
+      # roll it back.
+      #
+      # It runs here, before the commit below, so the review rides the same
+      # commit as the generation it reviews. The consequence, stated rather
+      # than discovered: a cadence boundary reached on a run that shipped
+      # nothing has no commit to ride, and that boundary is skipped — the
+      # next one picks it up, or `FORCE_REVIEW=true` via workflow_dispatch
+      # does it by hand.
+      - name: Themes review, if this generation is a cadence boundary
+        id: themes
+        if: steps.improve.outputs.has-changes == 'true'
+        shell: bash
+        continue-on-error: true
+        env:
+{{PROVIDER_ENV_LINES}}
+          GEN_NUMBER: ${{ steps.gen.outputs.number }}
+        run: node harness/scripts/generate-themes-review.mjs
+
       - name: Commit and push the agent branch, if it has changes
         if: steps.improve.outputs.has-changes == 'true'
         shell: bash
@@ -170,6 +196,16 @@ jobs:
           SUMMARY: ${{ steps.improve.outputs.summary }}
         run: |
           git add -A -- {{ALLOWED_PATHS_GIT_ADD}}
+          # The harness's own record of this run: the generation record
+          # run-generation.mjs writes, and the themes review the step above
+          # writes at a cadence boundary. Added explicitly rather than left
+          # to allowed_paths, because they are not the agent's editable
+          # surface — a project that (rightly) refuses to let the agent
+          # rewrite its own history would otherwise never commit that
+          # history at all, and every future run would read an empty one.
+          for d in {{RECORD_DIRS_GIT_ADD}}; do
+            if [ -d "$d" ]; then git add -A -- "$d"; fi
+          done
           git commit -m "Generation $GEN_NUMBER: $SUMMARY"
           git push origin "$BRANCH"
 

@@ -145,6 +145,14 @@ memory:
   escalation_consensus:
     models: 3
     labs: 2
+  # Every N generations, one model reads the same history window every
+  # suggesting model reads and is asked what principle explains it —
+  # abstraction rather than association. Written by
+  # harness/scripts/generate-themes-review.mjs, read back into every
+  # subsequent suggestion prompt by harness/lib/themes.mjs. The script
+  # decides for itself whether a run is a cadence boundary, so the generated
+  # workflow runs it every generation rather than keeping a second schedule
+  # in sync with the first.
   themes_review:
     dir: docs/themes
     cadence_generations: 10

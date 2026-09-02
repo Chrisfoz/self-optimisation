@@ -30,7 +30,7 @@ happened.
 Everything here is a gap in shipped, tested code. None of it is new
 architecture. All of it blocks Tier 3.
 
-**1.1–1.3 are done** (2026-09-02). 1.4 is the one left.
+**Tier 1 is done** (2026-09-02).
 
 - [x] **1.1 — Reconcile the merge model: pull request by default, autonomous merge as opt-in.**
   `harness/templates/workflow.yml.tmpl` only ever does autonomous merge — it
@@ -99,7 +99,7 @@ architecture. All of it blocks Tier 3.
   rehearsal. `cadence.trigger` is documentation of intent with no mechanism
   behind it, and is described as such.
 
-- [ ] **1.4 — Build the themes-review CLI.**
+- [x] **1.4 — Build the themes-review CLI.**
   `harness/lib/generate-themes.mjs` holds a prompt and a parser that no script
   calls, and `memory.themes_review.cadence_generations` is parsed, unit-tested,
   and read by nothing. The blocker was never the compiler — it was real
@@ -108,6 +108,24 @@ architecture. All of it blocks Tier 3.
   *Done when:* `harness/scripts/generate-themes-review.mjs` exists, follows the
   pure-logic-in-lib / model-calls-in-scripts split, and is the prerequisite
   Tier 4 needs it to be.
+  **Done.** The cadence decision (`isThemesReviewDue()`), the filename
+  padding (`padGeneration()` — `loadLatestThemesReview()` sorts filenames
+  lexicographically, so `review-9.json` would have silently pinned a project
+  to a stale review forever), the prompts and the output object are all pure
+  and in `generate-themes.mjs`; the script owns the adapter, the filesystem,
+  the API call and the exit code. Every failure path writes nothing and exits
+  non-zero: a themes review becomes permanent standing context for every
+  future generation, so a bad one is worse than none. "Not due" exits 0,
+  because this runs after every generation and would otherwise train everyone
+  to ignore a failing step. 7 of the new tests drive the CLI as a real child
+  process, including the whole path up to the API boundary.
+  Two things found while wiring it, both fixed here: the generated workflow
+  committed only `constitution.allowed_paths`, so a project that (rightly)
+  kept `docs/generations` out of the agent's editable surface never committed
+  its own history and every future run read an empty one; and
+  `buildThemesSystemPrompt()` hardcoded "ten generations", which would have
+  told a project on a cadence of 5, or a first review with 3 records, to
+  compare ten things it did not have.
 
 ---
 
@@ -218,8 +236,11 @@ at fixing and never gets curious" — but do respect its own gate.
   If the questions C2 produces are never cited by any subsequent generation,
   the ledger is a filing cabinet for noise and **the rest of the folder should
   not be built**. Honour this.
-  *Depends on:* 1.4 (C2 needs the themes CLI) and enough real generations to
-  score.
+  *Depends on:* 1.4 (C2 needs the themes CLI — **done**; C2's phase A, the
+  `UNKNOWN` field, is part of this tier and stays behind this gate) and enough
+  real generations to score. The second dependency is the binding one now: no
+  amount of harness code substitutes for a project that has actually run
+  twenty-odd generations, which is 2.1's business.
 
 - [ ] **4.4 — C3 → C4 → C5 → C6 → C7 → C9, in that dependency order.**
   Only if 4.3 says yes.

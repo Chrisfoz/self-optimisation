@@ -374,6 +374,14 @@ export function renderWorkflowTemplate(template, answers) {
   );
   const testCommandLines = indentBlock((answers.testCommands || []).join('\n'), 10);
   const allowedPathsGitAdd = (answers.allowedPaths || []).map(shellQuote).join(' ');
+  // The harness's own records, committed alongside whatever the agent
+  // changed. Deduped because a project is free to point both at the same
+  // place, and `git add` twice over one directory is harmless but reads
+  // like a mistake.
+  const recordDirsGitAdd = [...new Set([
+    answers.generationsDir || 'docs/generations',
+    answers.themesDir || 'docs/themes',
+  ])].map(shellQuote).join(' ');
 
   // The template places {{NOTIFY_STEPS}} after a literal 6-space prefix on
   // its own line, so this block's FIRST line must have no leading spaces
@@ -450,6 +458,8 @@ export function renderWorkflowTemplate(template, answers) {
   out = sub(out, '{{SNAPSHOT_PATH}}', answers.snapshotPath || '.agent/model-snapshot.json');
   out = sub(out, '{{TEST_COMMAND_LINES}}', testCommandLines);
   out = sub(out, '{{ALLOWED_PATHS_GIT_ADD}}', allowedPathsGitAdd);
+  out = sub(out, '{{RECORD_DIRS_GIT_ADD}}', recordDirsGitAdd);
+  out = sub(out, '{{THEMES_CADENCE}}', String(Number.isFinite(answers.themesCadence) ? answers.themesCadence : 10));
   out = sub(out, '{{DEFAULT_BRANCH}}', answers.defaultBranch || 'main');
   // Same first-line-unindented convention as {{NOTIFY_STEPS}} below: the
   // template supplies the 6 spaces before the token, so this block's own
