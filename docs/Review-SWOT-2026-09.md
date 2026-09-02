@@ -7,10 +7,10 @@ than a research harness. Every claim about the code below was checked
 against the code, with the file and line named, in the same spirit as
 `Portable-Harness-Design.md` and `console/DESIGN.md`.
 
-**Status of this document:** a review. Nothing in it is adopted until it
-is moved into `WORKPLAN.md` as a ticked-or-unticked item. The "Proposed
-additions" section at the end is written in the workplan's own *done
-when* style so that moving an item across is a copy, not a rewrite.
+**Status of this document:** a review, now adopted. Its §6 was moved into
+`WORKPLAN.md` as Tier 0, Tier 5 and amendments to Tiers 2 and 4 on
+2026-09-02, and most of it shipped the same day; `WORKPLAN.md` is the plan
+of record for what is ticked. This document stays as the argument.
 
 ---
 

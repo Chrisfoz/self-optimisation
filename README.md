@@ -368,6 +368,15 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Staging & promotion — merge + tag (`harness/lib/promote.mjs`), deploy verification (`harness/lib/verify-deployment.mjs`) | ✅ Built, tested — all four `verify_strategy` values: `url` (poll + compare), `registry` (npm/PyPI/NuGet/Maven Central), `artifact` (build/path/smoke-run), `none`. Chained automatically by the generated workflow (`harness/templates/workflow.yml.tmpl`). |
 | Notifier — plain-language digest with a reliable fallback (`harness/lib/notify.mjs`, `harness/scripts/send-digest.mjs`, `send-escalation-notice.mjs`) | ✅ Built, tested — sender is pluggable (`registerSender()`; SendGrid ships built in, Slack/webhook/another email API are added by registering one under its own name), calibration examples are optional project config, not hardcoded. Chained automatically by the generated workflow. |
 | `init` CLI scaffolder (`harness/cli/init.mjs`) | ✅ Built — asks the Portable-Harness-Design.md §6 questions and writes `project-adapter.yml`, the generated workflow, brief-template copies, and an install README for a new project |
+| Cost accounting + budget cap (`harness/lib/spend.mjs`, `budget.max_generation_tokens`) | ✅ Built, tested — every `attempts.json` carries `spend`; a generation projected over the cap is refused before the fan-out, and the refine loop stops when the running total passes it. Tokens, not money |
+| Pull-request read-back (`harness/lib/pull-requests.mjs`, `harness/scripts/sync-pull-request-outcomes.mjs`) | ✅ Built, tested — merged / open / closed written into the record at the top of every cycle; a closed pull request breaks the clean streak and reaches the next prompt as CLOSED UNMERGED |
+| Rollback (`harness/lib/rollback.mjs`, `harness/scripts/revert-generation.mjs`) | ✅ Built, tested against a real remote on both merge paths — reverts the shipped merge, records `reverted`, the next run reads it as a failure |
+| The ambition dial (`context.ambition`, [`docs/Ambition-Control.md`](docs/Ambition-Control.md)) and scope-aware ranking | ✅ Built, tested — `focused` / `earned` (default) / `ambitious`, read at run time, per-run override from the Actions tab; the ranking rubric follows the scope; a lone ambitious failure no longer resets the streak |
+| Seats (`harness/lib/seats.mjs`) — cross-family ranker, seat promotion | ✅ Built, tested — the rank seat defaults to another lab's model from the snapshot; a rotating model whose own edits keep being approved and kept can earn the implement seat (`roles.promotion`, off by default); the review seat is never auto-assigned |
+| Operational report (`harness/lib/report.mjs` → `<generationsDir>/REPORT.md`) | ✅ Built, tested — the paper's §7 metrics from the records, regenerated every cycle, never hand-edited |
+| Campaign mode (`harness/lib/campaign.mjs`, the workflow's `models` input) | ✅ Built, tested — a generation now, on models named by hand, recorded as `campaign: true` |
+| The committed goal (`project.goal`, [`docs/curiosity/C1`](docs/curiosity/C1-committed-goal.md)) and the themes review's `UNKNOWN` field ([`C2`](docs/curiosity/C2-themes-review-cli.md) phase A) | ✅ Built, tested — the goal sits above the brief, the reviewer rejects drift from it, the guard refuses a diff that edits it; a review may name open questions, rendered as their own section and dropped when none |
+| Kill switch, version stamp, pinned supply chain | ✅ Built, tested — `SELF_IMPROVE_PAUSED` repository variable; `harness/VERSION` in every adapter and record; actions by SHA, `js-yaml` exact with scripts disabled |
 | `templates/` — generated workflow (`harness/templates/workflow.yml.tmpl`), agent brief, reviewer brief | ✅ Built, tested (`tests/lib/scaffold.test.mjs` parses every strategy combination's generated YAML back to confirm it's valid); guard config has no separate template — it's `constitution.*` in `project-adapter.yml` itself |
 
 `Portable-Harness-Design.md` §10 has the full build order and reasoning for
@@ -409,15 +418,16 @@ status marks below don't read as contradictions:
    refine → guard → test → promote → verify → notify loop end to end — see
    "What's actually built here, today" in [`ARCHITECTURE.md`](ARCHITECTURE.md).
    This is the only one of the three stages that runs unattended today.
-3. **Learn** (🚧 proposed): `docs/curiosity/` designs a second, slower pass
-   over the same run history — harvesting open questions from every
+3. **Learn** (🚧 partly built): `docs/curiosity/` designs a second, slower
+   pass over the same run history — harvesting open questions from every
    proposal, promoting the corroborated ones into a themes review, and
    occasionally spending a whole generation on a sourced document instead of
-   a diff. None of it is built; every component is designed to attach onto a
-   specific file the loop already writes (`escalations.mjs`, `themes.mjs`,
-   `context-pack.mjs`) rather than requiring a new one, so a repository with
-   no run history yet is unaffected — see "Cold start" in
-   [`docs/curiosity/README.md`](docs/curiosity/README.md#cold-start-the-first-runs-must-work-with-none-of-this).
+   a diff. Four of its ten components are built (C1 the goal, C2's `UNKNOWN`
+   field, C8 escalation follow-through, C10 runtime evidence); the rest wait
+   on the A′ go/no-go (`WORKPLAN.md` 4.3a). Every component attaches onto a
+   file the loop already writes and renders nothing when its input is
+   absent, so a repository with no run history yet is unaffected — see "Cold
+   start" in [`docs/curiosity/README.md`](docs/curiosity/README.md#cold-start-the-first-runs-must-work-with-none-of-this).
 
 **The seam between stage 1 and stage 2, now closed:** the generated workflow
 used to always auto-merge an approved change (`harness/lib/promote.mjs`),
