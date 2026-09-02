@@ -163,6 +163,17 @@ gaps are solved by better documentation — they are missing code.
   which is what makes this a test rather than a rewrite.
   *Done when:* `init` plus one rehearsed generation have run on each of the
   three dev OSes and on at least one non-Ubuntu CI runner.
+  **Partly done, and deliberately not ticked.** Linux is now a real second
+  data point: the whole suite (including the e2e test, which drives the real
+  chain against a real git remote and a real child-process test run) passes
+  there, and `init` has been run against a fresh git repo end to end
+  producing valid YAML. The LLM calls were NOT made — no lab API key in that
+  environment — and neither macOS nor a non-`ubuntu-latest` runner has been
+  touched. §8.3's first bullet asked for an actual audit of the control code
+  rather than an assumption; that audit is done and written up there, with
+  one real finding fixed (two scripts built the path they *record* with
+  `path.join()`, so a Windows developer and CI would have written different
+  strings for the same file, silently).
 
 - [x] **2.4 — Reframe the evaluator plugins as a documented extension point.**
   §8.2: "visual/wordless-play" was never the general case — it is one instance

@@ -174,7 +174,9 @@ const review = buildThemesReview({
   themes: parsed.themes,
 });
 
-const relative = path.join(themesDir, themesReviewFilename(throughGeneration));
+// Forward slashes for the recorded/reported path, path.join() for the
+// filesystem — see run-evaluators.mjs for the same note in full.
+const relative = `${themesDir}/${themesReviewFilename(throughGeneration)}`;
 fs.mkdirSync(path.join(repoRoot, themesDir), { recursive: true });
 fs.writeFileSync(path.join(repoRoot, relative), JSON.stringify(review, null, 2) + '\n', 'utf8');
 

@@ -390,6 +390,28 @@ from what still needs real work, rather than letting the plugin language in
   injection concern already flagged for the workflow YAML's `${{ }}`
   interpolation applies to any shell string built from model- or
   user-supplied text, on any OS.
+
+  **The audit has now been done** (2026-09-02), on Linux, and the code came
+  back clean on the three things it asked about, with one real finding:
+
+  - No hardcoded `/tmp` anywhere; tests use `os.tmpdir()`. Filesystem access
+    goes through `path.join`/`path.resolve` in every module that touches
+    disk — no path is built by string concatenation.
+  - Every child process is `execFileSync('git', [...])` with an argv array,
+    so nothing model-supplied is ever parsed by a shell. The one exception is
+    `verify-deployment.mjs`'s `build_command`/`smoke_command`, which are
+    `execSync` of a string — but that string is the project's own adapter
+    config, written by the human who installed the harness, and running it as
+    a shell command is the entire point of the field. No model output reaches
+    it.
+  - **Found and fixed:** two scripts built the path they *record* with
+    `path.join()`. A repo-relative path in a record is a git path, and
+    `docs\generations\gen-001\metrics.json` written by a Windows developer
+    is a different string from the one CI writes for the same file, silently.
+    Recorded and reported paths now use forward slashes everywhere, matching
+    the convention `orchestrator.mjs` already followed; `path.join()` stays
+    for the actual filesystem call, where the separator genuinely has to be
+    the platform's.
 - **The generated workflow YAML should pin `shell: bash` on every step.**
   GitHub-hosted `windows-latest` and `macos-latest` runners both ship Git
   Bash, so the existing heredoc/`jq`/`sed` patterns keep working across all
@@ -409,12 +431,18 @@ from what still needs real work, rather than letting the plugin language in
   shelling out to `jq` — Node already has this for free, and it removes a
   dependency the local path would otherwise silently assume is on the
   developer's PATH.
-- **This has only been exercised on Windows so far** (this document's own
-  authoring environment). Node cross-platform support makes portability
-  *plausible*, not *verified* — treat "works on Mac and Linux too" as
-  unconfirmed until `init` and one rehearsed generation have actually been
-  run on each, not as a property that follows automatically from using
-  Node.js.
+- **Windows and Linux exercised; Mac not yet, and no non-Ubuntu CI runner
+  yet.** This document was authored on Windows. As of 2026-09-02 the whole
+  test suite — including `tests/e2e/full-loop.test.mjs`, which drives the
+  real chain against a real git remote and a real child-process test run —
+  passes on Linux, and `harness/cli/init.mjs` has been run there against a
+  fresh git repository end to end, producing a workflow that parses as valid
+  YAML. That is a real second data point, and it is not the whole claim:
+  **the LLM calls were not made** (no lab API key in that environment), and
+  no run has happened on macOS or on a non-`ubuntu-latest` GitHub runner.
+  Node cross-platform support makes the rest *plausible*, not *verified* —
+  treat "works on Mac too" as unconfirmed until `init` and one rehearsed
+  generation have actually been run there.
 
 ### 8.4 Honesty note
 

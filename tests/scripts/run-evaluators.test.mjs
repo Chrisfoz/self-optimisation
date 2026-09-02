@@ -150,5 +150,6 @@ test('defaults to the newest generation when GEN_NUMBER is not set', (t) => {
 
   const { status, outputs } = run(root);
   assert.equal(status, 0);
-  assert.equal(outputs.path, path.join('docs/generations', 'gen-002', 'metrics.json'));
+  // Forward slashes, on every platform: a repo-relative path is a git path.
+  assert.equal(outputs.path, 'docs/generations/gen-002/metrics.json');
 });

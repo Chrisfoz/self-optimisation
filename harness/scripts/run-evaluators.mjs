@@ -119,7 +119,14 @@ const record = buildMetricsRecord({
   errors: [...loadErrors, ...errors],
 });
 
-const relative = path.join(generationsDir, `gen-${genNumber}`, 'metrics.json');
+// Forward slashes, not path.join(), for the RECORDED path — the same
+// convention orchestrator.mjs's writeAttemptRecord() and
+// recordPullRequestUrl() already follow. A repo-relative path is a git
+// path, and a value recorded as `docs\\generations\\gen-001\\metrics.json`
+// because someone ran this on Windows is a different string from the one
+// CI writes for the same file. path.join() is still what touches the
+// filesystem, where the separator genuinely has to be the platform's.
+const relative = `${generationsDir}/gen-${genNumber}/metrics.json`;
 fs.mkdirSync(path.join(repoRoot, generationsDir, `gen-${genNumber}`), { recursive: true });
 fs.writeFileSync(path.join(repoRoot, relative), JSON.stringify(record, null, 2) + '\n', 'utf8');
 
