@@ -120,7 +120,7 @@ test('buildSuggestUserPrompt: a cold-start prompt is byte-identical whether the 
     context: {
       manifest: 'M', sources: 'S',
       qualityMetrics: null, runtime: null, workOrder: null, escalationReview: null,
-      themes: null, escalations: null, platform: null, feedback: null,
+      themes: null, escalations: null, platform: null, feedback: null, openQuestions: null,
     },
   });
   assert.equal(withNulls, buildSuggestUserPrompt(base));
@@ -601,4 +601,170 @@ test('runGeneration: applyEdits failure retries without consuming the implemente
   assert.equal(implementCalls, 2);
   // Both attempts count against maxAttempts since neither was a direct edit.
   assert.equal(result.attempts, 2);
+});
+
+test('writeAttemptRecord: stamps the harness version that wrote it', (t) => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'orch-ver-'));
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  const rel = writeAttemptRecord({ repoRoot, genNumber: '001', outcome: 'no-proposal', suggestResult: null, proposal: null, attempts: [], fanOut: null, implementedBy: null, implementModel: 'm', scope: { scope: 'focused', reason: 'r' } });
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, rel), 'utf8'));
+  assert.match(record.harnessVersion, /^\d+\.\d+\.\d+$/);
+});
+
+// --- Cost accounting and the budget cap (harness/lib/spend.mjs) --------------
+
+test('runGeneration: every stage\'s usage lands in attempts.json as spend, by model and by site', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', model, sentImages: 0, usage: { input_tokens: 1000, output_tokens: 300 } };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false, model, usage: { prompt_tokens: 500, completion_tokens: 100 } };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.', model, usage: null };
+    throw new Error('unexpected call: ' + model);
+  };
+
+  const result = await runGeneration(baseConfig(repoRoot), { call });
+  assert.equal(result.outcome, 'approved');
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.equal(record.spend.calls, 3);
+  assert.equal(record.spend.estimatedCalls, 1, 'the review call reported no usage, so it is an estimate');
+  assert.deepEqual(record.spend.byModel['suggest-model'], { calls: 1, inputTokens: 1000, outputTokens: 300 });
+  assert.deepEqual(record.spend.bySite.implement, { calls: 1, inputTokens: 500, outputTokens: 100 });
+  assert.ok(record.spend.totalTokens > 1900);
+  assert.equal(result.spend.totalTokens, record.spend.totalTokens);
+});
+
+test('runGeneration: a fan-out projected over the cap is refused before any model is called', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  let calls = 0;
+  const call = async () => { calls += 1; throw new Error('must not be called'); };
+
+  const result = await runGeneration(baseConfig(repoRoot, { budget: { maxGenerationTokens: 10 } }), { call });
+  assert.equal(result.outcome, 'over-budget');
+  assert.equal(result.hasChanges, false);
+  assert.equal(calls, 0);
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.equal(record.outcome, 'over-budget');
+  assert.equal(record.attempts[0].outcome, 'over-budget');
+  assert.match(record.attempts[0].detail, /max_generation_tokens/);
+  assert.equal(record.spend.calls, 0);
+});
+
+test('runGeneration: the running cap stops the refine loop with a budget-exhausted attempt, and the run is abandoned', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  let implementCalls = 0;
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', model, sentImages: 0, usage: { input_tokens: 1000, output_tokens: 500 } };
+    if (model === 'implement-model') { implementCalls += 1; return { text: VALID_IMPLEMENTATION, truncated: false, model, usage: { input_tokens: 100, output_tokens: 100 } }; }
+    if (model === 'review-model') return { text: 'VERDICT: REJECTED\n\nREASON: no.\n\nREQUIRED FIXES:\n- x', model, usage: { input_tokens: 50, output_tokens: 10 } };
+    throw new Error('unexpected call: ' + model);
+  };
+
+  // 1500 after suggest, 1760 after the first implement+review: the second
+  // attempt must not start.
+  const result = await runGeneration(baseConfig(repoRoot, { budget: { maxGenerationTokens: 1600 } }), { call });
+  assert.equal(result.outcome, 'abandoned');
+  assert.equal(implementCalls, 1);
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.deepEqual(record.attempts.map((a) => a.outcome), ['rejected-by-review', 'budget-exhausted']);
+  assert.equal(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), 'original content', 'tree restored');
+});
+
+test('runGeneration: with no budget configured, nothing is refused and spend is still recorded', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: suggestionWithDirectEdits(), truncated: false, provider: 'anthropic', model, sentImages: 0 };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.', model };
+    throw new Error('unexpected call: ' + model);
+  };
+  const result = await runGeneration(baseConfig(repoRoot, { budget: { maxGenerationTokens: null } }), { call });
+  assert.equal(result.outcome, 'approved');
+  assert.equal(result.spend.estimatedCalls, 2);
+});
+
+// --- Scope-aware ranking (docs/Review-SWOT-2026-09.md F1) --------------------
+
+test('rankProposals: the focused rubric is the original, and the ambitious one stops preferring the smallest proposal', async () => {
+  const seen = [];
+  const call = async ({ system }) => { seen.push(system); return { text: 'CHOICE: 2\nREASON: bigger.' }; };
+  const proposals = [{ id: 'a', text: 'CHANGE: small' }, { id: 'b', text: 'CHANGE: structural' }];
+  await rankProposals({ projectDescription: 'p', proposals, rankModel: 'r' }, { call });
+  await rankProposals({ projectDescription: 'p', proposals, rankModel: 'r', scope: 'focused' }, { call });
+  await rankProposals({ projectDescription: 'p', proposals, rankModel: 'r', scope: 'ambitious' }, { call });
+  assert.equal(seen[0], seen[1], 'no scope and focused are byte-identical');
+  assert.match(seen[0], /implementable as a few localised edits/);
+  assert.notEqual(seen[2], seen[0]);
+  assert.match(seen[2], /the smallest proposal is not the default winner/);
+  assert.doesNotMatch(seen[2], /a few localised edits/);
+  assert.match(seen[2], /reversed in one revert/);
+});
+
+// --- Every proposal is kept, not only the winner's (5.12) ---------------------
+
+test('runGeneration: every fan-out proposal is written under gen-NNN/proposals/, and the index does not grow', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  const call = async ({ model }) => {
+    if (model === 'suggest-a' || model === 'suggest-b') return { text: `${VALID_SUGGESTION}\nMARKER: from ${model}`, truncated: false, provider: 'anthropic', model, sentImages: 0 };
+    if (model === 'rank-model') return { text: 'CHOICE: 1\nREASON: first.' };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.' };
+    throw new Error('unexpected call: ' + model);
+  };
+  const result = await runGeneration(baseConfig(repoRoot, { suggestModels: [{ id: 'suggest-a', provider: 'anthropic' }, { id: 'suggest-b', provider: 'anthropic' }] }), { call });
+  assert.equal(result.outcome, 'approved');
+  const dir = path.join(repoRoot, 'docs/generations/gen-001/proposals');
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['suggest-a.md', 'suggest-b.md']);
+  assert.match(fs.readFileSync(path.join(dir, 'suggest-b.md'), 'utf8'), /from suggest-b/);
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.deepEqual(record.fanOut.proposalFiles, ['docs/generations/gen-001/proposals/suggest-a.md', 'docs/generations/gen-001/proposals/suggest-b.md']);
+  const { buildGenerationIndex } = await import('../../harness/lib/context-pack.mjs');
+  assert.equal(buildGenerationIndex({ repoRoot }).split('\n').length, 3, 'header, rule, one row');
+});
+
+// --- The committed goal (docs/curiosity/C1) -----------------------------------
+
+test('buildGoalSection renders statement, holds and away-from, and null drops it', async () => {
+  const { buildGoalSection } = await import('../../harness/lib/orchestrator.mjs');
+  assert.equal(buildGoalSection(null), null);
+  const text = buildGoalSection({ statement: 'Become calm.', holds: ['h1'], awayFrom: ['a1'] });
+  assert.match(text, /does not change/);
+  assert.match(text, /Become calm\./);
+  assert.match(text, /must hold[\s\S]*- h1/);
+  assert.match(text, /drifting away[\s\S]*- a1/);
+});
+
+test('buildSuggestSystemPrompt: with no goal is byte-identical to before; with one, the goal sits above the brief', () => {
+  const base = { agentBrief: 'THE BRIEF', scopeText: 'scope', editableFiles: ['a.js'] };
+  assert.equal(buildSuggestSystemPrompt({ ...base, goal: null }), buildSuggestSystemPrompt(base));
+  const withGoal = buildSuggestSystemPrompt({ ...base, goal: { statement: 'Become calm.', holds: [], awayFrom: [] } });
+  assert.ok(withGoal.indexOf('Become calm.') < withGoal.indexOf('THE BRIEF'));
+});
+
+test('runGeneration: the reviewer is told the goal and to reject drift; without a goal its system prompt is the brief alone', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  const systems = [];
+  const call = async ({ model, system }) => {
+    if (model === 'suggest-model') return { text: suggestionWithDirectEdits(), truncated: false, provider: 'anthropic', model, sentImages: 0 };
+    if (model === 'review-model') { systems.push(system); return { text: 'VERDICT: APPROVED\n\nREASON: fine.' }; }
+    throw new Error('unexpected call: ' + model);
+  };
+  await runGeneration(baseConfig(repoRoot, { goal: { statement: 'Become calm.', holds: ['quiet'], awayFrom: [] } }), { call });
+  assert.match(systems[0], /committed goal[\s\S]*Become calm\.[\s\S]*- quiet[\s\S]*is a REJECTION/);
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  await runGeneration(baseConfig(repoRoot, { genNumber: '002' }), { call });
+  assert.equal(systems[1], baseConfig(repoRoot).reviewerBrief);
 });

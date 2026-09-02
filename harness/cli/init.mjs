@@ -46,6 +46,9 @@ import readline from 'node:readline/promises';
 import '../providers/index.mjs';
 import { getProvider, registeredProviders, resolveProvider } from '../lib/llm-provider.mjs';
 import { renderAdapterYaml, renderWorkflowTemplate, renderReadme } from '../lib/scaffold.mjs';
+import { harnessVersion, checkUpgrade } from '../lib/version.mjs';
+import { describeSeats } from '../lib/seats.mjs';
+import { normalizeAmbition } from '../lib/adapter.mjs';
 
 // path.join(..., '../x'), not import.meta.dirname — that global needs Node
 // 20.11+, and package.json's engines field only promises 20.6.0.
@@ -58,6 +61,32 @@ const AUTO_YES = process.argv.includes('--yes') || process.argv.includes('-y');
 // already-filled-in brief or adapter is exactly the kind of thing that
 // should need its own explicit flag, not fall out of "accept defaults."
 const FORCE = process.argv.includes('--force');
+
+// Two informational flags that never write anything. `--version` says which
+// harness this vendored copy is; `--check-upgrade` fetches upstream's
+// VERSION and says whether this copy is behind. Both exist because "copy one
+// folder" is the install, and a folder carries no manifest to ask.
+if (process.argv.includes('--version')) {
+  console.log(harnessVersion());
+  process.exit(0);
+}
+if (process.argv.includes('--check-upgrade')) {
+  const result = await checkUpgrade();
+  if (result.error) {
+    console.log(`Local harness ${result.local}; could not read upstream (${result.error}).`);
+    process.exit(2);
+  }
+  if (result.behind === null) {
+    console.log(`Local harness ${result.local}; upstream ${result.upstream} — could not compare.`);
+    process.exit(2);
+  }
+  console.log(
+    result.behind
+      ? `Local harness ${result.local} is behind upstream ${result.upstream}. Re-copy harness/ from the repository and re-run init with --force to regenerate the workflow.`
+      : `Local harness ${result.local} is current (upstream ${result.upstream}).`
+  );
+  process.exit(result.behind ? 1 : 0);
+}
 
 // stdio: 'pipe' for every stream, explicitly — git's stderr streams to our
 // own stderr by default when unspecified, and "no remote configured" is an
@@ -93,11 +122,19 @@ async function ask(rl, question, { default: def = '' } = {}) {
 async function main() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   console.log('Self-optimisation harness — installation scaffolder\n');
+  let answersAmbitionOverride = null;
 
   try {
     const projectId = await ask(rl, 'Project id', { default: path.basename(repoRoot) });
     const repository = await ask(rl, 'Repository URL', { default: detectGitRemote() });
     const defaultBranch = await ask(rl, 'Default branch', { default: detectGitBranch() || 'main' });
+
+    // The committed goal (docs/curiosity/C1). Optional, strongly
+    // recommended, and the one thing every stage is judged against once it
+    // exists. Direction, not a metric — a number here would be gamed.
+    console.log('\nWhat is this project trying to become? One or two sentences of direction, not a metric.');
+    console.log('Optional, but every proposal and every review is judged against it once it exists.\n');
+    const goalStatement = await ask(rl, 'Goal (blank to skip)');
 
     const allowedPathsRaw = await ask(rl, 'Editable paths (comma-separated globs, e.g. index.html,src/**/*.js)');
     const allowedPaths = splitList(allowedPathsRaw);
@@ -138,8 +175,18 @@ async function main() {
     console.log('\nThe pinned seats — the suggest seat rotates to whichever watched lab ships something new,');
     console.log('but these three stay on a model you choose. Blank accepts the default.\n');
     const implementModel = await ask(rl, 'Implement model — writes the actual edit when the suggester offers none', { default: 'claude-opus-5' });
-    const reviewModel = await ask(rl, 'Review model — the independent gate; fails closed', { default: 'claude-opus-5' });
-    const rankModel = await ask(rl, 'Rank model — only called when more than one lab proposed', { default: implementModel || 'claude-opus-5' });
+    const reviewModel = await ask(rl, 'Review model — the independent gate; fails closed. Prefer a DIFFERENT lab than the implementer', { default: 'claude-opus-5' });
+    // Blank means "let the run choose a different family from the snapshot"
+    // (harness/lib/seats.mjs), which is the better default than echoing the
+    // implementer — see run-generation.mjs for why the rank seat can be
+    // auto-assigned and the review seat cannot.
+    const rankModel = await ask(rl, 'Rank model — only called when more than one lab proposed; blank picks another lab\'s model at run time', { default: '' });
+
+    const seats = describeSeats({ implementModel, reviewModel, rankModel: rankModel || implementModel });
+    for (const warning of seats.warnings) {
+      if (!rankModel && warning.includes('rank seat')) continue;
+      console.log(`   ⚠️  ${warning}`);
+    }
 
     // Resolve each pinned model back to the lab that serves it, so the
     // generated workflow gets that lab's API-key secret even when nobody is
@@ -178,6 +225,28 @@ async function main() {
     if (wantsAutoMerge) {
       console.log('   ℹ️  Autonomous merge selected. Every generation is still tagged gen-NNN, so any merge');
       console.log('      is revertible — but nothing will ask you first. Rehearse at least one run by hand.');
+    }
+
+    // The ambition dial. Phrased with "earned" as the default and the
+    // ambitious setting behind an explicit risk statement — the gates are
+    // the same at every setting, but what a run ATTEMPTS is not, and an
+    // owner who picks "ambitious" with autonomous merge has chosen to have
+    // structural change land unattended. docs/Ambition-Control.md.
+    console.log('\nHow ambitious may each generation be? "focused" is one small localised change every time;');
+    console.log('"earned" (the default) unlocks one ambitious generation after a clean streak; "ambitious" attempts');
+    console.log('structural work on every run. Every setting passes the same gates.\n');
+    const ambition = normalizeAmbition(await ask(rl, 'Ambition (focused / earned / ambitious)', { default: 'earned' }));
+    if (ambition === 'ambitious') {
+      console.log('   ⚠️  Ambitious on every run. Expect more rejected attempts and more tokens per generation, and');
+      console.log('      read docs/Ambition-Control.md — in particular, keep the pull-request merge model, and know');
+      console.log('      that `node harness/scripts/revert-generation.mjs NNN` undoes a shipped generation.');
+      if (wantsAutoMerge) {
+        console.log('   ⚠️  Ambitious AND autonomous merge: structural change will land on your default branch with');
+        console.log('      nobody asked first. That is the riskiest combination this harness offers.');
+        const sure = (await ask(rl, '      Type "ambitious" to confirm, or anything else to fall back to "earned"', { default: 'earned' })).trim().toLowerCase();
+        if (sure !== 'ambitious') console.log('      Falling back to "earned".');
+        answersAmbitionOverride = sure === 'ambitious' ? 'ambitious' : 'earned';
+      }
     }
 
     const cadenceCron = await ask(rl, 'Cadence (cron, UTC)', { default: '0 0 1 * *' });
@@ -230,6 +299,9 @@ async function main() {
     rl.close();
 
     const answers = {
+      harnessVersion: harnessVersion(),
+      ambition: answersAmbitionOverride ?? ambition,
+      goalStatement: goalStatement || undefined,
       projectId, repository, defaultBranch,
       allowedPaths, createOnlyPaths: [], frozenPaths, appendOnlyPaths,
       testCommands, providers, roleProviders, snapshotPath: '.agent/model-snapshot.json',

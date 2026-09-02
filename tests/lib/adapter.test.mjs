@@ -202,6 +202,7 @@ context:
         reviewModel: 'claude-opus-5',
         rankModel: 'claude-opus-5',
         maxAttempts: 3,
+        promotionThreshold: null,
       });
 
       const ctx = contextConfig(adapter);
@@ -219,11 +220,12 @@ context:
 
 test('briefPaths, rolesConfig and contextConfig return null/empty defaults on a bare adapter', () => {
   assert.deepEqual(briefPaths(null), { agentBriefPath: null, reviewerBriefPath: null });
-  assert.deepEqual(rolesConfig(null), { suggestMaxTokens: null, implementModel: null, reviewModel: null, rankModel: null, maxAttempts: null });
+  assert.deepEqual(rolesConfig(null), { suggestMaxTokens: null, implementModel: null, reviewModel: null, rankModel: null, maxAttempts: null, promotionThreshold: null });
   assert.deepEqual(contextConfig(null), {
     generationsDir: null, runtimeEvidenceDir: null,
     architectureNotesPath: null, architectureNotesMarker: null,
     testFiles: [], purposes: {}, platformNotes: null, historyLimit: null, scopeRequired: null,
+    ambition: 'earned',
   });
 });
 
@@ -395,4 +397,45 @@ test('accessors return null/empty defaults on an adapter missing that section', 
     assert.equal(maxFanout(adapter), null);
     assert.deepEqual(constitutionAllowlist(adapter), { allowedPaths: [], createOnlyPaths: [] });
   });
+});
+
+test('budgetConfig: reads a positive cap, and treats absent, zero or junk as no cap', async () => {
+  const { budgetConfig } = await import('../../harness/lib/adapter.mjs');
+  assert.deepEqual(budgetConfig({ budget: { max_generation_tokens: 500000 } }), { maxGenerationTokens: 500000 });
+  assert.deepEqual(budgetConfig({ budget: { max_generation_tokens: 0 } }), { maxGenerationTokens: null });
+  assert.deepEqual(budgetConfig({ budget: { max_generation_tokens: 'lots' } }), { maxGenerationTokens: null });
+  assert.deepEqual(budgetConfig({}), { maxGenerationTokens: null });
+  assert.deepEqual(budgetConfig(null), { maxGenerationTokens: null });
+});
+
+test('normalizeAmbition and contextConfig: the three levels pass through, and anything else is "earned", never "ambitious"', async () => {
+  const { normalizeAmbition, contextConfig, DEFAULT_AMBITION } = await import('../../harness/lib/adapter.mjs');
+  assert.equal(DEFAULT_AMBITION, 'earned');
+  assert.equal(normalizeAmbition('focused'), 'focused');
+  assert.equal(normalizeAmbition(' Ambitious '), 'ambitious');
+  assert.equal(normalizeAmbition('earned'), 'earned');
+  assert.equal(normalizeAmbition('ambitous'), 'earned');
+  assert.equal(normalizeAmbition(true), 'earned');
+  assert.equal(normalizeAmbition(undefined), 'earned');
+  assert.equal(contextConfig({ context: { ambition: 'ambitious' } }).ambition, 'ambitious');
+  assert.equal(contextConfig({}).ambition, 'earned');
+});
+
+test('rolesConfig: the promotion threshold is read when positive and null otherwise', async () => {
+  const { rolesConfig } = await import('../../harness/lib/adapter.mjs');
+  assert.equal(rolesConfig({ roles: { promotion: { implement_after_self_implemented_approvals: 3 } } }).promotionThreshold, 3);
+  assert.equal(rolesConfig({ roles: { promotion: { implement_after_self_implemented_approvals: 0 } } }).promotionThreshold, null);
+  assert.equal(rolesConfig({}).promotionThreshold, null);
+});
+
+test('goalConfig: null with no goal, throws on a goal without a statement, caps the lists', async () => {
+  const { goalConfig } = await import('../../harness/lib/adapter.mjs');
+  assert.equal(goalConfig({}), null);
+  assert.equal(goalConfig(null), null);
+  assert.throws(() => goalConfig({ project: { goal: { holds: ['x'] } } }), /no statement/);
+  assert.deepEqual(goalConfig({ project: { goal: 'Be calm.' } }), { statement: 'Be calm.', holds: [], awayFrom: [] });
+  const g = goalConfig({ project: { goal: { statement: ' Become X. ', holds: Array.from({ length: 10 }, (_, i) => `h${i}`), away_from: ['a'.repeat(400)] } } });
+  assert.equal(g.statement, 'Become X.');
+  assert.equal(g.holds.length, 8);
+  assert.equal(g.awayFrom[0].length, 300);
 });

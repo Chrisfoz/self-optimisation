@@ -175,6 +175,9 @@ async function composeWithFallback({ systemPrompt, userPrompt, buildFallback, di
  * @param {string} r.summary
  * @param {Array<{name: string, result: string, note?: string}>} r.gates
  * @param {string} [r.briefFeedback]
+ * @param {number} [r.spendTokens]  Tokens spent across every call this
+ *   generation made (harness/lib/spend.mjs). Omitted when unknown; never
+ *   rendered as zero, since zero would read as "free".
  * @param {number} [r.escalationsOpened] @param {number} [r.escalationsFlagged]
  * @param {string} [r.minorityReport]  Open escalations with a strong case
  *   and no backing, already rendered (escalations.mjs's
@@ -198,6 +201,8 @@ export async function buildGenerationDigestEmail(r, deps = {}) {
   ];
   const escalationsLine = `Escalations: ${r.escalationsOpened || 0} new case(s) opened` +
     ((r.escalationsFlagged || 0) > 0 ? `, ${r.escalationsFlagged} reached consensus — see the separate notice` : '.');
+  const spendKnown = Number.isFinite(r.spendTokens) && r.spendTokens > 0;
+  const spendLine = spendKnown ? `Spent: ${r.spendTokens.toLocaleString()} tokens across every model call this generation made` : null;
 
   const buildFallback = () => ({
     subject: `${statusWord}: ${r.genLabel} — ${r.summary || 'no change approved'}`.slice(0, 200),
@@ -207,6 +212,7 @@ export async function buildGenerationDigestEmail(r, deps = {}) {
       gatesBlock(r.gates), ``,
       `What the suggesting model said about its own brief:`, `  ${r.briefFeedback || '(none given)'}`, ``,
       escalationsLine,
+      ...(spendLine ? [spendLine] : []),
       ...(r.minorityReport ? [``, r.minorityReport] : []),
     ].join('\n'),
   });
@@ -223,6 +229,7 @@ export async function buildGenerationDigestEmail(r, deps = {}) {
     `What the suggesting model said about its own brief: ${r.briefFeedback || '(none given)'}`,
     `New escalations opened this run: ${r.escalationsOpened || 0}`,
     `Escalations that reached consensus this run: ${r.escalationsFlagged || 0} (sent as a separate notice if any)`,
+    spendLine ? `Cost: ${r.spendTokens.toLocaleString()} tokens (input plus output, every call). Mention it in one short sentence.` : '',
     r.attemptsJson ? `\nFull attempt record:\n${r.attemptsJson}` : '',
     r.proposalMd ? `\nFull proposal, including the suggesting model's own analysis:\n${r.proposalMd}` : '',
   ].filter(Boolean).join('\n');
@@ -240,6 +247,7 @@ export async function buildGenerationDigestEmail(r, deps = {}) {
     body: [
       bannerLine, ``, ...creditLines, ``, composed.body, ``,
       gatesBlock(r.gates), ``, escalationsLine,
+      ...(spendLine ? [spendLine] : []),
       // Appended after the model-written body rather than folded into it:
       // this is a standing list a human skims, not part of the story of
       // this run, and a digest model asked to weave it in would editorialise
@@ -283,6 +291,11 @@ export const NO_GENERATION_REASONS = {
   CHECK_FAILED: 'check-failed',
   ALL_UNREACHABLE: 'all-unreachable',
   PREFLIGHT_FAILED: 'preflight-failed',
+  // The owner flipped the kill switch (the SELF_IMPROVE_PAUSED repository
+  // variable). Listed here because a paused cycle must still say so: a
+  // loop that is silent while paused is indistinguishable, from the inbox,
+  // from a loop that is silently broken.
+  PAUSED: 'paused',
 };
 
 /**
@@ -300,6 +313,22 @@ export const NO_GENERATION_REASONS = {
 export function buildNoGenerationEmail({ reason, runUrl, labs = [], detail = '', projectName = 'This project' }) {
   const labList = labs.length ? ` (${labs.join(', ')})` : '';
   const footer = ['', `${projectName} is unchanged.`, ...(runUrl ? ['', `Run: ${runUrl}`] : [])];
+
+  if (reason === NO_GENERATION_REASONS.PAUSED) {
+    return {
+      subject: '⏸ The loop is paused — nothing was checked and nothing was spent',
+      body: [
+        `The cycle started and stopped immediately, because the SELF_IMPROVE_PAUSED`,
+        `repository variable is set to "true". No lab was polled, no model was`,
+        `called, and no tokens were spent.`,
+        ``,
+        `To resume: in the repository's Settings -> Secrets and variables ->`,
+        `Actions -> Variables, delete SELF_IMPROVE_PAUSED or set it to anything`,
+        `other than "true". The next scheduled run picks up where it left off.`,
+        ...footer,
+      ].join('\n'),
+    };
+  }
 
   if (reason === NO_GENERATION_REASONS.CHECK_FAILED) {
     return {

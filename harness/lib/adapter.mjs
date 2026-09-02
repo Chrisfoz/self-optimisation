@@ -74,6 +74,45 @@ export async function loadAdapter(filePath = path.join(process.cwd(), 'project-a
 }
 
 /**
+ * Parse adapter YAML from a string — for callers that hold the text of a
+ * particular git ref rather than a file on disk (the guard comparing the
+ * goal before and after a change). Same lazy js-yaml import, same
+ * fail-loud-on-malformed rule as loadAdapter().
+ */
+export async function parseAdapterText(text) {
+  const { load: parseYaml } = await import('js-yaml');
+  const parsed = parseYaml(text);
+  if (parsed === null || typeof parsed !== 'object') throw new Error('adapter text did not parse to an object');
+  return parsed;
+}
+
+/**
+ * The committed goal (docs/curiosity/C1-committed-goal.md): what this
+ * project is trying to become, stated once by a human, frozen, and shown
+ * to every stage. `Usefulness` has no referent without it.
+ *
+ * Returns null when no goal is configured — everything then works exactly
+ * as before, and the byte-identity tests hold. Throws when `project.goal`
+ * is present without a `statement`: a half-specified goal silently ignored
+ * is worse than none. `holds` and `away_from` are capped at 8 entries of
+ * 300 characters each, so a goal cannot quietly become a second brief.
+ *
+ * @returns {{statement: string, holds: string[], awayFrom: string[]}|null}
+ */
+export function goalConfig(adapter) {
+  const goal = adapter?.project?.goal;
+  if (goal === undefined || goal === null) return null;
+  const statement = typeof goal === 'string' ? goal.trim() : typeof goal.statement === 'string' ? goal.statement.trim() : '';
+  if (!statement) throw new Error('project.goal is present but has no statement — write one, or remove the goal.');
+  const list = (v) => (Array.isArray(v) ? v : []).map((x) => String(x).trim()).filter(Boolean).slice(0, 8).map((x) => x.slice(0, 300));
+  return {
+    statement: statement.slice(0, 1000),
+    holds: typeof goal === 'string' ? [] : list(goal.holds),
+    awayFrom: typeof goal === 'string' ? [] : list(goal.away_from),
+  };
+}
+
+/**
  * Provider names this adapter says to watch, or null if the adapter has no
  * opinion (missing file, or no `providers.watched` section) — callers
  * should fall back to their own default (e.g. "every registered provider")
@@ -250,7 +289,37 @@ export function rolesConfig(adapter) {
     maxAttempts: Number.isFinite(adapter?.roles?.refine?.max_attempts)
       ? adapter.roles.refine.max_attempts
       : null,
+    // Seat promotion by track record (harness/lib/seats.mjs's
+    // promotionCandidate()). Null means never promote — the default, since
+    // this hands the implement seat to a model nobody pinned.
+    promotionThreshold: Number.isFinite(adapter?.roles?.promotion?.implement_after_self_implemented_approvals) && adapter.roles.promotion.implement_after_self_implemented_approvals > 0
+      ? adapter.roles.promotion.implement_after_self_implemented_approvals
+      : null,
   };
+}
+
+/**
+ * The three settings of the ambition dial, and the one anything
+ * unrecognised falls back to.
+ *
+ *   focused    every generation is focused: one small, localised change.
+ *   earned     (DEFAULT) focused until the track record earns an ambitious
+ *              generation — context-pack.mjs's recommendScope().
+ *   ambitious  every generation is ambitious: structural work, several
+ *              files, several hundred lines, every run.
+ *
+ * Unknown values resolve to `earned`, not to `ambitious`: a typo must
+ * never be the reason a project starts attempting structural change on
+ * every run. See docs/Ambition-Control.md for the risks of each setting
+ * and why rollback exists alongside this dial.
+ */
+export const AMBITION_LEVELS = ['focused', 'earned', 'ambitious'];
+export const DEFAULT_AMBITION = 'earned';
+
+/** @returns {'focused'|'earned'|'ambitious'} */
+export function normalizeAmbition(value) {
+  const trimmed = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return AMBITION_LEVELS.includes(trimmed) ? trimmed : DEFAULT_AMBITION;
 }
 
 /**
@@ -277,6 +346,11 @@ export function contextConfig(adapter) {
     platformNotes: adapter?.context?.platform_notes ?? null,
     historyLimit: Number.isFinite(adapter?.context?.history_limit) ? adapter.context.history_limit : null,
     scopeRequired: Number.isFinite(adapter?.context?.scope_required) ? adapter.context.scope_required : null,
+    // The ambition dial — see normalizeAmbition() above. Read at RUN time
+    // by run-generation.mjs (unlike approval_class, which is baked into the
+    // workflow), because it changes what a run attempts, not what a run is
+    // permitted to do: the gates are the same at every setting.
+    ambition: normalizeAmbition(adapter?.context?.ambition),
   };
 }
 
@@ -373,5 +447,19 @@ export function notifyConfig(adapter) {
     digestModel: adapter?.notify?.digest_model ?? null,
     escalationNotice: adapter?.notify?.escalation_notice ?? true,
     calibrationExamplesPaths: adapter?.notify?.calibration_examples ?? [],
+  };
+}
+
+/**
+ * The token cap one generation may spend, or null for no cap. Consumed by
+ * harness/lib/orchestrator.mjs's runGeneration(): projected before the
+ * fan-out and checked between attempts. Tokens rather than money on
+ * purpose — see harness/lib/spend.mjs for why — and a cap here bounds one
+ * run, not a month: set a spending limit at each provider as well.
+ */
+export function budgetConfig(adapter) {
+  const raw = adapter?.budget?.max_generation_tokens;
+  return {
+    maxGenerationTokens: Number.isFinite(raw) && raw > 0 ? raw : null,
   };
 }

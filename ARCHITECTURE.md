@@ -131,6 +131,20 @@ flowchart TD
   style wired fill:#DCE7F0,stroke:#4A5C6A
 ```
 
+**Added 2026-09-02, not yet drawn above:** every model call is recorded
+(`spend.mjs`) and a generation has a token cap; the fate of every pull
+request is read back at the top of each cycle (`pull-requests.mjs`) and a
+shipped generation can be reverted (`rollback.mjs`), both of which the next
+prompt and the earned-ambition check read; the owner sets how ambitious a
+run may be (`context.ambition`, `docs/Ambition-Control.md`); the rank seat
+defaults to a different family than the implementer and a rotating model
+can earn the implement seat (`seats.mjs`); a generated `REPORT.md` carries
+the paper's metrics (`report.mjs`); campaign mode runs a generation on
+models named by hand; the committed goal (`project.goal`) sits above the
+brief and the reviewer judges against it; and a themes review may name
+what it cannot tell (`UNKNOWN`). Each is a `harness/lib/` module with its
+own test file. See `WORKPLAN.md` Tier 0 and Tier 5.
+
 **Read this diagram as what's real, not a roadmap with checkboxes filled
 in.** Every box is real: the detector via
 `examples/workflows/watch-releases.yml`, and the loop via

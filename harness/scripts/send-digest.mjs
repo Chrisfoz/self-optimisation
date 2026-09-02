@@ -21,11 +21,13 @@
  *
  * Optional environment (all default to sensible "not available" values):
  *   SCOPE, SUGGEST_MODEL, SUGGEST_PROVIDER, IMPLEMENT_MODEL,
- *   SELF_IMPLEMENTED, SUMMARY, BRIEF_FEEDBACK, ESC_OPENED, ESC_FLAGGED
+ *   SELF_IMPLEMENTED, SUMMARY, BRIEF_FEEDBACK, ESC_OPENED, ESC_FLAGGED,
+ *   SPEND_TOKENS
  *
  * When GEN_NUMBER is ABSENT no generation ran, and this still sends an email
  * saying which of the four no-generation outcomes occurred. Read in this
  * order, first match wins:
+ *   PAUSED            == "true"     -> the owner flipped the kill switch
  *   CHECK_RESULT      != "success"  -> the release check never completed
  *   PREFLIGHT_RESULT  != "success"  -> the project's own checks failed first
  *   RELEASE_DETECTED  == "true"     -> something shipped, nothing was reachable
@@ -98,7 +100,9 @@ const genNumber = process.env.GEN_NUMBER;
 
 if (!genNumber) {
   const reason =
-    process.env.CHECK_RESULT && process.env.CHECK_RESULT !== 'success'
+    process.env.PAUSED === 'true'
+      ? NO_GENERATION_REASONS.PAUSED
+      : process.env.CHECK_RESULT && process.env.CHECK_RESULT !== 'success'
       ? NO_GENERATION_REASONS.CHECK_FAILED
       : process.env.PREFLIGHT_RESULT && process.env.PREFLIGHT_RESULT !== 'success'
         ? NO_GENERATION_REASONS.PREFLIGHT_FAILED
@@ -171,6 +175,7 @@ const email = await buildGenerationDigestEmail(
     briefFeedback: process.env.BRIEF_FEEDBACK,
     escalationsOpened: Number(process.env.ESC_OPENED || 0),
     escalationsFlagged: Number(process.env.ESC_FLAGGED || 0),
+    spendTokens: Number(process.env.SPEND_TOKENS || 0),
     minorityReport: minority,
     attemptsJson: read(`${generationsDir}/gen-${genNumber}/attempts.json`),
     proposalMd: read(`${generationsDir}/gen-${genNumber}/proposal.md`),

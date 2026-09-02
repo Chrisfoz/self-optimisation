@@ -60,6 +60,8 @@ import {
   buildEscalationReviewField, buildEscalationBrief, loadLedger, saveLedger, renderForNotification,
 } from './escalations.mjs';
 import { summarizeApiIssues } from './api-errors.mjs';
+import { harnessVersion } from './version.mjs';
+import { createSpendLedger, withSpend, projectedFanOut } from './spend.mjs';
 
 // ---------------------------------------------------------------------------
 // Pure text-processing helpers — ported verbatim, no genericisation needed.
@@ -170,10 +172,39 @@ ESCALATION DISSENT: <none, or the id of one you think is wrong, and why.>
 Then, optionally, the edit blocks implementing your change.`;
 
 /**
+ * The committed goal, rendered as the one thing that does not change —
+ * above the brief, labelled as such. Null drops it entirely, which is what
+ * keeps a project with no goal on the prompt it had before (the
+ * byte-identity test). See docs/curiosity/C1-committed-goal.md.
+ *
+ * Direction plus constraints, never a metric (principle 22b): the reviewer
+ * judges alignment to it in prose; nothing scores it.
+ *
+ * @param {{statement: string, holds?: string[], awayFrom?: string[]}|null} goal
+ * @returns {string|null}
+ */
+export function buildGoalSection(goal) {
+  if (!goal || !goal.statement) return null;
+  const holds = (goal.holds ?? []).map((h) => `- ${h}`).join('\n');
+  const away = (goal.awayFrom ?? []).map((a) => `- ${a}`).join('\n');
+  return [
+    `# The goal — the one thing in this prompt that does not change`,
+    ``,
+    `A person committed this project to the following, once. It is frozen: you may argue against it through the ESCALATION fields, and a person may change it; nothing else may. Every proposal is judged against it — a change that is correct, safe and tested but moves the project away from it is a rejection.`,
+    ``,
+    goal.statement,
+    ...(holds ? [``, `What must hold, in every generation:`, holds] : []),
+    ...(away ? [``, `What counts as drifting away from it:`, away] : []),
+    ``,
+  ].join('\n');
+}
+
+/**
  * Build the suggestion stage's system prompt. The project's agent brief
  * (in full) IS the prompt — this only adds the two things that vary per
  * run and are the same mechanical shape for any project: which scope this
- * generation may attempt, and the optional edit-format contract.
+ * generation may attempt, and the optional edit-format contract. A
+ * committed goal, when the project has one, goes ABOVE the brief.
  *
  * @param {object} opts
  * @param {string} opts.agentBrief  Required — the project's filled-in
@@ -184,14 +215,15 @@ Then, optionally, the edit blocks implementing your change.`;
  * @param {string} [opts.createOnlyDescription]
  * @param {number} [opts.suggestMaxTokens]
  */
-export function buildSuggestSystemPrompt({ agentBrief, scopeText, editableFiles, createOnlyDescription, suggestMaxTokens = 32000 }) {
+export function buildSuggestSystemPrompt({ agentBrief, scopeText, editableFiles, createOnlyDescription, suggestMaxTokens = 32000, goal = null }) {
   const editSpec = buildEditFormatSpec({
     createSection: createOnlyDescription
       ? { pathDescription: createOnlyDescription, examplePath: '<a new path matching that pattern>' }
       : null,
   });
 
-  return `${agentBrief}
+  const goalSection = buildGoalSection(goal);
+  return `${goalSection ? `${goalSection}\n` : ''}${agentBrief}
 
 # Scope for this generation
 
@@ -238,8 +270,9 @@ export const DEFAULT_SCOPE_TEXT = {
  * @param {object} opts
  * @param {string} opts.genLabel
  * @param {object} opts.context  Named text blocks — sources, manifest,
- *   testIndex, generationIndex, history, themes, escalations, feedback,
- *   platform, qualityMetrics, runtime, workOrder, architectureNotes — any
+ *   testIndex, generationIndex, history, themes, openQuestions,
+ *   escalations, feedback, platform, qualityMetrics, runtime, workOrder,
+ *   architectureNotes — any
  *   of which may be null/undefined and is dropped from the prompt via
  *   section(). `runtime` is what the last runs actually observed rather than
  *   what the code says (context-pack.mjs's buildRuntimeEvidence()).
@@ -263,7 +296,7 @@ export function buildSuggestUserPrompt({ genLabel, context, screenshots = { imag
 
 # Repository map
 ${context.manifest ?? ''}
-${section('THIS GENERATION HAS BEEN ASSIGNED A DECIDED CHANGE', context.workOrder)}${section('Target platform', context.platform)}${section('Measured quality dimensions — non-gating', context.qualityMetrics)}${section('Frozen test invariants', context.testIndex)}${section('Every generation on record (compact — nothing here is ever dropped)', context.generationIndex)}${section('Most recent generations, in full detail (including what failed)', context.history)}${section('What the last runs actually observed at runtime', context.runtime)}${section('Recurring themes from the last review', context.themes)}${section('Open escalations — what earlier models asked us to change', context.escalations)}${section('Player feedback', context.feedback)}${section('How this project is built, and what it has learned building itself', context.architectureNotes)}
+${section('THIS GENERATION HAS BEEN ASSIGNED A DECIDED CHANGE', context.workOrder)}${section('Target platform', context.platform)}${section('Measured quality dimensions — non-gating', context.qualityMetrics)}${section('Frozen test invariants', context.testIndex)}${section('Every generation on record (compact — nothing here is ever dropped)', context.generationIndex)}${section('Most recent generations, in full detail (including what failed)', context.history)}${section('What the last runs actually observed at runtime', context.runtime)}${section('Recurring themes from the last review', context.themes)}${section('Open questions this project has not answered', context.openQuestions)}${section('Open escalations — what earlier models asked us to change', context.escalations)}${section('Player feedback', context.feedback)}${section('How this project is built, and what it has learned building itself', context.architectureNotes)}
 ${shots}
 # Current source
 ${context.sources ?? ''}
@@ -370,6 +403,31 @@ export async function gatherProposals(promptConfig, models, deps = {}) {
 // ---------------------------------------------------------------------------
 
 /**
+ * The ranking rubric, by scope. `focused` is the original text, unchanged.
+ * `ambitious` exists because the original was one of four places the
+ * harness pulled every generation toward the smallest safe change (see
+ * docs/Review-SWOT-2026-09.md F1): an ambitious run earns its headroom by
+ * shipping cleanly twice, and then had the same rubric pick "a few
+ * localised edits" from its fan-out.
+ */
+export const RANK_RUBRIC = {
+  focused: `Judge only on the merit of the change itself:
+- How much it improves the outcome the change claims to strengthen
+- Whether it is genuinely implementable as a few localised edits
+- Whether it risks breaking a frozen test invariant or a stated constraint
+- Whether it fixes something real rather than adding decoration
+
+Prefer a fix to something broken over an addition. Prefer a change that helps the common case over one that helps an edge case.`,
+  ambitious: `This generation is explicitly AMBITIOUS: the recent generations all merged cleanly, and structural work is in scope. Judge on:
+- How much it changes what the project can do or how it works, not how small it is — the smallest proposal is not the default winner here
+- Whether it is ONE coherent idea that could be reversed in one revert if it turns out badly, rather than a collection of small ones or a change that quietly rewrites everything
+- Whether it risks breaking a frozen test invariant or a stated constraint
+- Whether it fixes something real or opens something new that the project's stated purpose actually calls for
+
+Prefer the proposal with the largest genuine effect at an acceptable reversibility. Do not prefer a proposal merely because it is safer or smaller.`,
+};
+
+/**
  * Choose which proposal to implement, when more than one exists. The
  * ranker is given proposals with their authors withheld, so it judges the
  * idea rather than the brand — see learning/01-principles.md for the
@@ -383,8 +441,13 @@ export async function gatherProposals(promptConfig, models, deps = {}) {
  * @param {string} [opts.manifest] @param {string} [opts.testIndex]
  * @param {Array} opts.proposals
  * @param {string} [opts.rankModel]
+ * @param {'focused'|'ambitious'} [opts.scope]  The run's scope. The rubric
+ *   used to be scope-blind — it preferred "a few localised edits" and "a
+ *   fix over an addition" on every run — so an ambitious generation, whose
+ *   whole point is structural work, still had its smallest proposal chosen.
+ *   Default 'focused', which keeps the prompt byte-identical to before.
  */
-export async function rankProposals({ projectDescription, manifest = '', testIndex = null, proposals, rankModel = 'claude-opus-5' }, deps = {}) {
+export async function rankProposals({ projectDescription, manifest = '', testIndex = null, proposals, rankModel = 'claude-opus-5', scope = 'focused' }, deps = {}) {
   const call = deps.call ?? callModelWithHeadroom;
   const log = deps.log ?? (() => {});
 
@@ -392,13 +455,7 @@ export async function rankProposals({ projectDescription, manifest = '', testInd
 
   const system = `You are choosing between improvement proposals for ${projectDescription}, written by different frontier models that each looked at the same code.
 
-Judge only on the merit of the change itself:
-- How much it improves the outcome the change claims to strengthen
-- Whether it is genuinely implementable as a few localised edits
-- Whether it risks breaking a frozen test invariant or a stated constraint
-- Whether it fixes something real rather than adding decoration
-
-Prefer a fix to something broken over an addition. Prefer a change that helps the common case over one that helps an edge case.
+${RANK_RUBRIC[scope] ?? RANK_RUBRIC.focused}
 
 Respond in EXACTLY this format:
 CHOICE: <the number of the winning proposal>
@@ -544,7 +601,7 @@ Implement the proposal above using the required edit format.`,
  * since the next generation reads this back and can see which ideas
  * already died and why.
  */
-export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize, apiIssues = [], pullRequestUrl = null }) {
+export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize, apiIssues = [], pullRequestUrl = null, spend = null, campaign = false, seatPromotion = null }) {
   const dir = path.join(repoRoot, generationsDir, `gen-${genNumber}`);
   fs.mkdirSync(dir, { recursive: true });
   const relative = `${generationsDir}/gen-${genNumber}/attempts.json`;
@@ -560,9 +617,20 @@ export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generation
       {
         generation: genNumber,
         date: new Date().toISOString().slice(0, 10),
+        // Which harness wrote this record — provenance for a vendored copy
+        // that has no package manifest of its own. See harness/lib/version.mjs.
+        harnessVersion: harnessVersion(),
         outcome,
         scope: scope?.scope ?? null,
         scopeReason: scope?.reason ?? null,
+        // True for a generation the owner ran on models named by hand
+        // (harness/lib/campaign.mjs) rather than on a detected release.
+        // Kept so release-driven history stays distinguishable.
+        campaign: Boolean(campaign),
+        // Set when the implement seat was filled by a rotating model that
+        // earned it (harness/lib/seats.mjs's promotionCandidate()), not the
+        // pinned default. Null otherwise.
+        seatPromotion: seatPromotion ?? null,
         suggestModel: suggestResult ? `${suggestResult.model} (${suggestResult.provider})` : null,
         fanOut: fanOut ?? null,
         screenshotsSent: suggestResult?.sentImages ?? 0,
@@ -572,6 +640,10 @@ export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generation
         proposalSummary,
         escalations: escalations ?? null,
         contextSize: contextSize ?? null,
+        // What this generation cost, in tokens, per model and per stage —
+        // see harness/lib/spend.mjs. Null only for a record written by
+        // something other than runGeneration().
+        spend: spend ?? null,
         attempts,
         // Actionable API failures only — "you need to fix a key or your
         // billing" — deduplicated by provider+kind. See api-errors.mjs.
@@ -627,6 +699,40 @@ export function recordPullRequestUrl({ repoRoot, generationsDir = 'docs/generati
   record.pullRequestUrl = pullRequestUrl;
   fs.writeFileSync(absolute, JSON.stringify(record, null, 2) + '\n', 'utf8');
   return relative;
+}
+
+/**
+ * Every proposal the fan-out produced, winners and losers alike, one file
+ * each under `gen-NNN/proposals/`. Until this existed only the winner's
+ * text survived (in proposal.md); the losers were an id in fanOut.proposed
+ * and their argument was gone. The curiosity design (§3.4) is explicit
+ * that the four rejected proposals are four different reads of the same
+ * repository, and where they diverge is where the repository is ambiguous
+ * — and a later compare-two-implementations experiment needs them too.
+ * Costs nothing: the fan-out was already paid for.
+ *
+ * Nothing reads these back into a prompt. The generation index and history
+ * read proposal.md and attempts.json only, so the prompt is unchanged.
+ *
+ * @returns {string[]} the relative paths written
+ */
+export function writeFanOutProposals({ repoRoot, generationsDir = 'docs/generations', genNumber, proposals }) {
+  const dir = path.join(repoRoot, generationsDir, `gen-${genNumber}`, 'proposals');
+  fs.mkdirSync(dir, { recursive: true });
+  const written = [];
+  for (const p of proposals) {
+    const safe = String(p.id).replace(/[^A-Za-z0-9._-]+/g, '_');
+    const relative = `${generationsDir}/gen-${genNumber}/proposals/${safe}.md`;
+    fs.writeFileSync(
+      path.join(repoRoot, relative),
+      `# Generation ${genNumber} — proposal from \`${p.id}\` (${p.provider})\n\n` +
+      `Every model asked this generation, not only the one whose proposal was chosen. ` +
+      `See attempts.json's fanOut for which one was.\n\n\`\`\`\n${String(p.text).trim()}\n\`\`\`\n`,
+      'utf8'
+    );
+    written.push(relative);
+  }
+  return written;
 }
 
 export function writeProposal({ repoRoot, generationsDir = 'docs/generations', genNumber, proposal, parsed, suggestResult, applied, review, attempts, implementedBy, implementModel, reviewModel, scope, briefFeedback }) {
@@ -871,6 +977,11 @@ export function restoreSnapshot(repoRoot, snapshot, createdPaths = []) {
  * @param {{models: number, labs: number}} [config.consensus]
  * @param {() => Promise<object>} [config.captureVisual]  Passed to review.mjs.
  * @param {string} [config.implementationNotes]
+ * @param {{maxGenerationTokens?: number|null}} [config.budget]  A token cap
+ *   for the whole generation (harness/lib/adapter.mjs's budgetConfig()).
+ *   Checked twice: projected before the fan-out (outcome 'over-budget',
+ *   nothing called), and actually between attempts (the loop stops with a
+ *   'budget-exhausted' attempt and the run is abandoned). Null means no cap.
  * @param {{call?: Function, log?: (msg: string) => void}} [deps]
  * @returns {Promise<object>}
  */
@@ -901,10 +1012,22 @@ export async function runGeneration(config, deps = {}) {
     resurfaceAfter,
     captureVisual,
     implementationNotes = null,
+    budget = {},
+    campaign = false,
+    seatPromotion = null,
+    goal = null,
   } = config;
 
-  const call = deps.call ?? callModelWithHeadroom;
+  const rawCall = deps.call ?? callModelWithHeadroom;
   const log = deps.log ?? (() => {});
+
+  // Every model call this generation makes goes through the ledger, tagged
+  // with the stage that made it, so the attempt record can say what the
+  // run cost and the cap below has something real to compare against.
+  const spend = createSpendLedger();
+  const callFor = (site) => withSpend(rawCall, spend, site);
+  const maxGenerationTokens = Number.isFinite(budget?.maxGenerationTokens) && budget.maxGenerationTokens > 0 ? budget.maxGenerationTokens : null;
+  const budgetExhausted = () => maxGenerationTokens !== null && spend.total() > maxGenerationTokens;
 
   if (!agentBrief || !agentBrief.trim()) throw new Error('runGeneration requires a non-empty agentBrief.');
   if (!reviewerBrief || !reviewerBrief.trim()) throw new Error('runGeneration requires a non-empty reviewerBrief.');
@@ -934,6 +1057,7 @@ export async function runGeneration(config, deps = {}) {
 
   const promptConfig = {
     agentBrief,
+    goal,
     scopeText: scopeText[scope.scope] ?? scopeText.focused,
     editableFiles,
     createOnlyDescription,
@@ -951,11 +1075,46 @@ export async function runGeneration(config, deps = {}) {
 
   const pristine = snapshotEditableFiles(repoRoot, editableFiles);
 
-  const { proposals, failures } = await gatherProposals(promptConfig, asking, { call, log });
+  // Projected, before anything is spent: the suggestion prompt is the same
+  // for every model, so its size times the fan-out is the floor of what
+  // this run will cost. A run that cannot fit under the cap is refused
+  // here, recorded, and reported — not discovered after N labs were paid.
+  if (maxGenerationTokens !== null) {
+    const promptChars = buildSuggestSystemPrompt(promptConfig).length + buildSuggestUserPrompt(promptConfig).length;
+    const projected = projectedFanOut({ promptChars, models: asking.length, maxTokens: maxGenerationTokens });
+    if (projected.over) {
+      const detail = `projected ${projected.estimatedTokens.toLocaleString()} input tokens across ${asking.length} model(s) exceeds budget.max_generation_tokens (${maxGenerationTokens.toLocaleString()}); nothing was called`;
+      log(`💸 Over budget before the fan-out — ${detail}`);
+      const recordPath = writeAttemptRecord({
+        repoRoot, generationsDir, genNumber, campaign, seatPromotion,
+        outcome: 'over-budget',
+        suggestResult: null,
+        proposal: null,
+        attempts: [{ attempt: 1, by: null, outcome: 'over-budget', detail: oneLine(detail, 400) }],
+        fanOut: { asked: asking.map((m) => `${m.id} (${m.provider})`), proposed: [], failed: [] },
+        implementedBy: null,
+        implementModel,
+        scope,
+        spend: spend.summary(),
+      });
+      finishWorkOrder({ repoRoot, ledgerPath, genNumber, outcome: 'over-budget' });
+      return {
+        outcome: 'over-budget',
+        hasChanges: false,
+        scope,
+        attemptRecordPath: recordPath,
+        summary: oneLine(detail, 200),
+        askedModels: asking,
+        spend: spend.summary(),
+      };
+    }
+  }
+
+  const { proposals, failures } = await gatherProposals(promptConfig, asking, { call: callFor('suggest'), log });
 
   if (proposals.length === 0) {
     const recordPath = writeAttemptRecord({
-      repoRoot, generationsDir, genNumber,
+      repoRoot, generationsDir, genNumber, campaign, seatPromotion,
       outcome: 'no-proposal',
       suggestResult: null,
       proposal: null,
@@ -965,6 +1124,7 @@ export async function runGeneration(config, deps = {}) {
       implementModel,
       scope,
       apiIssues: summarizeApiIssues(failures),
+      spend: spend.summary(),
     });
 
     // Assigned before the fan-out, so an order can be outstanding even on a
@@ -979,6 +1139,7 @@ export async function runGeneration(config, deps = {}) {
       summary: oneLine(`no usable proposal — ${failures.map((f) => `${f.id}: ${f.reason}`).join('; ')}`, 200),
       askedModels: asking,
       failures,
+      spend: spend.summary(),
     };
   }
 
@@ -990,10 +1151,14 @@ export async function runGeneration(config, deps = {}) {
   // to produce one.
   const escalationRound = recordEscalations(proposals, { repoRoot, ledgerPath, genNumber, threshold: consensus });
 
+  // Same seam, same reasoning: keep every proposal's text before anything
+  // below can throw or discard.
+  const proposalFiles = writeFanOutProposals({ repoRoot, generationsDir, genNumber, proposals });
+
   const crashState = { suggestResult: null, proposal: null, fanOut: null, attempts: [], by: null };
 
   try {
-    const ranking = await rankProposals({ projectDescription, manifest: context.manifest, testIndex: context.testIndex, proposals, rankModel }, { call, log });
+    const ranking = await rankProposals({ projectDescription, manifest: context.manifest, testIndex: context.testIndex, proposals, rankModel, scope: scope.scope }, { call: callFor('rank'), log });
     const winner = proposals[ranking.index];
     const suggestResult = winner.result;
     const proposal = winner.text;
@@ -1006,6 +1171,7 @@ export async function runGeneration(config, deps = {}) {
       chosen: `${winner.id} (${winner.provider})`,
       rankedBy: proposals.length > 1 ? rankModel : null,
       rankingReason: ranking.reason,
+      proposalFiles,
       briefFeedback: Object.fromEntries(proposals.filter((p) => p.briefFeedback).map((p) => [p.id, p.briefFeedback])),
     };
     crashState.suggestResult = suggestResult;
@@ -1029,6 +1195,17 @@ export async function runGeneration(config, deps = {}) {
       const attempt = index + 1;
       crashState.by = step.by;
 
+      // The running check. The first attempt always runs — the fan-out was
+      // already projected to fit — but a refine loop can spend the cap
+      // several times over, and a cap that only ever counted the first call
+      // would not be one.
+      if (attempt > 1 && budgetExhausted()) {
+        const detail = `spent ${spend.total().toLocaleString()} tokens, over budget.max_generation_tokens (${maxGenerationTokens.toLocaleString()}); no further attempts`;
+        log(`💸 Attempt ${attempt} (${step.by}) not started: ${detail}`);
+        attemptLog.push({ attempt, by: step.by, outcome: 'budget-exhausted', detail: oneLine(detail, 400) });
+        break;
+      }
+
       restoreSnapshot(repoRoot, pristine, createdLastAttempt);
 
       let parsed;
@@ -1040,7 +1217,7 @@ export async function runGeneration(config, deps = {}) {
           { ...promptConfig, implementModel, implementationNotes },
           proposal,
           { applyErrors, reviewFeedback, rejectedRender, attempt, author: `${winner.id} (${winner.provider})` },
-          { call, log, maxAttempts }
+          { call: callFor('implement'), log, maxAttempts }
         );
         parsed = parseResponse(implemented.text, ['PILLAR']);
       }
@@ -1069,7 +1246,8 @@ export async function runGeneration(config, deps = {}) {
         testDescription,
         captureVisual,
         reviewModel,
-        call,
+        goal,
+        call: callFor('review'),
       });
 
       if (!review.approved) {
@@ -1093,14 +1271,16 @@ export async function runGeneration(config, deps = {}) {
       });
 
       const attemptRecordPath = writeAttemptRecord({
-        repoRoot, generationsDir, genNumber,
+        repoRoot, generationsDir, genNumber, campaign, seatPromotion,
         outcome: 'approved', suggestResult, proposal, attempts: attemptLog,
         fanOut, implementedBy, implementModel, scope, escalations: escalationRound,
         apiIssues: summarizeApiIssues(failures),
+        spend: spend.summary(),
       });
 
       log(`\n✅ Approved on attempt ${attempt}: ${review.reason}`);
       log(`   implemented by ${implementedBy}`);
+      log(`💸 ${spend.total().toLocaleString()} tokens across ${spend.calls.length} call(s)`);
 
       // The outcome label this generation's work order was waiting for.
       const workOrder = finishWorkOrder({ repoRoot, ledgerPath, genNumber, outcome: 'approved' });
@@ -1124,6 +1304,7 @@ export async function runGeneration(config, deps = {}) {
         briefFeedback: winner.briefFeedback,
         escalations: escalationRound,
         fanOut,
+        spend: spend.summary(),
       };
     }
 
@@ -1132,10 +1313,11 @@ export async function runGeneration(config, deps = {}) {
     // failed run.
     restoreSnapshot(repoRoot, pristine, createdLastAttempt);
     const attemptRecordPath = writeAttemptRecord({
-      repoRoot, generationsDir, genNumber,
+      repoRoot, generationsDir, genNumber, campaign, seatPromotion,
       outcome: 'abandoned', suggestResult, proposal, attempts: attemptLog,
       fanOut, implementedBy: null, implementModel, scope, escalations: escalationRound,
       apiIssues: summarizeApiIssues(failures),
+      spend: spend.summary(),
     });
 
     const workOrder = finishWorkOrder({ repoRoot, ledgerPath, genNumber, outcome: 'abandoned' });
@@ -1148,11 +1330,12 @@ export async function runGeneration(config, deps = {}) {
       scope,
       suggestModel: suggestResult.model,
       suggestProvider: suggestResult.provider,
-      attempts: plan.length,
+      attempts: attemptLog.length,
       attemptRecordPath,
       briefFeedback: winner.briefFeedback,
       escalations: escalationRound,
       fanOut,
+      spend: spend.summary(),
     };
   } catch (err) {
     // A genuinely unexpected failure. Write down whatever state had
@@ -1161,7 +1344,7 @@ export async function runGeneration(config, deps = {}) {
     // see this function's own doc comment for the incident this guards
     // against.
     const attemptRecordPath = writeAttemptRecord({
-      repoRoot, generationsDir, genNumber,
+      repoRoot, generationsDir, genNumber, campaign, seatPromotion,
       outcome: 'crashed',
       suggestResult: crashState.suggestResult,
       proposal: crashState.proposal,
@@ -1184,6 +1367,7 @@ export async function runGeneration(config, deps = {}) {
         ...failures,
         { id: crashState.by, provider: err?.provider, kind: err?.kind, statusCode: err?.statusCode },
       ]),
+      spend: spend.summary(),
     });
     log(`📓 Recorded the crash in ${attemptRecordPath}`);
     // A run that was handed a work order and died still completes it, with

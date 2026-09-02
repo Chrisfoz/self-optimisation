@@ -152,12 +152,14 @@ Read the generation history below. Find 2 to 4 real patterns — not technical t
 For each theme, give:
 NOTICED: the concrete, specific observation — cite generation numbers. This is the association: what keeps co-occurring.
 MEANS: the principle it points to. This is the abstraction: why it happens, stated so it transfers to generations that have not happened yet. Do not just restate NOTICED in other words — if MEANS could be produced by a thesaurus pass over NOTICED, it is not an abstraction.
+UNKNOWN: optional. The question this principle exposes and does not answer — what you would have to find out to know whether it holds, or what it implies that no generation has tested yet. A theme whose principle is genuinely settled has no UNKNOWN; omit the line rather than invent one. This is the frontier of the abstraction, and it is read by every later generation as an open question, so a padded one costs more than none.
 
-Respond in EXACTLY this format, with nothing before the first THEME line or after the last MEANS line:
+Respond in EXACTLY this format, with nothing before the first THEME line or after the last field:
 
 THEME 1
 NOTICED: <text>
 MEANS: <text>
+UNKNOWN: <text, or omit this line>
 
 THEME 2
 NOTICED: <text>
@@ -175,11 +177,18 @@ Find the recurring themes across these generations.`;
 }
 
 /**
- * Parse a THEME/NOTICED/MEANS response into { themes: [{noticed, means}] }.
- * Throws with a specific reason on anything malformed — this harness fails
- * closed on model output (see edit-format.mjs), and a themes review is
- * permanent standing context for every future generation, so a bad one is
- * worse than none.
+ * Parse a THEME/NOTICED/MEANS[/UNKNOWN] response into
+ * { themes: [{noticed, means, unknown?}] }. Throws with a specific reason
+ * on anything malformed — this harness fails closed on model output (see
+ * edit-format.mjs), and a themes review is permanent standing context for
+ * every future generation, so a bad one is worse than none.
+ *
+ * UNKNOWN is optional per theme (docs/curiosity/C2-themes-review-cli.md,
+ * phase A): a settled principle has no live question, and forcing one
+ * produces the padded, plausible question the design exists to avoid. When
+ * present it is held to the same minimum length as the other two fields,
+ * and a too-short one fails the whole review rather than being dropped —
+ * a question that reaches every later prompt must be a real one.
  */
 export function parseThemesResponse(text) {
   if (typeof text !== 'string' || !text.trim()) {
@@ -200,14 +209,17 @@ export function parseThemesResponse(text) {
 
   const themes = blocks.map((block, i) => {
     const noticed = block.match(/^NOTICED:\s*([\s\S]*?)(?:\nMEANS:|$)/m)?.[1]?.trim();
-    const means = block.match(/^MEANS:\s*([\s\S]*)$/m)?.[1]?.trim();
+    const means = block.match(/^MEANS:\s*([\s\S]*?)(?:\nUNKNOWN:|$)/m)?.[1]?.trim();
+    const unknownMatch = block.match(/^UNKNOWN:\s*([\s\S]*)$/m);
+    const unknown = unknownMatch?.[1]?.trim() ?? null;
 
     if (!noticed) throw new Error(`Theme ${i + 1} is missing a NOTICED field.`);
     if (!means) throw new Error(`Theme ${i + 1} is missing a MEANS field.`);
     if (noticed.length < 15) throw new Error(`Theme ${i + 1}'s NOTICED is too short to be a real observation.`);
     if (means.length < 15) throw new Error(`Theme ${i + 1}'s MEANS is too short to be a real principle.`);
+    if (unknownMatch && (!unknown || unknown.length < 15)) throw new Error(`Theme ${i + 1}'s UNKNOWN is present but too short to be a real question; omit the line instead.`);
 
-    return { noticed, means };
+    return unknown ? { noticed, means, unknown } : { noticed, means };
   });
 
   if (themes.length < 2) {

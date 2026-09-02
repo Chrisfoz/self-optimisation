@@ -88,3 +88,18 @@ test('reviewedGenerations lists the generations covered, ignoring anything else 
   fs.writeFileSync(path.join(dir, 'review-draft.json'), '{}');
   assert.deepEqual(reviewedGenerations({ repoRoot }), ['010', '020']);
 });
+
+test('buildOpenQuestionsBrief: renders only themes with an UNKNOWN, numbered for citation, and null when none carry one', async () => {
+  const { buildOpenQuestionsBrief } = await import('../../harness/lib/themes.mjs');
+  const review = { throughGeneration: '010', date: '2026-09-02', themes: [
+    { noticed: 'a', means: 'b' },
+    { noticed: 'c', means: 'd', unknown: 'does the reviewer ever see timing?' },
+    { noticed: 'e', means: 'f', unknown: '   ' },
+  ] };
+  const brief = buildOpenQuestionsBrief(review);
+  assert.match(brief, /through generation 010/);
+  assert.match(brief, /- q2: does the reviewer ever see timing\?/);
+  assert.doesNotMatch(brief, /q1:|q3:/);
+  assert.equal(buildOpenQuestionsBrief({ throughGeneration: '010', themes: [{ noticed: 'a', means: 'b' }] }), null);
+  assert.equal(buildOpenQuestionsBrief(null), null);
+});

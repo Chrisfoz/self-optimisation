@@ -67,19 +67,25 @@ These specify what is wanted. They apply no matter how capable the model is.
 - [Compatibility constraint — e.g. existing saved data must survive]
 - [Performance or dependency constraint]
 - [Accessibility or inclusion constraint]
-- ONE focused improvement, not a list.
-- It must be expressible as a small number of localised edits to existing
-  [code/content]. Never a wholesale rewrite.
+- ONE improvement per generation, not a list — one idea, reviewable and
+  revertible as one unit.
+- Targeted edits to existing [code/content], never a wholesale file
+  rewrite. (How MANY edits, and how structural, is the SCOPE below — not
+  a constraint.)
 
 ## SCOPE — earned, not scheduled
 
 Each run is either `focused` (one small localised change, the default) or
-`ambitious` (structural work, several files). The mode is granted by the
-track record — a run of generations that each merged on the first attempt
-unlocks one ambitious generation — and a human can force either. Do NOT
-write "smaller is always better" into this brief permanently: that is a
-hint wearing a constraint's clothes, and it will outlive its usefulness. See
-`learning/01-principles.md` principle 21.
+`ambitious` (structural work, several files, several hundred lines). The
+harness tells you which this run is, in the "Scope for this generation"
+section it adds beneath this brief; follow that, not a standing rule here.
+The mode is granted by the track record — a run of generations that each
+merged on the first attempt unlocks one ambitious generation — or set by
+the owner (`context.ambition` in `project-adapter.yml`, or per run from
+the Actions tab). Do NOT write "smaller is always better" or "a small
+number of localised edits" into the CONSTRAINTS above: that is a hint
+wearing a constraint's clothes, it contradicts every ambitious run, and it
+will outlive its usefulness. See `learning/01-principles.md` principle 21.
 
 ## HINTS — a checklist, not a ceiling
 

@@ -24,6 +24,25 @@ project:
   repository: <https://github.com/you/your-project>
   default_branch: main
 
+  # --- LIVE: the committed goal (docs/curiosity/C1-committed-goal.md).
+  # What this project is trying to BECOME, stated once by a person. Shown
+  # above the brief to every suggesting model, and the reviewer rejects a
+  # change that is correct, safe and tested but moves away from it. Frozen:
+  # harness/scripts/check-guarded-paths.mjs refuses a diff that changes it;
+  # a model may argue against it through the escalation ledger only.
+  # Direction plus constraints, never a metric — a number here would be
+  # optimised the way readingLevel was. Optional; delete the block for the
+  # goal-free behaviour. `holds` and `away_from` are optional, up to 8 each.
+  # goal:
+  #   statement: >
+  #     Become the thing a nurse reaches for when a frightened child needs
+  #     ten minutes of calm, on a shared hospital tablet, with nobody
+  #     available to help them use it.
+  #   holds:
+  #     - A child who has never seen it before can start playing without being told how.
+  #   away_from:
+  #     - Anything that rewards speed over calm.
+
 # --- LIVE: harness/scripts/check-model-releases.mjs reads this section ----
 providers:
   # Which labs to watch for new releases. Delete any you don't have a key
@@ -135,10 +154,27 @@ roles:
   review:
     model: claude-opus-5       # pinned — this gate does not rotate
   rank:
-    model: claude-opus-5       # only called when more than one lab proposed this run
+    # Only called when more than one lab proposed this run. LEAVE UNSET (or
+    # null) to have the run pick a model from a DIFFERENT family than the
+    # implementer, from the model snapshot, among labs whose key is present
+    # — a judge prefers its own family's prose (learning/07-whats-actually-new.md
+    # §5), and ranking fails safe so the auto-pick costs at worst one
+    # ranking. The review seat above is NOT auto-picked: it fails closed and
+    # must be a model you chose — but the run warns every time it shares the
+    # implementer's family, and it should not.
+    model: null
   refine:
     max_attempts: 3            # on the pinned implementer; a direct edit from the
                                 # suggesting model is tried first and doesn't count against this
+  # Seat promotion by track record — the bet on the curve, extended from the
+  # suggest seat to the implement seat. A rotating model whose OWN edit
+  # blocks were approved and kept (merged, not closed, not reverted) this
+  # many times takes the implement seat from the pinned model above, for as
+  # long as it holds the record and its lab's key is present. The review
+  # seat is never promoted: it is the gate, and a gate is not a prize. Omit
+  # or set 0 to never promote (the default).
+  # promotion:
+  #   implement_after_self_implemented_approvals: 3
 
 memory:
   escalation_ledger: docs/escalations/ledger.json
@@ -215,6 +251,48 @@ context:
 
   history_limit: 3       # how many recent generations get full detail in the prompt
   scope_required: 2      # clean first-attempt merges in a row before "ambitious" unlocks
+
+  # --- LIVE: the ambition dial, read at RUN time by run-generation.mjs.
+  # How much each generation may ATTEMPT. The gates — independent review,
+  # the guard, your tests, the pull request — are identical at every
+  # setting; what changes is the size of the change that reaches them.
+  #
+  #   focused     one small, localised change, every generation.
+  #   earned      focused until `scope_required` generations in a row merged
+  #               on the first attempt, which earns ONE ambitious generation;
+  #               a lone ambitious failure costs one focused generation, two
+  #               in a row cost the streak. (DEFAULT)
+  #   ambitious   structural work — several files, several hundred lines —
+  #               on every run. More rejected attempts, more tokens, and a
+  #               shipped change that is harder to read in a diff. Pair it
+  #               with the pull-request merge model, keep the budget cap on,
+  #               and know that `harness/scripts/revert-generation.mjs NNN`
+  #               undoes a generation that passed every gate and still
+  #               should not have shipped.
+  #
+  # Anything unrecognised resolves to `earned`, never to `ambitious`. A
+  # single run can be overridden from the Actions tab ("Run workflow" →
+  # scope) without changing this file. docs/Ambition-Control.md has the
+  # risk table for each setting.
+  ambition: earned
+
+# --- LIVE: harness/scripts/run-generation.mjs reads this (via
+# harness/lib/adapter.mjs's budgetConfig()) --------------------------------
+# The most tokens one generation may spend, input plus output, across every
+# model call it makes. Checked twice: projected before the fan-out (the
+# suggestion prompt's size times the number of newly released models — if
+# that alone exceeds the cap the run is refused, recorded as `over-budget`,
+# and nothing is called) and actually, between refine attempts (the loop
+# stops with a `budget-exhausted` attempt and the generation is abandoned).
+# Every attempts.json carries a `spend` block with the real totals per model
+# and per stage, from the usage the provider reported.
+#
+# Tokens, not money: a price table in this file would rot, and a wrong price
+# is worse than none. This bounds ONE run. It does not bound a month in
+# which nine labs each ship something — set a spending limit at each
+# provider as well. Delete the section, or set it to 0, for no cap.
+budget:
+  max_generation_tokens: 2000000
 
 # --- LIVE: harness/scripts/verify-deployment.mjs and promote.mjs read this
 # section (via harness/lib/adapter.mjs's deploymentConfig()). Neither is

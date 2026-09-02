@@ -1,5 +1,7 @@
 # Self-Optimisation
 
+MIT licensed — see [`LICENSE`](LICENSE).
+
 A portable harness for model-release-driven software improvement: point it at
 a project, and a governed suggest → implement → review → gate → promote loop
 lets each newly released frontier model propose one improvement, gated by
@@ -230,6 +232,7 @@ you fill it in today, checked against the code rather than assumed:
 | Frozen / append-only paths, frozen JSON fields, churn ceiling | `project-adapter.yml` → `constitution.frozen_paths` / `append_only_paths` / `frozen_fields` / `churn_ceiling` | **Used immediately** — `harness/scripts/check-guarded-paths.mjs` enforces these against a real git diff today |
 | Which paths an agent may edit or create | `project-adapter.yml` → `constitution.allowed_paths` / `create_only_paths` | **Used immediately** — `run-generation.mjs` compiles this into `edit-format.mjs`'s allowlist and enforces it against every edit the orchestrator produces |
 | Your actual test commands | Given to `harness/cli/init.mjs` when it scaffolds a new installation; echoed into `project-adapter.yml` → `evaluation.test_commands` (still reserved — nothing reads it back out of the file yet, see `ARCHITECTURE.md`) | **Used immediately** — rendered straight into the generated workflow's preflight and post-guard test steps; if you add or change commands later, edit both the workflow and `evaluation.test_commands` by hand, since re-running `init` won't overwrite an existing workflow file |
+| How ambitious each run may be | `project-adapter.yml` → `context.ambition` (`focused` / `earned` / `ambitious`), or per run from the Actions tab's **Run workflow** → `scope` | **Used immediately** — `run-generation.mjs` reads it every run. `earned` is the default; the gates are the same at every setting; see [`docs/Ambition-Control.md`](docs/Ambition-Control.md) for the risks and for `revert-generation.mjs`, which exists because of this dial |
 | What "better" means for your project | your own filled-in `agent-brief.md`, at the path named by `project-adapter.yml` → `roles.agent_brief_path` | **Used immediately, and used whole** — `run-generation.mjs` reads the file and sends it as the suggestion stage's entire system prompt, not a summary of it |
 | Where digest/escalation emails go, and how they're sent | `project-adapter.yml` → `notify.recipient` / `notify.from` / `notify.provider`, plus `<PROVIDER>_API_KEY` (e.g. `SENDGRID_API_KEY`) in `.env`/Secrets | **Used immediately** — `send-digest.mjs` / `send-escalation-notice.mjs` read these and actually send, once you (or your workflow) invoke them; SendGrid ships built in, other senders are added via `notify.mjs`'s `registerSender()` |
 | Real, well-received email bodies from your own project's history | `project-adapter.yml` → `notify.calibration_examples` (optional file paths) | **Used immediately once present** — quoted into the digest's system prompt to calibrate register; a fresh project with none yet still gets a working prompt from the rules alone |
@@ -311,8 +314,9 @@ npm test
 ```
 
 Zero dependencies here too: `node:test` and `node:assert` are Node
-built-ins, so there's no test framework to install. 258 checks as of this
-writing, all passing.
+built-ins, so there's no test framework to install. The count is whatever
+`npm test` prints — it is not repeated here, because a hand-typed number
+drifted three ways before this sentence replaced it.
 
 **Why this exists, and why it's worth keeping current:** every check here
 was, at first, a throwaway script written to confirm one piece of
@@ -364,6 +368,15 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Staging & promotion — merge + tag (`harness/lib/promote.mjs`), deploy verification (`harness/lib/verify-deployment.mjs`) | ✅ Built, tested — all four `verify_strategy` values: `url` (poll + compare), `registry` (npm/PyPI/NuGet/Maven Central), `artifact` (build/path/smoke-run), `none`. Chained automatically by the generated workflow (`harness/templates/workflow.yml.tmpl`). |
 | Notifier — plain-language digest with a reliable fallback (`harness/lib/notify.mjs`, `harness/scripts/send-digest.mjs`, `send-escalation-notice.mjs`) | ✅ Built, tested — sender is pluggable (`registerSender()`; SendGrid ships built in, Slack/webhook/another email API are added by registering one under its own name), calibration examples are optional project config, not hardcoded. Chained automatically by the generated workflow. |
 | `init` CLI scaffolder (`harness/cli/init.mjs`) | ✅ Built — asks the Portable-Harness-Design.md §6 questions and writes `project-adapter.yml`, the generated workflow, brief-template copies, and an install README for a new project |
+| Cost accounting + budget cap (`harness/lib/spend.mjs`, `budget.max_generation_tokens`) | ✅ Built, tested — every `attempts.json` carries `spend`; a generation projected over the cap is refused before the fan-out, and the refine loop stops when the running total passes it. Tokens, not money |
+| Pull-request read-back (`harness/lib/pull-requests.mjs`, `harness/scripts/sync-pull-request-outcomes.mjs`) | ✅ Built, tested — merged / open / closed written into the record at the top of every cycle; a closed pull request breaks the clean streak and reaches the next prompt as CLOSED UNMERGED |
+| Rollback (`harness/lib/rollback.mjs`, `harness/scripts/revert-generation.mjs`) | ✅ Built, tested against a real remote on both merge paths — reverts the shipped merge, records `reverted`, the next run reads it as a failure |
+| The ambition dial (`context.ambition`, [`docs/Ambition-Control.md`](docs/Ambition-Control.md)) and scope-aware ranking | ✅ Built, tested — `focused` / `earned` (default) / `ambitious`, read at run time, per-run override from the Actions tab; the ranking rubric follows the scope; a lone ambitious failure no longer resets the streak |
+| Seats (`harness/lib/seats.mjs`) — cross-family ranker, seat promotion | ✅ Built, tested — the rank seat defaults to another lab's model from the snapshot; a rotating model whose own edits keep being approved and kept can earn the implement seat (`roles.promotion`, off by default); the review seat is never auto-assigned |
+| Operational report (`harness/lib/report.mjs` → `<generationsDir>/REPORT.md`) | ✅ Built, tested — the paper's §7 metrics from the records, regenerated every cycle, never hand-edited |
+| Campaign mode (`harness/lib/campaign.mjs`, the workflow's `models` input) | ✅ Built, tested — a generation now, on models named by hand, recorded as `campaign: true` |
+| The committed goal (`project.goal`, [`docs/curiosity/C1`](docs/curiosity/C1-committed-goal.md)) and the themes review's `UNKNOWN` field ([`C2`](docs/curiosity/C2-themes-review-cli.md) phase A) | ✅ Built, tested — the goal sits above the brief, the reviewer rejects drift from it, the guard refuses a diff that edits it; a review may name open questions, rendered as their own section and dropped when none |
+| Kill switch, version stamp, pinned supply chain | ✅ Built, tested — `SELF_IMPROVE_PAUSED` repository variable; `harness/VERSION` in every adapter and record; actions by SHA, `js-yaml` exact with scripts disabled |
 | `templates/` — generated workflow (`harness/templates/workflow.yml.tmpl`), agent brief, reviewer brief | ✅ Built, tested (`tests/lib/scaffold.test.mjs` parses every strategy combination's generated YAML back to confirm it's valid); guard config has no separate template — it's `constitution.*` in `project-adapter.yml` itself |
 
 `Portable-Harness-Design.md` §10 has the full build order and reasoning for
@@ -384,6 +397,7 @@ what comes next and why.
 | The research corpus this draws on (AlphaEvolve, Darwin Gödel Machine, self-rewarding/self-adapting LMs, harness engineering) | [`docs/`](docs/), indexed in [`docs/SOURCES.md`](docs/SOURCES.md) |
 | A proposal for a second longitudinal pass — one that asks what the project still doesn't understand about itself, rather than what pattern is repeating | [`docs/Curiosity-Engine-Design.md`](docs/Curiosity-Engine-Design.md), with a build spec per component in [`docs/curiosity/`](docs/curiosity/) |
 | A proposal for a browser-based install flow — connect, configure, store keys, open the PR, rehearse — instead of running `init.mjs` by hand | [`console/DESIGN.md`](console/DESIGN.md) |
+| An outside review of the concept and the code, a SWOT, and the workplan additions it proposes to run this as a product | [`docs/Review-SWOT-2026-09.md`](docs/Review-SWOT-2026-09.md) |
 
 ## How the three pieces fit together
 
@@ -404,15 +418,16 @@ status marks below don't read as contradictions:
    refine → guard → test → promote → verify → notify loop end to end — see
    "What's actually built here, today" in [`ARCHITECTURE.md`](ARCHITECTURE.md).
    This is the only one of the three stages that runs unattended today.
-3. **Learn** (🚧 proposed): `docs/curiosity/` designs a second, slower pass
-   over the same run history — harvesting open questions from every
+3. **Learn** (🚧 partly built): `docs/curiosity/` designs a second, slower
+   pass over the same run history — harvesting open questions from every
    proposal, promoting the corroborated ones into a themes review, and
    occasionally spending a whole generation on a sourced document instead of
-   a diff. None of it is built; every component is designed to attach onto a
-   specific file the loop already writes (`escalations.mjs`, `themes.mjs`,
-   `context-pack.mjs`) rather than requiring a new one, so a repository with
-   no run history yet is unaffected — see "Cold start" in
-   [`docs/curiosity/README.md`](docs/curiosity/README.md#cold-start-the-first-runs-must-work-with-none-of-this).
+   a diff. Four of its ten components are built (C1 the goal, C2's `UNKNOWN`
+   field, C8 escalation follow-through, C10 runtime evidence); the rest wait
+   on the A′ go/no-go (`WORKPLAN.md` 4.3a). Every component attaches onto a
+   file the loop already writes and renders nothing when its input is
+   absent, so a repository with no run history yet is unaffected — see "Cold
+   start" in [`docs/curiosity/README.md`](docs/curiosity/README.md#cold-start-the-first-runs-must-work-with-none-of-this).
 
 **The seam between stage 1 and stage 2, now closed:** the generated workflow
 used to always auto-merge an approved change (`harness/lib/promote.mjs`),

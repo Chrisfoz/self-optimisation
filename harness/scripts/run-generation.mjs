@@ -20,7 +20,7 @@
  *
  * Everything else is read from project-adapter.yml, with environment
  * overrides available for the same fields the workflow already sets
- * (IMPLEMENT_MODEL, REVIEW_MODEL, SCOPE, MAX_ATTEMPTS) — same precedence
+ * (IMPLEMENT_MODEL, REVIEW_MODEL, RANK_MODEL, SCOPE, MAX_ATTEMPTS) — same precedence
  * convention as check-model-releases.mjs: env var beats adapter, adapter
  * beats built-in default.
  */
@@ -29,14 +29,17 @@ import fs from 'fs';
 import path from 'path';
 import '../providers/index.mjs';
 import { setOutput, oneLine } from '../lib/gh-output.mjs';
-import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig } from '../lib/adapter.mjs';
+import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig, goalConfig, snapshotPath as adapterSnapshotPath } from '../lib/adapter.mjs';
+import { getProvider } from '../lib/llm-provider.mjs';
+import { pickCrossFamilyRanker, describeSeats, promotionCandidate } from '../lib/seats.mjs';
+import { loadRecords } from '../lib/report.mjs';
 import { compileAllowlist } from '../lib/edit-format.mjs';
 import { globToRegExp } from '../lib/glob.mjs';
 import {
   buildSourceBundle, buildRepoManifest, buildTestIndex, buildArchitectureNotes,
-  buildGenerationIndex, buildGenerationHistory, buildRuntimeEvidence, recommendScope,
+  buildGenerationIndex, buildGenerationHistory, buildRuntimeEvidence, recommendScope, fenceUntrusted,
 } from '../lib/context-pack.mjs';
-import { loadLatestThemesReview, buildThemesBrief } from '../lib/themes.mjs';
+import { loadLatestThemesReview, buildThemesBrief, buildOpenQuestionsBrief } from '../lib/themes.mjs';
 import { buildMetricsBrief, loadLatestMetrics } from '../lib/evaluators.mjs';
 import { buildEscalationBrief, loadLedger } from '../lib/escalations.mjs';
 import { runGeneration } from '../lib/orchestrator.mjs';
@@ -92,6 +95,10 @@ const memory = memoryConfig(adapter);
 const briefs = briefPaths(adapter);
 const roles = rolesConfig(adapter);
 const ctxConfig = contextConfig(adapter);
+const budget = budgetConfig(adapter);
+// Throws on a goal with no statement — a half-specified goal silently
+// ignored is worse than none (docs/curiosity/C1).
+const goal = goalConfig(adapter);
 
 if (editableFiles.length === 0) {
   console.error('project-adapter.yml has no constitution.allowed_paths — nothing for the agent to edit.');
@@ -114,23 +121,81 @@ const readRequired = (relative, what) => {
 const agentBrief = readRequired(briefs.agentBriefPath, 'agent brief');
 const reviewerBrief = readRequired(briefs.reviewerBriefPath, 'reviewer brief');
 
-const implementModel = process.env.IMPLEMENT_MODEL || roles.implementModel || 'claude-opus-5';
-const reviewModel = process.env.REVIEW_MODEL || roles.reviewModel || 'claude-opus-5';
-const rankModel = roles.rankModel || implementModel;
-const maxAttempts = Number(process.env.MAX_ATTEMPTS || roles.maxAttempts || 3);
-const suggestMaxTokens = Number(process.env.SUGGEST_MAX_TOKENS || roles.suggestMaxTokens || 32000);
-
 const generationsDir = ctxConfig.generationsDir || 'docs/generations';
 
+// The implement seat: the env override, else a rotating model that EARNED
+// it (roles.promotion — a model whose own edits were approved and kept N
+// times), else the pinned model. The review seat is never promoted.
+const pinnedImplement = roles.implementModel || 'claude-opus-5';
+const promoted = process.env.IMPLEMENT_MODEL || !roles.promotionThreshold
+  ? null
+  : promotionCandidate({
+      records: loadRecords({ repoRoot, generationsDir }).records,
+      threshold: roles.promotionThreshold,
+      hasKey: (provider) => Boolean(process.env[getProvider(provider)?.envKey ?? '']),
+    });
+const seatPromotion = promoted && promoted.model !== pinnedImplement
+  ? { model: promoted.model, provider: promoted.provider, basis: `${promoted.kept} self-implemented change(s) approved and kept; threshold ${roles.promotionThreshold}` }
+  : null;
+if (seatPromotion) console.error(`🏅 Implement seat promoted to ${seatPromotion.model} — ${seatPromotion.basis}`);
+const implementModel = process.env.IMPLEMENT_MODEL || seatPromotion?.model || pinnedImplement;
+const reviewModel = process.env.REVIEW_MODEL || roles.reviewModel || 'claude-opus-5';
+
+// The rank seat: the adapter's choice if it made one, otherwise a model
+// from a DIFFERENT family than the implementer, drawn from the detector's
+// snapshot and limited to labs whose key is present — and only then the
+// implementer itself. A judge prefers its own family's prose
+// (learning/07-whats-actually-new.md §5); ranking fails safe, so a
+// cross-family default costs at worst one ranking. The review seat is not
+// auto-assigned the same way — it fails closed and must be a model someone
+// chose — but a shared family there is warned about below every run.
+const rankModel = process.env.RANK_MODEL || roles.rankModel || (() => {
+  const snapshotFile = path.resolve(repoRoot, adapterSnapshotPath(adapter) || '.agent/model-snapshot.json');
+  let snapshot = {};
+  try { snapshot = JSON.parse(fs.readFileSync(snapshotFile, 'utf8')); } catch { /* no snapshot yet: no cross-family default */ }
+  const pick = pickCrossFamilyRanker({
+    implementModel,
+    snapshot,
+    hasKey: (provider) => Boolean(process.env[getProvider(provider)?.envKey ?? '']),
+  });
+  if (pick) console.error(`⚖️  Rank seat defaulted to ${pick.id} (${pick.provider}) — a different family than the implementer, from the model snapshot.`);
+  return pick?.id ?? implementModel;
+})();
+
+const seats = describeSeats({ implementModel, reviewModel, rankModel });
+console.error(`🪑 Seats: ${seats.line}`);
+for (const warning of seats.warnings) console.error(`   ⚠️  ${warning}`);
+const maxAttempts = Number(process.env.MAX_ATTEMPTS || roles.maxAttempts || 3);
+const suggestMaxTokens = Number(process.env.SUGGEST_MAX_TOKENS || roles.suggestMaxTokens || 32000);
+const campaign = process.env.CAMPAIGN === 'true';
+if (campaign) console.error('🧪 Campaign generation — models named by hand; recorded as campaign: true');
+
 // --- scope ---
+// Precedence, highest first: SCOPE for this one run (the Actions tab's
+// "Run workflow" input, or the console's per-run override), then the
+// adapter's standing ambition dial, then the earned default. The dial is
+// the owner's decision about how much each run may attempt; the gates
+// (review, guard, tests, the pull request) are identical at every setting,
+// and rollback exists because an ambitious change that passes them can
+// still be one the owner wants gone — see docs/Ambition-Control.md.
 const scopeEnv = (process.env.SCOPE || '').toLowerCase();
 const scope = scopeEnv === 'focused' || scopeEnv === 'ambitious'
   ? { scope: scopeEnv, reason: 'set explicitly for this run' }
-  : recommendScope({ repoRoot, generationsDir, required: ctxConfig.scopeRequired ?? 2 });
+  : ctxConfig.ambition === 'focused'
+    ? { scope: 'focused', reason: 'context.ambition is "focused": every generation is a small, localised change' }
+    : ctxConfig.ambition === 'ambitious'
+      ? { scope: 'ambitious', reason: 'context.ambition is "ambitious": every generation may attempt structural work' }
+      : recommendScope({ repoRoot, generationsDir, required: ctxConfig.scopeRequired ?? 2 });
+console.error(`🎚️  Scope: ${scope.scope} — ${scope.reason}`);
 
 // --- context ---
+const latestThemes = loadLatestThemesReview({ repoRoot, themesDir: memory.themesDir || 'docs/themes' });
 const context = {
-  sources: buildSourceBundle(editableFiles, { repoRoot }),
+  // Fenced (context-pack.mjs's fenceUntrusted()): the source and the
+  // architecture notes are the two blocks a stranger with commit access to
+  // the project could have written into. Everything else in this object is
+  // derived by the harness or written by the owner.
+  sources: fenceUntrusted('SOURCE', buildSourceBundle(editableFiles, { repoRoot })) ?? '',
   manifest: buildRepoManifest({
     repoRoot,
     purposes: ctxConfig.purposes,
@@ -141,8 +206,11 @@ const context = {
   testIndex: buildTestIndex({ repoRoot, testFiles: ctxConfig.testFiles }),
   generationIndex: buildGenerationIndex({ repoRoot, generationsDir }),
   history: buildGenerationHistory({ repoRoot, generationsDir, limit: 3 }),
-  architectureNotes: buildArchitectureNotes({ repoRoot, docPath: ctxConfig.architectureNotesPath, appendOnlyMarker: ctxConfig.architectureNotesMarker }),
-  themes: buildThemesBrief(loadLatestThemesReview({ repoRoot, themesDir: memory.themesDir || 'docs/themes' })),
+  architectureNotes: fenceUntrusted('ARCHITECTURE NOTES', buildArchitectureNotes({ repoRoot, docPath: ctxConfig.architectureNotesPath, appendOnlyMarker: ctxConfig.architectureNotesMarker })),
+  themes: buildThemesBrief(latestThemes),
+  // The UNKNOWN field of the same review — docs/curiosity/C2, phase A. Null
+  // for every review written before the field existed, which drops it.
+  openQuestions: buildOpenQuestionsBrief(latestThemes),
   escalations: buildEscalationBrief(
     loadLedger({ repoRoot, ledgerPath: memory.ledgerPath || undefined }),
     { threshold: { models: memory.consensus.models ?? 3, labs: memory.consensus.labs ?? 2 } }
@@ -166,7 +234,8 @@ console.error(
   `architecture notes ${context.architectureNotes ? 'included' : 'unavailable'}, ` +
   `themes review ${context.themes ? 'included' : 'none yet'}, ` +
   `measured quality dimensions ${context.qualityMetrics ? 'included' : 'none configured'}, ` +
-  `runtime evidence ${context.runtime ? 'included' : 'none recorded'}\n`
+  `runtime evidence ${context.runtime ? 'included' : 'none recorded'}, ` +
+  `committed goal ${goal ? 'set' : 'none'}\n`
 );
 
 const projectDescription = adapter.project?.description || adapter.project?.id || 'this project';
@@ -198,6 +267,10 @@ try {
       ledgerPath: memory.ledgerPath || undefined,
       consensus: { models: memory.consensus.models ?? 3, labs: memory.consensus.labs ?? 2 },
       resurfaceAfter: memory.resurfaceAfter ?? undefined,
+      budget,
+      campaign,
+      seatPromotion,
+      goal,
     },
     { log: (msg) => console.error(msg) }
   );
@@ -210,6 +283,8 @@ try {
 
 setOutput('has-changes', String(result.hasChanges));
 setOutput('scope', result.scope?.scope ?? '');
+// Tokens, input plus output, across every call this generation made.
+setOutput('spend-tokens', String(result.spend?.totalTokens ?? 0));
 if (result.attemptRecordPath) setOutput('attempt-record', result.attemptRecordPath);
 
 // Escalations, if any were recorded this run — feeds send-digest.mjs's
@@ -244,6 +319,13 @@ if (result.outcome === 'no-proposal') {
   console.error(`\n⚠️  No model produced a usable proposal.`);
   setOutput('summary', result.summary);
   setOutput('review-verdict', 'no-proposal');
+  process.exit(1);
+}
+
+if (result.outcome === 'over-budget') {
+  console.error(`\n💸 Refused before the fan-out: ${result.summary}`);
+  setOutput('summary', result.summary);
+  setOutput('review-verdict', 'over-budget');
   process.exit(1);
 }
 

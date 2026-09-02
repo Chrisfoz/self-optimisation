@@ -59,6 +59,10 @@ on:
         required: false
         type: choice
         options: ['', focused, ambitious]
+      models:
+        description: 'Campaign mode: comma-separated model ids to run a generation on NOW, instead of waiting for a release. Recorded as campaign: true.'
+        required: false
+        type: string
 
 permissions:
 {{PERMISSION_LINES}}
@@ -67,25 +71,69 @@ jobs:
   self-improve:
     runs-on: {{RUNNER}}
     steps:
-      - uses: actions/checkout@v4
+      # Actions pinned by commit SHA, not by tag, and the one npm package
+      # pinned to an exact version with lifecycle scripts disabled. This
+      # job holds a token that can write to the repository; a tag can be
+      # moved and a floating version can be replaced, and either would run
+      # inside every gate rather than having to defeat one. See
+      # learning/03-failure-modes.md Part 9, "Supply chain, on the build
+      # side". Bump the SHA and the version together, on purpose.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20'
 
       - name: Install harness dependencies
         shell: bash
-        run: npm install --no-save js-yaml
+        run: npm install --no-save --ignore-scripts js-yaml@{{JS_YAML_VERSION}}
+
+      # The kill switch. A repository VARIABLE (not a secret — it is not
+      # sensitive, and a variable can be read back and seen in the UI),
+      # settable by anyone with settings access and requiring no edit to
+      # this file. When it is "true" the run stops here: no lab is polled,
+      # no model is called, nothing is spent — and the digest step at the
+      # bottom still runs, so the inbox says "paused" rather than nothing.
+      # Settings -> Secrets and variables -> Actions -> Variables ->
+      # SELF_IMPROVE_PAUSED = true.
+      - name: Is the loop paused?
+        id: pause
+        shell: bash
+        env:
+          PAUSED: ${{ vars.SELF_IMPROVE_PAUSED }}
+        run: |
+          if [ "$PAUSED" = "true" ]; then
+            echo "paused=true" >> "$GITHUB_OUTPUT"
+            echo "SELF_IMPROVE_PAUSED is set. Stopping before anything is polled or spent."
+          else
+            echo "paused=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # continue-on-error so a crashed release check cannot kill the job
       # before the digest step gets to report that it crashed. Its outcome is
       # read back below and passed to the digest as CHECK_RESULT — without
       # that, "the check never ran" is indistinguishable from "the check ran
       # and found nothing", and a broken cycle reports as a calm one.
+      # Campaign mode (harness/lib/campaign.mjs): the owner named models from
+      # the Actions tab, so the release check is skipped and the same
+      # release-check.json is written by hand. Everything downstream — probe,
+      # preflight, improve — runs unchanged, and the record is stamped
+      # campaign: true so release-driven history stays distinguishable.
+      - name: Use the models named by hand (campaign mode)
+        id: campaign
+        if: steps.pause.outputs.paused != 'true' && github.event.inputs.models
+        shell: bash
+        env:
+          CAMPAIGN_MODELS: ${{ github.event.inputs.models }}
+        run: |
+          node harness/scripts/campaign-models.mjs > "$RUNNER_TEMP/release-check.json"
+          echo "has-new=true" >> "$GITHUB_OUTPUT"
+
       - name: Check for new model releases
         id: check
+        if: steps.pause.outputs.paused != 'true' && !github.event.inputs.models
         shell: bash
         continue-on-error: true
         env:
@@ -101,6 +149,7 @@ jobs:
           echo "release-detected=$(jq -r '.releaseDetected' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
 
       - name: Commit the updated model snapshot
+        if: steps.pause.outputs.paused != 'true' && !github.event.inputs.models
         shell: bash
         run: |
           git config user.email "self-improvement-bot@github-actions.local"
@@ -109,9 +158,33 @@ jobs:
           git commit -m "Update model snapshot" || echo "No change to commit"
           git push
 
+      # The fate of earlier generations' pull requests, read back into their
+      # records before this cycle decides anything: a person merging or
+      # closing is the one verdict in the loop that is not the harness
+      # grading itself, and it feeds the next prompt's history and the
+      # earned-ambition check. Finds nothing on the autonomous-merge path,
+      # which is fine. continue-on-error: bookkeeping must not stop a cycle.
+      - name: Read back the fate of earlier pull requests
+        id: prs
+        if: steps.pause.outputs.paused != 'true'
+        shell: bash
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node harness/scripts/sync-pull-request-outcomes.mjs --generations-dir {{GENERATIONS_DIR}}
+          # The operational report — the paper's §7 metrics, generated from
+          # the records and never hand-edited. Regenerated here, after the
+          # read-back, so it reflects every fate known at the start of this
+          # cycle. See harness/lib/report.mjs.
+          node harness/scripts/report.mjs --generations-dir {{GENERATIONS_DIR}}
+          git add -A -- {{GENERATIONS_DIR}}
+          git commit -m "Record pull request outcomes and regenerate the report" || echo "Nothing to record"
+          git push
+
       - name: Probe reachability, then read the survivors
         id: probe
-        if: steps.check.outputs.has-new == 'true'
+        if: steps.check.outputs.has-new == 'true' || steps.campaign.outputs.has-new == 'true'
         shell: bash
         run: |
           node harness/scripts/probe-models.mjs "$RUNNER_TEMP/release-check.json"
@@ -159,6 +232,7 @@ jobs:
           GEN_NUMBER: ${{ steps.gen.outputs.number }}
           SUGGEST_MODELS: ${{ steps.probe.outputs.models }}
           SCOPE: ${{ github.event.inputs.scope }}
+          CAMPAIGN: ${{ steps.campaign.outputs.has-new }}
         run: node harness/scripts/run-generation.mjs
 
       # The measurements that are NOT gates — quality dimensions beyond

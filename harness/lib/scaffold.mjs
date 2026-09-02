@@ -13,7 +13,15 @@
  */
 
 import { dump as dumpYaml } from 'js-yaml';
-import { normalizeApprovalClass } from './adapter.mjs';
+import { normalizeApprovalClass, normalizeAmbition } from './adapter.mjs';
+
+/**
+ * The exact js-yaml version the generated workflow installs at run time.
+ * Exact, not a range: the job installing it holds a write token, and a
+ * floating version is a supply-chain door into every gate. Kept beside
+ * package.json's own pin — bump both together.
+ */
+export const JS_YAML_VERSION = '5.3.0';
 
 /** Single-quote a path/command for safe use in a bash argument list — the same escaping bash itself expects. */
 function shellQuote(value) {
@@ -86,6 +94,16 @@ export function buildAdapterObject(a) {
       id: a.projectId,
       repository: a.repository || undefined,
       default_branch: a.defaultBranch || 'main',
+      // The committed goal (docs/curiosity/C1) — present only when the
+      // owner wrote one. Frozen: the guard refuses a diff that changes it.
+      ...(a.goalStatement ? { goal: { statement: a.goalStatement, holds: a.goalHolds || [], away_from: a.goalAwayFrom || [] } } : {}),
+    },
+    // Provenance: which harness produced this file. Read by nothing at run
+    // time; written so `init --check-upgrade` and a human can tell whether
+    // this installation carries a fix that shipped after it was scaffolded.
+    // init.mjs supplies it from harness/VERSION via harness/lib/version.mjs.
+    harness: {
+      version: a.harnessVersion || 'unknown',
     },
     providers: {
       watched: a.providers.map((p) => p.name),
@@ -116,7 +134,11 @@ export function buildAdapterObject(a) {
       suggest: { max_output_tokens: Number.isFinite(a.suggestMaxTokens) ? a.suggestMaxTokens : 32000 },
       implement: { model: a.implementModel || 'claude-opus-5' },
       review: { model: a.reviewModel || 'claude-opus-5' },
-      rank: { model: a.rankModel || 'claude-opus-5' },
+      // Unset on purpose when init left it blank: run-generation.mjs then
+      // picks a model from a different family than the implementer at run
+      // time (harness/lib/seats.mjs). Writing the implementer here instead
+      // would silently re-create the shared-family judge the blank avoids.
+      rank: { model: a.rankModel || null },
       refine: { max_attempts: Number.isFinite(a.maxAttempts) ? a.maxAttempts : 3 },
     },
     memory: {
@@ -139,10 +161,21 @@ export function buildAdapterObject(a) {
       purposes: a.purposes || {},
       history_limit: Number.isFinite(a.historyLimit) ? a.historyLimit : 3,
       scope_required: Number.isFinite(a.scopeRequired) ? a.scopeRequired : 2,
+      // LIVE, read at run time, normalised rather than echoed so a typo
+      // never lands on "ambitious". See docs/Ambition-Control.md.
+      ambition: normalizeAmbition(a.ambition),
     },
     deployment: {
       verify_strategy: a.deploymentStrategy || 'none',
       ci: { runner: a.runner || 'ubuntu-latest' },
+    },
+    // LIVE: run-generation.mjs reads it. A per-generation token cap, set by
+    // default because an unattended loop's cost scales with other people's
+    // release schedules — a busy month is N proposers, and nothing else in
+    // the pipeline bounds it. 2,000,000 is a few times a typical generation
+    // with three proposers; a project with a large source bundle raises it.
+    budget: {
+      max_generation_tokens: Number.isFinite(a.maxGenerationTokens) ? a.maxGenerationTokens : 2000000,
     },
     // RECORDED, and deliberately never read back — see the closing section
     // of harness/project-adapter.example.yml for the reasoning. Both of
@@ -408,6 +441,7 @@ export function renderWorkflowTemplate(template, answers) {
         env:
           ${notifyEnvLine}
           GEN_NUMBER: \${{ steps.gen.outputs.number }}
+          PAUSED: \${{ steps.pause.outputs.paused }}
           CHECK_RESULT: \${{ steps.check.outcome }}
           PREFLIGHT_RESULT: \${{ steps.preflight.outcome }}
           RELEASE_DETECTED: \${{ steps.check.outputs.release-detected }}
@@ -424,6 +458,7 @@ export function renderWorkflowTemplate(template, answers) {
           BRIEF_FEEDBACK: \${{ steps.improve.outputs.brief-feedback }}
           ESC_OPENED: \${{ steps.improve.outputs.escalations-opened }}
           ESC_FLAGGED: \${{ steps.improve.outputs.escalations-flagged }}
+          SPEND_TOKENS: \${{ steps.improve.outputs.spend-tokens }}
         run: node harness/scripts/send-digest.mjs
 
       - name: Send an escalation notice, if anything was flagged
@@ -462,6 +497,8 @@ export function renderWorkflowTemplate(template, answers) {
   out = sub(out, '{{ALLOWED_PATHS_GIT_ADD}}', allowedPathsGitAdd);
   out = sub(out, '{{RECORD_DIRS_GIT_ADD}}', recordDirsGitAdd);
   out = sub(out, '{{THEMES_CADENCE}}', String(Number.isFinite(answers.themesCadence) ? answers.themesCadence : 10));
+  out = sub(out, '{{JS_YAML_VERSION}}', JS_YAML_VERSION);
+  out = sub(out, '{{GENERATIONS_DIR}}', shellQuote(answers.generationsDir || 'docs/generations'));
   out = sub(out, '{{DEFAULT_BRANCH}}', answers.defaultBranch || 'main');
   // Same first-line-unindented convention as {{NOTIFY_STEPS}} below: the
   // template supplies the 6 spaces before the token, so this block's own
@@ -568,6 +605,23 @@ ${approvalSection}
 ## Cadence
 
 ${cadenceSection}
+
+## Undoing a generation
+
+Every gate is a prediction; this is the correction. From a checkout with
+push access to \`${answers.defaultBranch || 'main'}\`:
+
+\`\`\`bash
+node harness/scripts/revert-generation.mjs NNN --reason "why"
+\`\`\`
+
+It reverts the merge that shipped generation NNN (the \`gen-NNN\` tag on the
+autonomous path, the pull request's merge commit on the default path),
+pushes, and records the revert in that generation's \`attempts.json\` so
+the next run reads it as a failure rather than a success. It rewrites no
+history. See \`docs/Ambition-Control.md\` in the harness repository for why
+this exists beside the ambition setting (\`context.ambition\`, currently
+\`${answers.ambition || 'earned'}\`).
 
 ## Rehearse before turning the schedule on
 

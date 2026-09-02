@@ -121,3 +121,11 @@ test('the probe step does not overwrite releaseDetected', () => {
   assert.doesNotMatch(probeStep, /release-detected=/, 'releaseDetected must survive the probe unchanged');
   assert.match(probeStep, /dropped=/, 'the probe should report what it dropped, for the unreachable email');
 });
+
+test('a paused cycle says so, says nothing was spent, and says how to resume', () => {
+  const { subject, body } = buildNoGenerationEmail({ reason: NO_GENERATION_REASONS.PAUSED, runUrl: 'https://example/run' });
+  assert.match(subject, /paused/i);
+  assert.match(body, /SELF_IMPROVE_PAUSED/);
+  assert.match(body, /no tokens were spent/i);
+  assert.match(body, /To resume/);
+});

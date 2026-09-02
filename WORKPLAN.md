@@ -18,10 +18,44 @@ call.
 
 ## Start here
 
-**→ Tier 2.1, rehearse on a second project.** Tier 1 is done. 2.1 is now the
-highest-value item in the file: it decides whether 2.2 is urgent or
-theoretical, and nothing should claim multi-language support until it has
-happened.
+**→ Tier 2.1a, three design-partner installs, with campaign mode on.**
+Tier 0, Tier 1 and the buildable half of Tier 5 are done (2026-09-02). The
+harness now records cost, reads the owner's verdict back from every pull
+request, ranks with a different family, no longer pulls every run toward
+the smallest change, and can be turned up and rolled back. What it does not
+have is a second project: every number it can now report is still n=1.
+2.1a decides whether 2.2 is urgent or theoretical, and nothing should claim
+multi-language support until it has happened. 4.3a (A′ on carrotgame's
+history) can run in parallel, since it needs only records that exist.
+
+---
+
+## Tier 0 — make it adoptable
+
+From [`docs/Review-SWOT-2026-09.md`](docs/Review-SWOT-2026-09.md) §6.
+**Tier 0 is done** (2026-09-02), with one item that is the owner's to
+confirm.
+
+- [x] **0.1 — Add a `LICENSE`.** MIT, with the owner named as copyright
+  holder. **The licence choice is the owner's decision, not the
+  reviewer's** — it is on the branch to be confirmed or changed before
+  merge; `CONTRIBUTING.md` now says MIT and should be corrected with it.
+- [x] **0.2 — Version the harness, and record which version an install
+  carries.** `harness/VERSION`, `harness/lib/version.mjs`; `init` writes
+  `harness.version` into the adapter, every `attempts.json` carries
+  `harnessVersion`, and `init --version` / `init --check-upgrade` read the
+  local and upstream files.
+- [x] **0.3 — Pin the generated workflow's supply chain.** Actions by
+  commit SHA (checkout v4.2.2, setup-node v4.4.0, resolved with
+  `git ls-remote`), `js-yaml` at the exact version `package.json` pins with
+  `--ignore-scripts`; the scaffold test asserts both, and that the two
+  pins agree.
+- [x] **0.4 — A kill switch a non-technical owner can flip.** The
+  `SELF_IMPROVE_PAUSED` repository variable, read by a first step that
+  gates the release check; the digest still runs and sends a `paused`
+  email saying nothing was spent and how to resume.
+- [x] **0.5 — Stop hand-typing the test count.** README and this file
+  point at `npm test` instead of carrying a number.
 
 ---
 
@@ -145,6 +179,22 @@ gaps are solved by better documentation — they are missing code.
   *Done when:* `init` has been run against that repo and one generation has
   been rehearsed end to end, with the result written up honestly — including
   whatever broke.
+
+- [ ] **2.1a — Three design-partner installs, not one.** One Python CLI
+  (no visual surface, `verify_strategy: none`), one TypeScript service with
+  more than 100 source files (forces `context.strategy: scoped`), one
+  published library (`verify_strategy: registry`). The paper's RQ5 says
+  three; the console needs the demand signal; and one project cannot
+  separate "the harness is portable" from "this project was easy".
+  *Done when:* three rehearsal reports exist, each naming what broke.
+
+- [x] **2.5 — Campaign mode, for accumulating evidence on purpose.**
+  **Done.** The generated workflow's `models` dispatch input runs a
+  generation now on models named by hand; `harness/lib/campaign.mjs` writes
+  the same `release-check.json` the detector would, so probe, preflight and
+  improve run unchanged; the snapshot is untouched; the record is stamped
+  `campaign: true` and the index and report say so. Principle 1 is about
+  the product loop; evaluating the harness needs a faster clock.
 
 - [ ] **2.2 — Implement `context.strategy: scoped`.**
   It has no implementation at all; `harness/cli/init.mjs:168` warns the user to
@@ -295,6 +345,14 @@ at fixing and never gets curious" — but do respect its own gate.
   stream to `$RUNNER_TEMP/tests.tap`, or write a JSON fragment. A project
   that does neither records less and the section shrinks; it never lies.
 
+- [x] **4.0 — Build phase A: the `UNKNOWN` field.** **Done.** 4.3
+  depended on it and the plan did not say so. `generate-themes.mjs` asks
+  for it as optional per theme and fails the review on a present-but-short
+  one; `themes.mjs`'s `buildOpenQuestionsBrief()` renders the questions as
+  their own section, numbered `q1..qN` for citation, and returns null for
+  every review without one, so the cold-start prompt stays byte-identical
+  (4.5's test now lists it).
+
 - [ ] **4.3 — Run the A′ go/no-go experiment before building anything else here.**
   `docs/curiosity/C9-retrospective-scoring.md` §"Phase A′, the cheap version".
   If the questions C2 produces are never cited by any subsequent generation,
@@ -306,8 +364,23 @@ at fixing and never gets curious" — but do respect its own gate.
   amount of harness code substitutes for a project that has actually run
   twenty-odd generations, which is 2.1's business.
 
+- [ ] **4.3a — Run A′ retrospectively on carrotgame.** Generate themes
+  reviews over carrotgame's existing generations in windows of ten (the
+  CLI's `FORCE_REVIEW`), then run `check-question-uptake.mjs` (C9, still
+  to write) against the generations that followed each window. This is the
+  go/no-go, available now, on real history — it does not have to wait for
+  2.1a.
+  *Done when:* the table in C9 §"Phase A′" has been printed for carrotgame
+  and the verdict is recorded in `docs/curiosity/README.md`.
+
 - [ ] **4.4 — C3 → C4 → C5 → C6 → C7 → C9, in that dependency order.**
   Only if 4.3 says yes.
+
+- [x] **4.6 — C1, the committed goal.** **Done.** `project.goal` in the
+  adapter; rendered above the brief; the reviewer rejects a correct, safe,
+  tested change that moves away from it; `check-guarded-paths.mjs` refuses
+  a diff that edits it; `init` asks for the statement. The open question
+  C1 left is decided in the doc: the goal wins, consensus is evidence.
 
 - [ ] **4.5 — The cold-start byte-identity test, on every component built.**
   *Standing, not finishable — left unticked on purpose.* Applied to every
@@ -324,6 +397,83 @@ at fixing and never gets curious" — but do respect its own gate.
   rather than merely intended to be, and its failure mode is why it's worth the
   effort: a stray newline is invisible in review, costs nothing measurable, and
   silently changes the prompt every model in the rotation has been answering.
+
+---
+
+## Tier 5 — operationalise
+
+From [`docs/Review-SWOT-2026-09.md`](docs/Review-SWOT-2026-09.md) §6,
+adopted 2026-09-02. Everything ticked here shipped in one pass on the
+`claude/self-optimization-swat-259scx` branch, each item its own commit
+with tests. What is not ticked needs either a second project or a design
+decision.
+
+- [x] **5.1 — Cost accounting and a budget cap.** `harness/lib/spend.mjs`;
+  every `attempts.json` carries `spend` (calls, tokens, per model, per
+  stage, how many are estimates); `budget.max_generation_tokens` is
+  projected before the fan-out (`over-budget`, nothing called) and
+  checked between attempts (`budget-exhausted`, abandoned); the digest
+  states the spend. Tokens, not money.
+- [x] **5.2 — A judge from a different family, by default.** The rank
+  seat: `harness/lib/seats.mjs` picks another lab's model from the
+  snapshot when the adapter names none. **The review seat is deliberately
+  not auto-picked** — it fails closed and must be a model someone chose —
+  but every run logs the family split and warns when review shares the
+  implementer's family, and `init` prompts for a different lab.
+- [x] **5.3 — Read the pull request's fate back.**
+  `harness/lib/pull-requests.mjs` + `sync-pull-request-outcomes.mjs`, run
+  at the top of every cycle. A closed-unmerged pull request breaks the
+  clean streak and reaches the next prompt as CLOSED UNMERGED.
+- [ ] **5.4 — A human verdict on shipped changes.** *Half done.* Closing
+  a pull request and reverting a generation are both read back and both
+  count as the owner's verdict (5.3, 5.11). What is not built is a verdict
+  on a change the owner kept — a `gen:good` / `gen:regret` label or a
+  reply keyword — which is what "promotion precision" needs beyond
+  "not reverted".
+  *Done when:* a kept change can carry a human verdict in its record and
+  the report counts it.
+- [x] **5.5 — Scope-aware ranking, and the brief template fix.**
+  `RANK_RUBRIC` by scope; focused is the original text byte for byte; the
+  brief template's "small localised edits" moved out of the constraints
+  that never expire.
+- [x] **5.6 — Stop ambition punishing itself.** A lone ambitious failure
+  costs one focused generation and is set aside from the window; two in a
+  row count in full.
+- [x] **5.6a — The ambition dial.** `context.ambition` (`focused` /
+  `earned` / `ambitious`), read at run time, per-run override from the
+  Actions tab, unrecognised values fall to `earned`; `init` refuses
+  ambitious plus autonomous merge unless the owner types the word.
+  [`docs/Ambition-Control.md`](docs/Ambition-Control.md) is the risk table
+  and states the rule the console design now carries as Step 7b: the
+  dial is not offered without the Revert button.
+- [x] **5.7 — Seat promotion by track record.**
+  `roles.promotion.implement_after_self_implemented_approvals`; a rotating
+  model whose own edits were approved and kept N times takes the
+  implement seat; the review seat is never promoted. Off by default.
+- [x] **5.8 — A generated operational report.** `harness/lib/report.mjs`
+  → `<generationsDir>/REPORT.md`: release yield, promotion precision,
+  closed-by-owner, failure recurrence, tokens and tokens per kept change,
+  per lab, per scope. Regenerated every cycle; never hand-edited.
+- [x] **5.9 — Fence untrusted source.** `fenceUntrusted()` wraps the
+  source bundle and the architecture notes; the review prompt and the
+  reviewer brief template treat text addressed to an AI as an injection
+  attempt to reject.
+- [ ] **5.10 — Branch-protection-compatible bookkeeping.** *Not built —
+  a design decision first.* The snapshot, the pull-request read-back, the
+  report and the runtime evidence all push straight to the default branch,
+  which branch protection refuses. Two shapes: a `harness/state` branch
+  the next run checks out into a worktree (clean, but every reader of the
+  records has to know), or bookkeeping riding the generation's own pull
+  request (simple, but a cycle that opens no PR records nothing). Decide
+  on the first design-partner repo that has protection on.
+  *Done when:* a rehearsal on a repo with branch protection completes
+  without a failed push.
+- [x] **5.11 — A rollback script.** `harness/lib/rollback.mjs` +
+  `revert-generation.mjs NNN`: reverts the tag's merge or the pull
+  request's merge commit, records `reverted`, and the next run reads it as
+  a failure. Tested against a real bare origin on both merge paths.
+- [x] **5.12 — Keep the losing proposals.** Every fan-out proposal under
+  `gen-NNN/proposals/<model>.md`; the prompt and the index are unchanged.
 
 ---
 
@@ -360,7 +510,7 @@ from it.
   pluggable sender registry.
 - `harness/cli/init.mjs` + `harness/templates/workflow.yml.tmpl` chain the
   whole thing into one generated workflow (§10 step 5).
-- 302 tests, including `tests/e2e/full-loop.test.mjs` driving the real chain
+- A test suite (`npm test` prints the count; it is not repeated here on purpose), including `tests/e2e/full-loop.test.mjs` driving the real chain
   against a real git remote and a real child-process test run.
 - Pinned implement/review/rank seats get their lab's API key wired even when
   that lab is not in `providers.watched`.

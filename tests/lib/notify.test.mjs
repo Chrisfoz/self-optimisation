@@ -208,3 +208,15 @@ test('registerSender: a project can register its own sender under its own name',
   assert.equal(calls[0].email.subject, 'Hi');
   assert.equal(calls[0].config.to, 'you@example.com');
 });
+
+test('buildGenerationDigestEmail: a known spend is stated in both paths, and an unknown one is never rendered as zero', async () => {
+  const throwing = async () => { throw new Error('no model'); };
+  const withSpend = await buildGenerationDigestEmail({ ...BASE, genLabel: 'generation 003', scope: 'focused', merged: true, summary: 'x', gates: GATES, spendTokens: 123456 }, { call: throwing });
+  assert.match(withSpend.body, /Spent: 123,456 tokens/);
+  const without = await buildGenerationDigestEmail({ ...BASE, genLabel: 'generation 004', scope: 'focused', merged: true, summary: 'x', gates: GATES, spendTokens: 0 }, { call: throwing });
+  assert.doesNotMatch(without.body, /Spent:/);
+  let seenFacts = '';
+  const capturing = async ({ user }) => { seenFacts = user; return { text: 'SUBJECT: s\nBODY:\nb' }; };
+  await buildGenerationDigestEmail({ ...BASE, genLabel: 'generation 005', scope: 'focused', merged: true, summary: 'x', gates: GATES, spendTokens: 999 }, { call: capturing });
+  assert.match(seenFacts, /Cost: 999 tokens/);
+});

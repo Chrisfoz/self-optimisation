@@ -396,7 +396,40 @@ it doesn't recognise (`harness/lib/adapter.mjs`'s `normalizeApprovalClass()`).
 A console bug that sends a malformed answer opens a pull request; it does not
 start merging.
 
+### Step 7b — Ambition
+
+- **Small, focused changes only**
+- **Earn it: one ambitious generation after a clean streak** (default)
+- **Ambitious every run** (advanced; shown with its risk statement, and
+  refused in combination with autonomous merge unless the user types the
+  word)
+
+Writes `context.ambition` (LIVE, read at run time by `run-generation.mjs`
+— unlike `approval_class`, which is baked into the workflow, because this
+changes what a run *attempts*, not what it is *permitted* to do; every
+setting passes the same gates). Anything unrecognised resolves to `earned`
+(`harness/lib/adapter.mjs`'s `normalizeAmbition()`), never to ambitious.
+
+The run view (§8.4) gets a per-run override of the same thing — the
+workflow's existing `scope` dispatch input — so an owner can say "this
+once, be ambitious" without changing the standing setting.
+
+**Rollback is the other half of this step.** An ambitious change can pass
+independent review, the guard and every test and still be a change the
+owner does not want. `harness/scripts/revert-generation.mjs NNN` undoes a
+shipped generation and records it as reverted, which the next run reads
+back as a failure; the console's run view should show a **Revert** button
+beside every merged generation, wired to that script via a dispatch. The
+dial should not be offered without the button. `docs/Ambition-Control.md`
+is the risk table this step renders from.
+
 ### Step 8 — Budget
+
+`budget.max_generation_tokens` (LIVE) — a per-generation token cap, checked
+before the fan-out and between refine attempts; default 2,000,000. Rendered
+as a number with a one-line explanation of what a typical generation costs,
+and a reminder that this bounds one run, not a month — a spending limit at
+each provider is still needed.
 
 `max_fanout` (LIVE) — a real ceiling on how many newly released models one
 run may fan out to, which is the actual blast-radius control this harness

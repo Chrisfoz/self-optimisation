@@ -5,9 +5,11 @@ The design argument lives in
 [`../Curiosity-Engine-Design.md`](../Curiosity-Engine-Design.md); these are
 the build instructions.
 
-**Status: none of this is built.** Every spec here describes a change to a
-harness that runs today, and each names the file it touches and what
-already exists there. Where a spec says a thing is LIVE, something reads it
+**Status: four of ten built** (C1, C2 phase A — the `UNKNOWN` field — C8
+and C10, as of 2026-09-02); the rest wait on the A′ go/no-go, which
+`WORKPLAN.md` 4.3a proposes running on carrotgame's existing history.
+Every spec here describes a change to a harness that runs today, and each
+names the file it touches and what already exists there. Where a spec says a thing is LIVE, something reads it
 now; RESERVED means it is parsed and nothing consumes it; PROPOSED means it
 does not exist.
 
