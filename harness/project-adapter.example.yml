@@ -135,7 +135,15 @@ roles:
   review:
     model: claude-opus-5       # pinned — this gate does not rotate
   rank:
-    model: claude-opus-5       # only called when more than one lab proposed this run
+    # Only called when more than one lab proposed this run. LEAVE UNSET (or
+    # null) to have the run pick a model from a DIFFERENT family than the
+    # implementer, from the model snapshot, among labs whose key is present
+    # — a judge prefers its own family's prose (learning/07-whats-actually-new.md
+    # §5), and ranking fails safe so the auto-pick costs at worst one
+    # ranking. The review seat above is NOT auto-picked: it fails closed and
+    # must be a model you chose — but the run warns every time it shares the
+    # implementer's family, and it should not.
+    model: null
   refine:
     max_attempts: 3            # on the pinned implementer; a direct edit from the
                                 # suggesting model is tried first and doesn't count against this

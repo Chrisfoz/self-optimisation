@@ -20,7 +20,7 @@
  *
  * Everything else is read from project-adapter.yml, with environment
  * overrides available for the same fields the workflow already sets
- * (IMPLEMENT_MODEL, REVIEW_MODEL, SCOPE, MAX_ATTEMPTS) — same precedence
+ * (IMPLEMENT_MODEL, REVIEW_MODEL, RANK_MODEL, SCOPE, MAX_ATTEMPTS) — same precedence
  * convention as check-model-releases.mjs: env var beats adapter, adapter
  * beats built-in default.
  */
@@ -29,7 +29,9 @@ import fs from 'fs';
 import path from 'path';
 import '../providers/index.mjs';
 import { setOutput, oneLine } from '../lib/gh-output.mjs';
-import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig } from '../lib/adapter.mjs';
+import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig, snapshotPath as adapterSnapshotPath } from '../lib/adapter.mjs';
+import { getProvider } from '../lib/llm-provider.mjs';
+import { pickCrossFamilyRanker, describeSeats } from '../lib/seats.mjs';
 import { compileAllowlist } from '../lib/edit-format.mjs';
 import { globToRegExp } from '../lib/glob.mjs';
 import {
@@ -117,7 +119,31 @@ const reviewerBrief = readRequired(briefs.reviewerBriefPath, 'reviewer brief');
 
 const implementModel = process.env.IMPLEMENT_MODEL || roles.implementModel || 'claude-opus-5';
 const reviewModel = process.env.REVIEW_MODEL || roles.reviewModel || 'claude-opus-5';
-const rankModel = roles.rankModel || implementModel;
+
+// The rank seat: the adapter's choice if it made one, otherwise a model
+// from a DIFFERENT family than the implementer, drawn from the detector's
+// snapshot and limited to labs whose key is present — and only then the
+// implementer itself. A judge prefers its own family's prose
+// (learning/07-whats-actually-new.md §5); ranking fails safe, so a
+// cross-family default costs at worst one ranking. The review seat is not
+// auto-assigned the same way — it fails closed and must be a model someone
+// chose — but a shared family there is warned about below every run.
+const rankModel = process.env.RANK_MODEL || roles.rankModel || (() => {
+  const snapshotFile = path.resolve(repoRoot, adapterSnapshotPath(adapter) || '.agent/model-snapshot.json');
+  let snapshot = {};
+  try { snapshot = JSON.parse(fs.readFileSync(snapshotFile, 'utf8')); } catch { /* no snapshot yet: no cross-family default */ }
+  const pick = pickCrossFamilyRanker({
+    implementModel,
+    snapshot,
+    hasKey: (provider) => Boolean(process.env[getProvider(provider)?.envKey ?? '']),
+  });
+  if (pick) console.error(`⚖️  Rank seat defaulted to ${pick.id} (${pick.provider}) — a different family than the implementer, from the model snapshot.`);
+  return pick?.id ?? implementModel;
+})();
+
+const seats = describeSeats({ implementModel, reviewModel, rankModel });
+console.error(`🪑 Seats: ${seats.line}`);
+for (const warning of seats.warnings) console.error(`   ⚠️  ${warning}`);
 const maxAttempts = Number(process.env.MAX_ATTEMPTS || roles.maxAttempts || 3);
 const suggestMaxTokens = Number(process.env.SUGGEST_MAX_TOKENS || roles.suggestMaxTokens || 32000);
 

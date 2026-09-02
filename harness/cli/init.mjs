@@ -47,6 +47,7 @@ import '../providers/index.mjs';
 import { getProvider, registeredProviders, resolveProvider } from '../lib/llm-provider.mjs';
 import { renderAdapterYaml, renderWorkflowTemplate, renderReadme } from '../lib/scaffold.mjs';
 import { harnessVersion, checkUpgrade } from '../lib/version.mjs';
+import { describeSeats } from '../lib/seats.mjs';
 
 // path.join(..., '../x'), not import.meta.dirname — that global needs Node
 // 20.11+, and package.json's engines field only promises 20.6.0.
@@ -165,8 +166,18 @@ async function main() {
     console.log('\nThe pinned seats — the suggest seat rotates to whichever watched lab ships something new,');
     console.log('but these three stay on a model you choose. Blank accepts the default.\n');
     const implementModel = await ask(rl, 'Implement model — writes the actual edit when the suggester offers none', { default: 'claude-opus-5' });
-    const reviewModel = await ask(rl, 'Review model — the independent gate; fails closed', { default: 'claude-opus-5' });
-    const rankModel = await ask(rl, 'Rank model — only called when more than one lab proposed', { default: implementModel || 'claude-opus-5' });
+    const reviewModel = await ask(rl, 'Review model — the independent gate; fails closed. Prefer a DIFFERENT lab than the implementer', { default: 'claude-opus-5' });
+    // Blank means "let the run choose a different family from the snapshot"
+    // (harness/lib/seats.mjs), which is the better default than echoing the
+    // implementer — see run-generation.mjs for why the rank seat can be
+    // auto-assigned and the review seat cannot.
+    const rankModel = await ask(rl, 'Rank model — only called when more than one lab proposed; blank picks another lab\'s model at run time', { default: '' });
+
+    const seats = describeSeats({ implementModel, reviewModel, rankModel: rankModel || implementModel });
+    for (const warning of seats.warnings) {
+      if (!rankModel && warning.includes('rank seat')) continue;
+      console.log(`   ⚠️  ${warning}`);
+    }
 
     // Resolve each pinned model back to the lab that serves it, so the
     // generated workflow gets that lab's API-key secret even when nobody is

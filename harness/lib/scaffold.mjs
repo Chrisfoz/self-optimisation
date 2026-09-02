@@ -131,7 +131,11 @@ export function buildAdapterObject(a) {
       suggest: { max_output_tokens: Number.isFinite(a.suggestMaxTokens) ? a.suggestMaxTokens : 32000 },
       implement: { model: a.implementModel || 'claude-opus-5' },
       review: { model: a.reviewModel || 'claude-opus-5' },
-      rank: { model: a.rankModel || 'claude-opus-5' },
+      // Unset on purpose when init left it blank: run-generation.mjs then
+      // picks a model from a different family than the implementer at run
+      // time (harness/lib/seats.mjs). Writing the implementer here instead
+      // would silently re-create the shared-family judge the blank avoids.
+      rank: { model: a.rankModel || null },
       refine: { max_attempts: Number.isFinite(a.maxAttempts) ? a.maxAttempts : 3 },
     },
     memory: {
