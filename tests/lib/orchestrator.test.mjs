@@ -119,7 +119,7 @@ test('buildSuggestUserPrompt: a cold-start prompt is byte-identical whether the 
     genLabel: 'Generation #1',
     context: {
       manifest: 'M', sources: 'S',
-      qualityMetrics: null, workOrder: null, escalationReview: null,
+      qualityMetrics: null, runtime: null, workOrder: null, escalationReview: null,
       themes: null, escalations: null, platform: null, feedback: null,
     },
   });

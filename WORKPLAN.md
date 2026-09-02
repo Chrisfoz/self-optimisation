@@ -310,6 +310,14 @@ at fixing and never gets curious" — but do respect its own gate.
   Only if 4.3 says yes.
 
 - [ ] **4.5 — The cold-start byte-identity test, on every component built.**
+  *Standing, not finishable — left unticked on purpose.* Applied to every
+  component built so far: `tests/lib/orchestrator.test.mjs`'s "a cold-start
+  prompt is byte-identical whether the optional blocks are absent or null"
+  covers `qualityMetrics`, `runtime`, `workOrder` and `escalationReview`
+  together, and `tests/lib/escalation-followthrough.test.mjs` pins the same
+  property on `buildEscalationBrief()` with nothing awaiting judgement. Add
+  the next block to that first test when you add one; the test is written so
+  that forgetting is the thing that fails.
   With no goal, no questions, no principles and no runtime evidence, the
   assembled suggestion prompt must be **byte-identical** to the one the harness
   produces today. It is the only assertion that proves the design is additive
