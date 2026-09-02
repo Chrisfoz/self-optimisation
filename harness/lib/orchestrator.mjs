@@ -235,8 +235,12 @@ export const DEFAULT_SCOPE_TEXT = {
  * @param {string} opts.genLabel
  * @param {object} opts.context  Named text blocks — sources, manifest,
  *   testIndex, generationIndex, history, themes, escalations, feedback,
- *   platform, scorecard, architectureNotes — any of which may be
+ *   platform, qualityMetrics, architectureNotes — any of which may be
  *   null/undefined and is dropped from the prompt via section().
+ *   `qualityMetrics` is what carrotgame's readiness scorecard generalised
+ *   into: measured, non-gating dimensions from this project's evaluator
+ *   plugins (harness/lib/evaluators.mjs). Null for every project that has
+ *   configured none, which drops the section entirely.
  * @param {{images: Array, source: string|null}} [opts.screenshots]
  */
 export function buildSuggestUserPrompt({ genLabel, context, screenshots = { images: [], source: null } }) {
@@ -248,7 +252,7 @@ export function buildSuggestUserPrompt({ genLabel, context, screenshots = { imag
 
 # Repository map
 ${context.manifest ?? ''}
-${section('Target platform', context.platform)}${section('Deployment readiness scorecard', context.scorecard)}${section('Frozen test invariants', context.testIndex)}${section('Every generation on record (compact — nothing here is ever dropped)', context.generationIndex)}${section('Most recent generations, in full detail (including what failed)', context.history)}${section('Recurring themes from the last review', context.themes)}${section('Open escalations — what earlier models asked us to change', context.escalations)}${section('Player feedback', context.feedback)}${section('How this project is built, and what it has learned building itself', context.architectureNotes)}
+${section('Target platform', context.platform)}${section('Measured quality dimensions — non-gating', context.qualityMetrics)}${section('Frozen test invariants', context.testIndex)}${section('Every generation on record (compact — nothing here is ever dropped)', context.generationIndex)}${section('Most recent generations, in full detail (including what failed)', context.history)}${section('Recurring themes from the last review', context.themes)}${section('Open escalations — what earlier models asked us to change', context.escalations)}${section('Player feedback', context.feedback)}${section('How this project is built, and what it has learned building itself', context.architectureNotes)}
 ${shots}
 # Current source
 ${context.sources ?? ''}

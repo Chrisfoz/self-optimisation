@@ -37,6 +37,7 @@ import {
   buildGenerationIndex, buildGenerationHistory, recommendScope,
 } from '../lib/context-pack.mjs';
 import { loadLatestThemesReview, buildThemesBrief } from '../lib/themes.mjs';
+import { buildMetricsBrief, loadLatestMetrics } from '../lib/evaluators.mjs';
 import { buildEscalationBrief, loadLedger } from '../lib/escalations.mjs';
 import { runGeneration } from '../lib/orchestrator.mjs';
 
@@ -148,7 +149,11 @@ const context = {
   ),
   platform: ctxConfig.platformNotes,
   feedback: null, // player-feedback equivalent: not ported (project-specific, see Portable-Harness-Design.md)
-  scorecard: null, // readiness-scorecard equivalent: not ported (project-specific plugin)
+  // The general form of carrotgame's readiness scorecard: whatever this
+  // project's evaluator plugins measured after the LAST generation, read
+  // back into this one. Null for a project with no evaluators configured,
+  // which drops the section from the prompt entirely.
+  qualityMetrics: buildMetricsBrief(loadLatestMetrics({ repoRoot, generationsDir })),
 };
 
 console.error(
@@ -156,7 +161,8 @@ console.error(
   `test index ${context.testIndex ? 'included' : 'unavailable'}, ` +
   `generation index ${context.generationIndex ? 'included' : 'unavailable'}, ` +
   `architecture notes ${context.architectureNotes ? 'included' : 'unavailable'}, ` +
-  `themes review ${context.themes ? 'included' : 'none yet'}\n`
+  `themes review ${context.themes ? 'included' : 'none yet'}, ` +
+  `measured quality dimensions ${context.qualityMetrics ? 'included' : 'none configured'}\n`
 );
 
 const projectDescription = adapter.project?.description || adapter.project?.id || 'this project';

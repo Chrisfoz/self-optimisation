@@ -296,3 +296,28 @@ deployment:
 # evaluation:
 #   test_commands: []
 #   preflight_required: true
+
+# --- LIVE: harness/scripts/run-evaluators.mjs reads this ------------------
+# Quality-dimension evaluator plugins — the measurements that are NOT gates.
+# `test_commands` above are the gates: they run in CI and a failure stops the
+# generation. These run afterwards and can stop nothing. A plugin that
+# throws, hangs, or returns nonsense produces a recorded error and the
+# generation proceeds — see harness/plugins/evaluators/README.md, which is
+# the interface a plugin implements and the reasoning for enforcing
+# "non-gating" in the runner rather than trusting each plugin.
+#
+# Results are written to <generations_dir>/gen-NNN/metrics.json and read back
+# into the NEXT generation's suggestion prompt, as measured context that is
+# explicitly not a target. A project with none configured gets a prompt
+# byte-identical to one from before any of this existed.
+#
+# `module` is resolved relative to the project root, so your own plugin lives
+# in your own repository, version-controlled beside the thing it measures.
+# Nothing has to be contributed back to this harness to be used.
+
+# evaluation:
+#   evaluators:
+#     - module: harness/plugins/evaluators/source-weight/index.mjs
+#       config:
+#         paths: ['src/**/*.js']     # defaults to the whole tree
+#         largeFileLines: 500

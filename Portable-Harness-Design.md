@@ -160,9 +160,11 @@ self_optimisation/
 │   │   └── CONTRIBUTING-A-PROVIDER.md              # the 06-starter-kit §"adding a provider" checklist, promoted to its own doc
 │   └── plugins/
 │       └── evaluators/
-│           ├── visual-canvas/       # ported visual-check.mjs + wordless-play.mjs,
-│           │                        # relabelled as ONE example plugin, not the default
-│           └── README.md            # the interface a quality-dimension plugin implements (§8.2)
+│           ├── source-weight/       # ✅ the ONE shipped example plugin — chosen because it
+│           │                        # needs no tooling and this repo's tests can run it;
+│           │                        # visual-canvas joins Checkstyle/mypy/Roslyn as a
+│           │                        # documented extension point instead
+│           └── README.md            # ✅ the interface a quality-dimension plugin implements (§8.2)
 │
 ├── templates/                       # what `init` fills in and writes to the target repo
 │   ├── agent-brief.md.tmpl          # ✅ built — from learning/06-starter-kit.md §1, with the
@@ -344,16 +346,30 @@ from what still needs real work, rather than letting the plugin language in
   until one of these exists and has been rehearsed on a real repo above the
   full-dump size threshold.
 - **"Visual/wordless-play" was never the general case — it's one instance of
-  a plugin category.** The real abstraction is *domain-specific quality
-  dimensions beyond pass/fail*, evaluated non-gating like carrotgame's
-  readiness scorecard. Reframe `visual-check.mjs`/`wordless-play.mjs` as the
-  one shipped example plugin (`harness/plugins/evaluators/visual-canvas/`,
-  §4), document the interface a plugin implements (input: working tree +
-  generation record; output: a named metric, never gating unless a human
-  later decides to promote it), and leave the ecosystem-specific plugins
-  (Checkstyle + JaCoCo delta for Java, mypy/ruff + coverage for Python,
-  Roslyn analyzers for C#) as a documented extension point rather than
-  something v1 ships.
+  a plugin category.** ✅ **Done.** The real abstraction is *domain-specific
+  quality dimensions beyond pass/fail*, evaluated non-gating like
+  carrotgame's readiness scorecard. `harness/lib/evaluators.mjs` is the
+  runner, `harness/plugins/evaluators/README.md` is the interface (input:
+  working tree + generation record + this plugin's own config; output: named
+  metrics with a value, a unit and which direction is better — never gating),
+  and `harness/plugins/evaluators/source-weight/` is the one shipped example.
+  The shipped example is deliberately NOT the visual one: a canvas renderer
+  cannot be exercised by this repository's own tests, and an example nobody
+  can run is a specification, not an example. The canvas checks join
+  Checkstyle + JaCoCo for Java, mypy/ruff + coverage for Python and Roslyn
+  for C# as documented extension points, which is what §8.2 argued for
+  anyway.
+
+  Three things the runner enforces rather than trusting each plugin to
+  honour, because a plugin is third-party code: a plugin that throws, hangs
+  past its timeout, or returns a malformed metric produces a recorded error
+  and nothing else (a measurement that can break the loop is a gate wearing a
+  metric's clothes); metrics are normalised on the way out; and the brief
+  those metrics are rendered into tells the model in as many words that they
+  are not targets. Results land in `<generationsDir>/gen-NNN/metrics.json`
+  and are read back into the NEXT generation's prompt through the section
+  carrotgame's readiness scorecard used to occupy — which was hardcoded
+  `null` until now.
 - **"Did it actually ship" assumed a fetchable URL.** `verify-production.mjs`'s
   pattern — fetch the live thing, compare the commit — only applies to
   deployed web services. §6's new `deployment.verify_strategy` field

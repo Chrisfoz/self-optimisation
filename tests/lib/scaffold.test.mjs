@@ -371,6 +371,18 @@ test('renderWorkflowTemplate: runs the themes-review CLI every generation, letti
   }
 });
 
+test('renderWorkflowTemplate: runs the evaluators, and never lets them fail the job', () => {
+  const parsed = loadYaml(renderWorkflowTemplate(template, baseAnswers()));
+  const step = parsed.jobs['self-improve'].steps.find((s) => s.id === 'evaluators');
+  assert.ok(step);
+  assert.match(step.run, /run-evaluators\.mjs/);
+  assert.equal(step['continue-on-error'], true);
+  // Deliberately absent from the gate list below: these are measurements,
+  // and a measurement in the gate list is a gate.
+  const gates = parsed.jobs['self-improve'].steps.find((s) => s.id === 'gates');
+  assert.doesNotMatch(gates.run, /evaluator/i);
+});
+
 test('renderWorkflowTemplate: the themes step runs before the commit, so the review rides the same commit', () => {
   const parsed = loadYaml(renderWorkflowTemplate(template, baseAnswers()));
   const steps = parsed.jobs['self-improve'].steps;

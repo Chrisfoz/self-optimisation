@@ -164,7 +164,7 @@ gaps are solved by better documentation — they are missing code.
   *Done when:* `init` plus one rehearsed generation have run on each of the
   three dev OSes and on at least one non-Ubuntu CI runner.
 
-- [ ] **2.4 — Reframe the evaluator plugins as a documented extension point.**
+- [x] **2.4 — Reframe the evaluator plugins as a documented extension point.**
   §8.2: "visual/wordless-play" was never the general case — it is one instance
   of *domain-specific quality dimensions beyond pass/fail, evaluated
   non-gating*. Ship one example plugin and document the interface (input:
@@ -172,6 +172,22 @@ gaps are solved by better documentation — they are missing code.
   unless a human later promotes it). Leave Checkstyle/mypy/Roslyn as
   documented extension points, not v1 code.
   *Done when:* the interface is documented and one plugin implements it.
+  **Done.** `harness/lib/evaluators.mjs` is the runner,
+  `harness/plugins/evaluators/README.md` is the interface, and
+  `harness/plugins/evaluators/source-weight/` is the shipped example.
+  The example is deliberately not the visual one: a canvas renderer cannot be
+  exercised by this repository's own tests, and an example nobody can run is
+  a specification wearing an example's clothes. The canvas checks join
+  Checkstyle/mypy/Roslyn as documented extension points, which is what §8.2
+  argued for anyway.
+  Non-gating is enforced in the runner rather than trusted to each plugin,
+  because a plugin is third-party code: throw, hang past the timeout, or
+  return a malformed metric, and the result is a recorded error and nothing
+  else. `run-evaluators.mjs` exits 0 even when every plugin it loaded blew
+  up. Results land in `<generationsDir>/gen-NNN/metrics.json` and are read
+  back into the NEXT generation's prompt through the section carrotgame's
+  readiness scorecard used to occupy — which was a hardcoded `null` in
+  `run-generation.mjs` until now.
 
 ---
 

@@ -161,6 +161,22 @@ jobs:
           SCOPE: ${{ github.event.inputs.scope }}
         run: node harness/scripts/run-generation.mjs
 
+      # The measurements that are NOT gates — quality dimensions beyond
+      # pass/fail, run against the tree this generation produced. A plugin
+      # cannot fail a generation, cannot stop a merge and cannot block a
+      # pull request: the script exits 0 even when every plugin it loaded
+      # blew up, and records that it did. See
+      # harness/plugins/evaluators/README.md. A project with no
+      # `evaluation.evaluators` configured runs this and it says so.
+      - name: Measure this project's quality dimensions (never gating)
+        id: evaluators
+        if: steps.improve.outputs.has-changes == 'true'
+        shell: bash
+        continue-on-error: true
+        env:
+          GEN_NUMBER: ${{ steps.gen.outputs.number }}
+        run: node harness/scripts/run-evaluators.mjs
+
       # Every {{THEMES_CADENCE}} generations, one model reads the same
       # history window every suggesting model reads and is asked what
       # principle explains it — abstraction rather than association. The

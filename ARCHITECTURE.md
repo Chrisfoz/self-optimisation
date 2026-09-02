@@ -95,6 +95,7 @@ flowchart TD
     reviewer["✅ Review<br/>review.mjs — fresh context,<br/>fails closed"]
     refine["✅ Refine<br/>rejected? restore to pristine,<br/>retry up to maxAttempts"]
     memory["✅ Memory<br/>escalations.mjs + themes.mjs<br/>folded in every run;<br/>generate-themes-review.mjs writes<br/>a new review every N generations"]
+    evaluators["✅ Quality dimensions<br/>evaluators.mjs + plugins/evaluators/<br/>measured, never gating"]
 
     adapter --> context --> propose
     propose --> router
@@ -102,6 +103,8 @@ flowchart TD
     reviewer -->|"rejected"| refine --> executor
     propose -.-> memory
     memory -.->|"read back next run"| context
+    reviewer -.-> evaluators
+    evaluators -.->|"metrics.json, read back next run"| context
   end
 
   rungen -.->|"composes all of this"| adapter

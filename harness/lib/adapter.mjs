@@ -306,6 +306,36 @@ export function deploymentConfig(adapter) {
 }
 
 /**
+ * The quality-dimension evaluator plugins this project runs — the
+ * measurements that are explicitly NOT gates. See
+ * harness/plugins/evaluators/README.md for the interface, and
+ * Portable-Harness-Design.md §8.2 for why this is a plugin category rather
+ * than something the harness ships opinions about.
+ *
+ * Note where this sits: `evaluation.test_commands` are the gates (baked into
+ * the generated workflow's test steps, and allowed to fail a generation);
+ * `evaluation.evaluators` are the dimensions (run afterwards, never able to
+ * fail anything). Neighbours in the file, opposites in what they may do.
+ *
+ * Entries missing a `module` are dropped here rather than reaching the
+ * loader: an entry with nothing to load is a typo in the adapter, and the
+ * loader's error message would blame the plugin for it.
+ *
+ * @returns {Array<{module: string, name: string|null, config: object}>}
+ */
+export function evaluatorConfig(adapter) {
+  const list = adapter?.evaluation?.evaluators;
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((e) => e && typeof e.module === 'string' && e.module.trim())
+    .map((e) => ({
+      module: e.module.trim(),
+      name: typeof e.name === 'string' && e.name.trim() ? e.name.trim() : null,
+      config: e.config && typeof e.config === 'object' ? e.config : {},
+    }));
+}
+
+/**
  * Notify config — ready for harness/lib/notify.mjs. `provider` names a
  * sender registered via notify.mjs's registerSender() — 'sendgrid' ships
  * built in; Slack/webhook/another email API are added by a project
