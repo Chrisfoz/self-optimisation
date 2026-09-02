@@ -134,13 +134,70 @@ export function guardConfig(adapter) {
 }
 
 /**
+ * The two approval classes a project may choose between, and the one that
+ * anything unrecognised falls back to.
+ *
+ * `human-approval-required` means the loop pushes its agent branch, runs
+ * every gate against it, and then opens a pull request for a person to
+ * merge. `autonomous-merge` means the loop merges and tags the branch
+ * itself once every gate has passed (harness/lib/promote.mjs).
+ *
+ * DEFAULT_APPROVAL_CLASS is the human one on purpose, and every unknown
+ * value resolves to it rather than to autonomous merge: a typo, an older
+ * adapter written before this field was read by anything, or a value some
+ * future console writes that this version doesn't know must never be the
+ * reason a project starts merging its own changes unattended. Fail closed
+ * is the whole convention here (learning/01-principles.md, 13) — this is
+ * the field where it matters most.
+ */
+export const APPROVAL_CLASSES = ['human-approval-required', 'autonomous-merge'];
+export const DEFAULT_APPROVAL_CLASS = 'human-approval-required';
+
+/**
+ * Normalise any value into one of APPROVAL_CLASSES.
+ *
+ * Exported separately from approvalClass() below because
+ * harness/lib/scaffold.mjs needs the same fail-closed rule when it renders
+ * a workflow from an answers object that never went through a
+ * project-adapter.yml — one definition, one test, one behaviour.
+ *
+ * @param {unknown} value
+ * @returns {'human-approval-required'|'autonomous-merge'}
+ */
+export function normalizeApprovalClass(value) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  return APPROVAL_CLASSES.includes(trimmed) ? trimmed : DEFAULT_APPROVAL_CLASS;
+}
+
+/**
+ * Which approval class this project chose — read from
+ * `constitution.approval_class`, which is where
+ * examples/carrotgame/project-adapter.yml already puts it, with a
+ * top-level `approval_class` accepted as a fallback because
+ * harness/project-adapter.example.yml documented it there while the field
+ * was RESERVED.
+ *
+ * Consumed by harness/lib/scaffold.mjs, which selects between the generated
+ * workflow's pull-request and autonomous-merge paths from it. Deliberately
+ * NOT consumed at runtime by promote.mjs: which path exists is a property
+ * of the workflow file that got generated, not something a script decides
+ * mid-run from a file the agent's own branch could in principle have
+ * edited.
+ */
+export function approvalClass(adapter) {
+  return normalizeApprovalClass(
+    adapter?.constitution?.approval_class ?? adapter?.approval_class
+  );
+}
+
+/**
  * Memory config — where the escalation ledger and themes reviews live, and
  * the consensus bar. Consumed by harness/lib/orchestrator.mjs's
- * runGeneration() (the ledger path and consensus bar) and, for the read
- * side, harness/lib/themes.mjs's loadLatestThemesReview() (themesDir).
- * Nothing yet triggers a themes review AT a cadence boundary — that's
- * still `generate-themes-review.mjs`'s unbuilt CLI (see
- * Portable-Harness-Design.md's Bucket B table for why).
+ * runGeneration() (the ledger path and consensus bar), by
+ * harness/lib/themes.mjs's loadLatestThemesReview() on the read side
+ * (themesDir), and by harness/scripts/generate-themes-review.mjs on the
+ * write side — which is what finally reads `themesCadence`, previously
+ * parsed here, unit-tested, and used by nothing.
  */
 export function memoryConfig(adapter) {
   return {
@@ -153,6 +210,13 @@ export function memoryConfig(adapter) {
         ? adapter.memory.escalation_consensus.labs
         : null,
     },
+    // How long an escalation may sit below the consensus bar, untouched,
+    // before the next fan-out is asked about it by name. Null means "use
+    // escalations.mjs's own default" — see DEFAULT_RESURFACE_AFTER there
+    // for why silence needed a mechanism at all.
+    resurfaceAfter: Number.isFinite(adapter?.memory?.escalation_consensus?.resurface_after)
+      ? adapter.memory.escalation_consensus.resurface_after
+      : null,
     themesDir: adapter?.memory?.themes_review?.dir ?? null,
     themesCadence: Number.isFinite(adapter?.memory?.themes_review?.cadence_generations)
       ? adapter.memory.themes_review.cadence_generations
@@ -200,6 +264,12 @@ export function rolesConfig(adapter) {
 export function contextConfig(adapter) {
   return {
     generationsDir: adapter?.context?.generations_dir ?? null,
+    // Where the record of what each run actually OBSERVED lives — see
+    // context-pack.mjs's buildRuntimeEvidence() and
+    // docs/curiosity/C10-runtime-evidence.md. Null means "use the default";
+    // a project that never writes any evidence simply never gets the
+    // section, which is exactly today's prompt.
+    runtimeEvidenceDir: adapter?.context?.runtime_evidence_dir ?? null,
     architectureNotesPath: adapter?.context?.architecture_notes?.path ?? null,
     architectureNotesMarker: adapter?.context?.architecture_notes?.append_only_marker ?? null,
     testFiles: adapter?.context?.test_files ?? [],
@@ -246,6 +316,36 @@ export function deploymentConfig(adapter) {
       smokeCommand: adapter?.deployment?.artifact?.smoke_command ?? null,
     },
   };
+}
+
+/**
+ * The quality-dimension evaluator plugins this project runs — the
+ * measurements that are explicitly NOT gates. See
+ * harness/plugins/evaluators/README.md for the interface, and
+ * Portable-Harness-Design.md §8.2 for why this is a plugin category rather
+ * than something the harness ships opinions about.
+ *
+ * Note where this sits: `evaluation.test_commands` are the gates (baked into
+ * the generated workflow's test steps, and allowed to fail a generation);
+ * `evaluation.evaluators` are the dimensions (run afterwards, never able to
+ * fail anything). Neighbours in the file, opposites in what they may do.
+ *
+ * Entries missing a `module` are dropped here rather than reaching the
+ * loader: an entry with nothing to load is a typo in the adapter, and the
+ * loader's error message would blame the plugin for it.
+ *
+ * @returns {Array<{module: string, name: string|null, config: object}>}
+ */
+export function evaluatorConfig(adapter) {
+  const list = adapter?.evaluation?.evaluators;
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((e) => e && typeof e.module === 'string' && e.module.trim())
+    .map((e) => ({
+      module: e.module.trim(),
+      name: typeof e.name === 'string' && e.name.trim() ? e.name.trim() : null,
+      config: e.config && typeof e.config === 'object' ? e.config : {},
+    }));
 }
 
 /**

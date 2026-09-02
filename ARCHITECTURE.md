@@ -40,14 +40,13 @@ flowchart TD
   scaffoldReal ==>|"writes"| adapter["project-adapter.yml +<br/>.github/workflows/self-improve.yml"]
 
   subgraph harnessloop["BUILT · the harness loop — detailed below"]
-    adapter --> loop["suggest -> implement -> review -> refine<br/>-> guard -> test -> promote -> verify -> notify"]
+    adapter --> loop["suggest -> implement -> review -> refine<br/>-> themes -> guard -> test -> notify"]
   end
 
-  loop -->|"today, always"| merge["autonomous merge<br/>promote.mjs"]
-  loop -.->|"proposed by console/DESIGN.md,<br/>NOT wired into workflow.yml.tmpl yet"| pr["open a PR instead —<br/>recordPullRequestUrl() exists,<br/>nothing calls it"]
-  style pr fill:#F3E3D4,stroke:#9FB0BE,stroke-dasharray: 5 5
+  loop -->|"constitution.approval_class:<br/>human-approval-required (DEFAULT)"| pr["open a pull request —<br/>gh pr create, then<br/>recordPullRequestUrl()"]
+  loop -->|"approval_class:<br/>autonomous-merge (opt-in)"| merge["autonomous merge<br/>promote.mjs, then verify"]
 
-  loop -.->|"every proposal's<br/>OPEN QUESTION field"| curiosity["PROPOSED · docs/curiosity/<br/>ledger, themes review, spikes —<br/>attaches onto escalations.mjs,<br/>themes.mjs, context-pack.mjs"]
+  loop -.->|"every proposal's<br/>OPEN QUESTION field"| curiosity["PROPOSED · docs/curiosity/<br/>curiosity ledger, open questions, spikes —<br/>attaches onto escalations.mjs,<br/>themes.mjs, context-pack.mjs"]
   curiosity -.->|"read back<br/>next run, once built"| loop
   style curiosity fill:#F3E3D4,stroke:#9FB0BE,stroke-dasharray: 5 5
 ```
@@ -95,7 +94,9 @@ flowchart TD
     executor["✅ Implement<br/>edit-format.mjs — targeted edits,<br/>all-or-nothing"]
     reviewer["✅ Review<br/>review.mjs — fresh context,<br/>fails closed"]
     refine["✅ Refine<br/>rejected? restore to pristine,<br/>retry up to maxAttempts"]
-    memory["✅ Memory<br/>escalations.mjs + themes.mjs<br/>folded in every run"]
+    memory["✅ Memory<br/>escalations.mjs + themes.mjs<br/>folded in every run;<br/>generate-themes-review.mjs writes<br/>a new review every N generations;<br/>an accepted escalation becomes a<br/>work order a later run carries out"]
+    evaluators["✅ Quality dimensions<br/>evaluators.mjs + plugins/evaluators/<br/>measured, never gating"]
+    runtime["✅ Runtime evidence<br/>runtime-evidence.mjs — what the tests<br/>and the deploy check actually SAW"]
 
     adapter --> context --> propose
     propose --> router
@@ -103,6 +104,9 @@ flowchart TD
     reviewer -->|"rejected"| refine --> executor
     propose -.-> memory
     memory -.->|"read back next run"| context
+    reviewer -.-> evaluators
+    evaluators -.->|"metrics.json, read back next run"| context
+    runtime -.->|"docs/runtime/gen-NNN.json,<br/>read back next run"| context
   end
 
   rungen -.->|"composes all of this"| adapter
@@ -155,7 +159,7 @@ plain-language digest with a reliable terse fallback, delivery behind a
 `registerSender()` registry so SendGrid is one registered sender, not a
 hardcoded dependency. What used to be "each piece real but nothing chains
 them" is now chained: `harness/templates/workflow.yml.tmpl` renders detect
--> probe -> preflight -> improve -> guard -> test -> promote -> verify ->
+-> probe -> preflight -> improve -> themes -> guard -> test -> promote -> verify ->
 notify as one sequential-steps GitHub Actions job (Actions can't loop or
 dynamically branch jobs — see the reference-implementation diagram below
 for what that constrains), and `harness/cli/init.mjs` asks the
@@ -165,18 +169,35 @@ README for a new project — verified against a real, fresh git repo end to
 end, and via `tests/lib/scaffold.test.mjs` parsing every strategy
 combination's generated YAML back with `js-yaml` to confirm it's valid.
 
-**Known gap, landed at the same time from a parallel stream of work:**
-`harness/templates/workflow.yml.tmpl` only ever does autonomous merge
-(`promote.mjs`) — no pull request, no `approval_class`, cron baked in
-immediately. `console/DESIGN.md` (the install-console proposal, merged
-into `main` the same day) makes a different, more conservative call for
-this exact file: pull-request-by-default, autonomous merge as an advanced
-opt-in, and a two-phase onboarding that ships the workflow with
-`workflow_dispatch` only until a rehearsal has passed. `orchestrator.mjs`'s
-`recordPullRequestUrl()` and `harness/scripts/record-pull-request.mjs`
-already exist to support a PR-opening step here; the template just doesn't
-call them yet. See the template's own header comment for the fuller note —
-reconcile before the console generates (or points a user at) this file.
+**The merge model, reconciled (was the known gap here):** the template used
+to render only autonomous merge. It now renders one of two paths, chosen at
+scaffold time from `constitution.approval_class` — a field that until this
+change was parsed by nothing.
+
+- **`human-approval-required`** is the default, and the fallback for any
+  unrecognised value. Every gate runs against the agent branch; then the
+  workflow opens a pull request with `gh pr create` and records its URL
+  back into that generation's `attempts.json` via
+  `harness/scripts/record-pull-request.mjs`. It runs no deployment
+  verification, because nothing is deployed until a person merges.
+- **`autonomous-merge`** is the opt-in: `promote.mjs` merges and tags, then
+  `verify-deployment.mjs` checks what that shipped.
+
+Exactly one path is written into the generated file, so which merge model a
+repository got is answerable by reading its workflow rather than by
+cross-referencing an adapter field against harness code. Unrecognised values
+fail closed to the pull-request path (`harness/lib/adapter.mjs`'s
+`normalizeApprovalClass()`), because a typo must never be the reason a
+project starts merging its own changes unattended — `console/DESIGN.md`
+§Step 7: "defaulting a non-technical user into autonomous merge is the
+single worst decision this console could make."
+
+The `schedule:` block is likewise now optional (`console/DESIGN.md` §Step 9's
+two-phase onboarding): rendered by default for `init`, omitted — leaving a
+`workflow_dispatch`-only workflow and a commented cron to add later — when
+the installer asks for it. Until then there is no cron in the repository to
+fire, which makes "the schedule stays off until a rehearsal passes" a fact
+about the file rather than a promise about the process.
 
 `Portable-Harness-Design.md`'s Status table has the same information as
 prose, kept in sync by hand — if the two ever disagree, trust whichever was

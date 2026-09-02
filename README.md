@@ -357,7 +357,10 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Independent reviewer (`harness/lib/review.mjs`) | ✅ Built, tested, wired into the orchestrator |
 | Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested — still awaiting a workflow step that runs it against a real PR from the orchestrator, since that's CI wiring, not harness code |
 | Automated evaluator — test-command runner (`evaluation.test_commands`) | ❌ Not built, and — now that the loop itself is real — turns out not to need any harness *code*: a project's test commands become CI steps directly, the same way the guard already runs as one |
-| Failure & proposal memory — escalations ledger (`harness/lib/escalations.mjs`), themes review read-side (`harness/lib/themes.mjs`, `generate-themes.mjs`) | ✅ Built, tested, wired: the orchestrator folds every run's proposals into the ledger and reads it back into the next prompt |
+| Quality-dimension evaluator plugins (`harness/lib/evaluators.mjs`, `harness/plugins/evaluators/`) | ✅ Built, tested, wired — the measurements that are explicitly **not** gates. A plugin gets the working tree and the generation record and returns named metrics; it cannot fail a generation, however badly it behaves. One shipped example (`source-weight`), the interface documented, ecosystem-specific plugins (Checkstyle, mypy, Roslyn, the canvas checks) left as extension points |
+| Runtime evidence (`harness/lib/runtime-evidence.mjs`, `context-pack.mjs`'s `buildRuntimeEvidence()`) | ✅ Built, tested, wired (`docs/curiosity/C10`): what the tests, the deploy check and any project probe **actually observed**, read back into the next generation's prompt. Every other block in that prompt describes what the project *is*; this is the only one that describes what it *did*. Observations, never scores — and when the budget runs out it is the totals that go, not a skipped test's name |
+| Escalation follow-through — work orders, resurfacing, the minority report (`harness/lib/escalations.mjs`, `orchestrator.mjs`) | ✅ Built, tested, wired (`docs/curiosity/C8`): an escalation a human accepts becomes a queued work order that the next ambitious generation is handed and told to deliver, and the outcome is written back — the first label in this project that scores its own *reasoning* rather than its code. An entry nobody has engaged with for N generations is put to the fan-out by name and must be answered AGREE / DISAGREE / IRRELEVANT, because silence was being scored as rejection |
+| Failure & proposal memory — escalations ledger (`harness/lib/escalations.mjs`), themes review (`harness/lib/themes.mjs`, `generate-themes.mjs`, `harness/scripts/generate-themes-review.mjs`) | ✅ Built, tested, wired: the orchestrator folds every run's proposals into the ledger and reads it back into the next prompt, and every `memory.themes_review.cadence_generations` generations one model is asked what principle explains the last N — written to `docs/themes/review-NNN.json`, read back into every prompt after it |
 | Staging & promotion — merge + tag (`harness/lib/promote.mjs`), deploy verification (`harness/lib/verify-deployment.mjs`) | ✅ Built, tested — all four `verify_strategy` values: `url` (poll + compare), `registry` (npm/PyPI/NuGet/Maven Central), `artifact` (build/path/smoke-run), `none`. Chained automatically by the generated workflow (`harness/templates/workflow.yml.tmpl`). |
 | Notifier — plain-language digest with a reliable fallback (`harness/lib/notify.mjs`, `harness/scripts/send-digest.mjs`, `send-escalation-notice.mjs`) | ✅ Built, tested — sender is pluggable (`registerSender()`; SendGrid ships built in, Slack/webhook/another email API are added by registering one under its own name), calibration examples are optional project config, not hardcoded. Chained automatically by the generated workflow. |
 | `init` CLI scaffolder (`harness/cli/init.mjs`) | ✅ Built — asks the Portable-Harness-Design.md §6 questions and writes `project-adapter.yml`, the generated workflow, brief-template copies, and an install README for a new project |
@@ -411,12 +414,14 @@ status marks below don't read as contradictions:
    no run history yet is unaffected — see "Cold start" in
    [`docs/curiosity/README.md`](docs/curiosity/README.md#cold-start-the-first-runs-must-work-with-none-of-this).
 
-**One known seam between stage 1 and stage 2, unresolved:** the generated
-workflow (stage 1's output) currently always auto-merges an approved change
-(`harness/lib/promote.mjs`); the console design calls for opening a pull
-request by default instead, with autonomous merge as an opt-in earned after
-a rehearsal. See ARCHITECTURE.md's "Known gap" for the full account — it
-affects real, generated code, not just a design disagreement on paper.
+**The seam between stage 1 and stage 2, now closed:** the generated workflow
+used to always auto-merge an approved change (`harness/lib/promote.mjs`),
+which is the opposite of what the console design calls for. It now renders
+one of two paths from `constitution.approval_class` — open a pull request
+(the default, and where any unrecognised value lands) or merge autonomously
+(the opt-in) — and the `schedule:` block is optional, so an installation can
+ship dispatch-only until a rehearsal has passed. See ARCHITECTURE.md's "The
+merge model, reconciled" for the full account.
 
 ## The bet this depends on
 

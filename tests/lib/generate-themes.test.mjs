@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildThemesSystemPrompt, buildThemesUserPrompt, parseThemesResponse } from '../../harness/lib/generate-themes.mjs';
+import {
+  buildThemesSystemPrompt, buildThemesUserPrompt, parseThemesResponse,
+  isThemesReviewDue, padGeneration, themesReviewFilename, buildThemesReview,
+} from '../../harness/lib/generate-themes.mjs';
 
 test('buildThemesSystemPrompt weaves in the supplied project description, not a hardcoded one', () => {
   const prompt = buildThemesSystemPrompt('a CLI tool for parsing log files, gated by unit tests.');
@@ -67,4 +70,111 @@ test('parseThemesResponse rejects a theme missing NOTICED or MEANS', () => {
 test('parseThemesResponse rejects a suspiciously short NOTICED or MEANS (a thesaurus-pass smell)', () => {
   const tooShort = 'THEME 1\nNOTICED: short.\nMEANS: a principle long enough to pass the check here.\n\nTHEME 2\nNOTICED: another long enough observation here.\nMEANS: also long enough here.';
   assert.throws(() => parseThemesResponse(tooShort), /too short to be a real observation/);
+});
+
+
+// --- the cadence decision -----------------------------------------------------
+// Pure on purpose: the CLI does the directory read and passes what it found,
+// so every branch of "is a review due" is testable without a filesystem.
+
+test('isThemesReviewDue: due on a cadence boundary, not due between them', () => {
+  for (const gen of ['010', '020', '030']) {
+    assert.equal(isThemesReviewDue({ genNumber: gen, cadence: 10 }).due, true, `${gen} should be due`);
+  }
+  for (const gen of ['011', '019', '001']) {
+    assert.equal(isThemesReviewDue({ genNumber: gen, cadence: 10 }).due, false, `${gen} should not be due`);
+  }
+});
+
+test('isThemesReviewDue: says when the next review is, rather than only that this is not it', () => {
+  const { due, reason } = isThemesReviewDue({ genNumber: '011', cadence: 10 });
+  assert.equal(due, false);
+  assert.match(reason, /Next review at generation 020/);
+});
+
+test('isThemesReviewDue: FORCE_REVIEW overrides the boundary', () => {
+  assert.equal(isThemesReviewDue({ genNumber: '007', cadence: 10 }).due, false);
+  assert.equal(isThemesReviewDue({ genNumber: '007', cadence: 10, force: true }).due, true);
+});
+
+test('isThemesReviewDue: not due when a review already covers that generation, force or not', () => {
+  // Overwriting a real review with a second opinion, or writing two files
+  // claiming the same window, are both worse than doing nothing. Deleting the
+  // file is the visible act that means "redo this one".
+  const reviewed = ['010', '020'];
+  assert.equal(isThemesReviewDue({ genNumber: '020', cadence: 10, reviewed }).due, false);
+  assert.equal(isThemesReviewDue({ genNumber: '020', cadence: 10, reviewed, force: true }).due, false);
+  assert.equal(isThemesReviewDue({ genNumber: '030', cadence: 10, reviewed }).due, true);
+});
+
+test('isThemesReviewDue: compares generations by value, not by the padding they happen to carry', () => {
+  assert.equal(isThemesReviewDue({ genNumber: '020', cadence: 10, reviewed: ['20'] }).due, false);
+  assert.equal(isThemesReviewDue({ genNumber: 20, cadence: 10, reviewed: ['0020'] }).due, false);
+});
+
+test('isThemesReviewDue: a missing or nonsense cadence is not due, and says what to set', () => {
+  assert.match(isThemesReviewDue({ genNumber: '010', cadence: null }).reason, /cadence_generations/);
+  assert.equal(isThemesReviewDue({ genNumber: '010', cadence: 0 }).due, false);
+  assert.equal(isThemesReviewDue({ genNumber: '010', cadence: null, force: true }).due, true);
+});
+
+test('isThemesReviewDue: an unusable GEN_NUMBER is not due rather than a crash', () => {
+  const { due, reason } = isThemesReviewDue({ genNumber: '', cadence: 10 });
+  assert.equal(due, false);
+  assert.match(reason, /not a generation number/);
+});
+
+// --- filename padding ---------------------------------------------------------
+// loadLatestThemesReview() picks the newest review by sorting filenames
+// lexicographically, so review-9.json would sort after review-10.json and a
+// project would silently keep reading a stale review forever. Prove the
+// writer cannot produce the unpadded form in the first place.
+
+test('themesReviewFilename always pads to at least three digits', () => {
+  assert.equal(themesReviewFilename(9), 'review-009.json');
+  assert.equal(themesReviewFilename('9'), 'review-009.json');
+  assert.equal(themesReviewFilename('010'), 'review-010.json');
+  assert.equal(themesReviewFilename(1234), 'review-1234.json');
+});
+
+test('themesReviewFilename output sorts correctly across a 9 -> 10 boundary', () => {
+  const names = [themesReviewFilename(10), themesReviewFilename(9)].sort();
+  assert.deepEqual(names, ['review-009.json', 'review-010.json']);
+});
+
+test('padGeneration accepts a gen-NNN directory name and rejects anything that is not a number', () => {
+  assert.equal(padGeneration('gen-007'), '007');
+  assert.throws(() => padGeneration('latest'), /Not a generation number/);
+  assert.throws(() => padGeneration(''), /Not a generation number/);
+});
+
+// --- the written record -------------------------------------------------------
+
+test('buildThemesReview records the window and the model that read it, not only the themes', () => {
+  // windowSize/model/provider exist so a later comparison of two reviews can
+  // tell that they read DIFFERENT windows — a theme that survives that is
+  // evidence a theme restated from the same window is not.
+  const review = buildThemesReview({
+    throughGeneration: 20,
+    windowSize: 10,
+    model: 'claude-opus-5',
+    provider: 'anthropic',
+    themes: [{ noticed: 'a', means: 'b' }],
+    date: new Date('2026-09-02T11:22:33Z'),
+  });
+  assert.equal(review.version, 1);
+  assert.equal(review.throughGeneration, '020');
+  assert.equal(review.date, '2026-09-02');
+  assert.equal(review.windowSize, 10);
+  assert.equal(review.model, 'claude-opus-5');
+  assert.equal(review.provider, 'anthropic');
+  assert.deepEqual(review.themes, [{ noticed: 'a', means: 'b' }]);
+});
+
+test('buildThemesSystemPrompt tells the model how many generations it is actually reading', () => {
+  // A model asked to compare ten things when it has three will pad to reach
+  // the count, and padding is what the rest of this prompt exists to prevent.
+  assert.match(buildThemesSystemPrompt('a project.', 3), /reviewing 3 generations/);
+  assert.match(buildThemesSystemPrompt('a project.', 1), /reviewing 1 generation of/);
+  assert.match(buildThemesSystemPrompt('a project.'), /reviewing 10 generations/);
 });

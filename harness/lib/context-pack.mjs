@@ -167,6 +167,152 @@ function generationDirs(repoRoot, generationsDir) {
   return listDir(repoRoot, generationsDir).filter((f) => /^gen-\d+$/.test(f)).sort();
 }
 
+// ---------------------------------------------------------------------------
+// Runtime evidence — what the tests, the deploy check and the probes SAW
+// ---------------------------------------------------------------------------
+
+/** Default location, relative to a project's root. Override via `context.runtime_evidence_dir`. */
+export const DEFAULT_EVIDENCE_DIR = 'docs/runtime';
+
+/** Roughly the size of the test index, deliberately not the size of the source bundle. */
+export const EVIDENCE_BUDGET = 2000;
+
+/**
+ * What the last few runs actually observed, as context alongside the source.
+ *
+ * Every other signal this harness sends describes what the project *is*.
+ * This is the only one that describes what it *did* — and the improvement
+ * signal without it is "review approved, tests green": a judgement about
+ * code, made by reading code.
+ *
+ * The evidence that this matters is in this repository's own history. The
+ * reference implementation's readiness scorecard found, on its FIRST run, a
+ * defect 239 existing checks had never noticed: two pages pulling a webfont
+ * over a render-blocking third-party import, stalling first paint by about
+ * thirteen seconds when that host was unreachable. Every gate was green
+ * throughout (learning/07-whats-actually-new.md §3). That defect was
+ * invisible to every model the harness ever asked, because nothing in the
+ * prompt described what the product did.
+ *
+ * Two rules this function enforces, both from incidents rather than taste:
+ *
+ * 1. **Observations, never scores.** A composite score in an evidence file
+ *    is dropped rather than rendered. A single number invites optimisation
+ *    of the number — the `readingLevel` lesson — while a raw observation
+ *    ("the probe drove real play and these were the draw calls") cannot be
+ *    gamed the same way, because there is no single quantity to move.
+ * 2. **Anomalies before totals, and totals are what gets truncated.** This
+ *    competes for attention with source, history, themes and escalations,
+ *    and principle 17 is explicit that the fix for weak context is never
+ *    "send more". "98 passed" changes no decision. "3 skipped, named X, Y,
+ *    Z" might change several.
+ *
+ * @param {object} [opts]
+ * @param {string} [opts.repoRoot]
+ * @param {string} [opts.evidenceDir]
+ * @param {number} [opts.limit]  How many runs' evidence to consider.
+ * @param {number} [opts.budget]  Character cap.
+ * @returns {string|null} null when there is no evidence at all — dropping
+ *   the section entirely rather than heading an empty one (principle 18).
+ */
+export function buildRuntimeEvidence({ repoRoot = process.cwd(), evidenceDir = DEFAULT_EVIDENCE_DIR, limit = 3, budget = EVIDENCE_BUDGET } = {}) {
+  const files = listDir(repoRoot, evidenceDir)
+    .filter((f) => /^gen-\d+\.json$/.test(f))
+    .sort()
+    .slice(-Math.max(0, limit));
+
+  const runs = [];
+  for (const file of files) {
+    const raw = read(repoRoot, `${evidenceDir}/${file}`);
+    if (!raw) continue;
+    try {
+      runs.push(JSON.parse(raw));
+    } catch {
+      // One malformed file does not take the others down with it. This is a
+      // helper; it fails safe, and a generation with no runtime evidence is
+      // exactly today's generation.
+    }
+  }
+
+  if (runs.length === 0) return null;
+
+  // Two passes over the same runs: anomalies first, in run order, then the
+  // totals. Truncation therefore eats totals before it eats a skipped test
+  // name, which is the whole point of separating them.
+  const anomalies = [];
+  const totals = [];
+
+  for (const run of runs) {
+    const label = `gen-${String(run.generation ?? '???')}${run.date ? ` (${run.date})` : ''}`;
+
+    for (const suite of run.tests?.suites ?? []) {
+      const skipped = (suite.skipped ?? []).filter(Boolean);
+      if (skipped.length) {
+        anomalies.push(`- ${label} ${suite.name}: SKIPPED ${skipped.length} — ${skipped.join(', ')}`);
+      }
+      if (Number(suite.failed) > 0) {
+        anomalies.push(`- ${label} ${suite.name}: ${suite.failed} FAILED`);
+      }
+      if (Number(suite.passed) >= 0 && suite.passed != null) {
+        totals.push(`- ${label} ${suite.name}: ${suite.passed} passed`);
+      }
+    }
+
+    for (const check of run.deploy?.checks ?? []) {
+      const line = `- ${label} deploy${run.deploy?.url ? ` (${run.deploy.url})` : ''} — ${check.what}: observed ${check.observed}`;
+      (check.ok === false ? anomalies : totals).push(line);
+    }
+
+    // A probe dimension is always an anomaly-class observation: it is here
+    // because someone thought it worth watching, and `method` is included
+    // because HOW a thing was measured turned out to be the part that
+    // mattered — it is what lets a model notice the metric is blind.
+    for (const dimension of run.probe?.dimensions ?? []) {
+      anomalies.push(
+        `- ${label} ${dimension.name}: observed ${dimension.observed}` +
+        (dimension.method ? ` (measured by: ${dimension.method})` : '')
+      );
+    }
+
+    for (const step of run.timing?.slowest ?? []) {
+      totals.push(`- ${label} slowest step "${step.step}": ${(Number(step.ms) / 1000).toFixed(1)}s`);
+    }
+  }
+
+  const header = [
+    'What the last run(s) actually observed at runtime — not a verdict and not a score,',
+    'the observation itself. A gate being green means nobody looked; these lines are what',
+    'something looked at. Anomalies are listed first because they are the part that can',
+    'change a decision.',
+    '',
+  ].join('\n');
+
+  const body = [];
+  let used = header.length;
+  for (const line of [...anomalies, ...totals]) {
+    if (used + line.length + 1 > budget) break;
+    body.push(line);
+    used += line.length + 1;
+  }
+
+  return body.length ? header + body.join('\n') : null;
+}
+
+/**
+ * The generation numbers on record, oldest first, as the padded strings
+ * their directory names carry (`['001', '002', ...]`).
+ *
+ * Exported because more than one caller now needs "which generations exist"
+ * without needing their contents — `generate-themes-review.mjs` uses it to
+ * default GEN_NUMBER to the newest one and to size its window honestly. The
+ * sort is lexicographic on the directory name, which is correct precisely
+ * because the padding is consistent; see generate-themes.mjs's
+ * padGeneration() for the same constraint stated where it can be violated.
+ */
+export function generationNumbers({ repoRoot = process.cwd(), generationsDir = DEFAULT_GENERATIONS_DIR } = {}) {
+  return generationDirs(repoRoot, generationsDir).map((d) => d.slice('gen-'.length));
+}
+
 /**
  * A one-line-per-generation index covering every generation on record —
  * not just the recent window buildGenerationHistory() below sends in full.

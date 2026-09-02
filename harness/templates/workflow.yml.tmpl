@@ -9,8 +9,8 @@
 # "reference implementation, concretely" diagram, which names this
 # explicitly), and passing state between jobs would mean serialising it
 # through artifacts for no real benefit here. Every gate still runs, in the
-# same order: detect -> probe -> preflight -> improve -> guard -> test ->
-# promote -> verify -> notify. A gate that fails does not fail the whole job
+# same order: detect -> probe -> preflight -> improve -> themes -> guard ->
+# test -> promote (or open a pull request) -> verify -> notify. A gate that fails does not fail the whole job
 # (`continue-on-error: true`) — it fails CLOSED further down instead, via the
 # `if:` on the step that depends on it, so the digest step still runs and
 # reports exactly what happened either way.
@@ -26,27 +26,32 @@
 # script-injection bug, not a style preference. See GitHub's own docs on
 # "Understanding the risk of script injection" if you extend this file.
 #
-# KNOWN GAP, worth fixing before this is the console's own output: this
-# template only ever does autonomous merge (harness/scripts/promote.mjs —
-# commit straight to the agent branch, guard, test, merge, tag). It does
-# not open a pull request, does not read `approval_class`, and always bakes
-# the `schedule:` cron in immediately. `console/DESIGN.md` §Step 7 makes a
-# different, more conservative call for exactly this file: "open a pull
-# request, I'll merge it" as the DEFAULT, autonomous merge as an advanced
-# opt-in — "defaulting a non-technical user into autonomous merge is the
-# single worst decision this console could make" — plus a two-phase
-# onboarding (§Step 9: ship with `workflow_dispatch` only, rehearse once,
-# THEN a second PR adds `schedule:`). `harness/lib/orchestrator.mjs`'s
-# `recordPullRequestUrl()` and `harness/scripts/record-pull-request.mjs`
-# already exist to support a PR-opening step here; nothing in this template
-# calls them yet. Reconcile these two designs before the console generates
-# (or links to) this file for a real user.
+# TWO THINGS THIS FILE IS RENDERED WITH, both chosen at scaffold time and
+# both visible below as ordinary YAML rather than as a runtime branch:
+#
+# 1. The MERGE MODEL, from `constitution.approval_class`.
+#    `human-approval-required` (the default, and what anything unrecognised
+#    falls back to) runs every gate against the agent branch and then opens
+#    a pull request for a person to merge — `console/DESIGN.md` §Step 7:
+#    "defaulting a non-technical user into autonomous merge is the single
+#    worst decision this console could make". `autonomous-merge` is the
+#    opt-in that merges and tags the branch itself
+#    (harness/scripts/promote.mjs). Exactly one of the two paths is
+#    rendered into this file; the other does not exist here at all, so
+#    which one a repository got is answerable by reading it.
+# 2. The SCHEDULE, which may be absent. §Step 9's two-phase onboarding
+#    ships `workflow_dispatch` only, rehearses once by hand, and adds the
+#    `schedule:` block afterward — so that "the schedule stays off until a
+#    rehearsal passes" is literally true rather than aspirational.
+#
+# `harness/lib/orchestrator.mjs`'s `recordPullRequestUrl()` and
+# `harness/scripts/record-pull-request.mjs` are what the pull-request path
+# calls to write the PR's URL back into that generation's attempts.json.
 
 name: Self-improvement loop
 
 on:
-  schedule:
-    - cron: '{{CRON}}'
+{{SCHEDULE_BLOCK}}
   workflow_dispatch:
     inputs:
       scope:
@@ -56,7 +61,7 @@ on:
         options: ['', focused, ambitious]
 
 permissions:
-  contents: write
+{{PERMISSION_LINES}}
 
 jobs:
   self-improve:
@@ -156,6 +161,48 @@ jobs:
           SCOPE: ${{ github.event.inputs.scope }}
         run: node harness/scripts/run-generation.mjs
 
+      # The measurements that are NOT gates — quality dimensions beyond
+      # pass/fail, run against the tree this generation produced. A plugin
+      # cannot fail a generation, cannot stop a merge and cannot block a
+      # pull request: the script exits 0 even when every plugin it loaded
+      # blew up, and records that it did. See
+      # harness/plugins/evaluators/README.md. A project with no
+      # `evaluation.evaluators` configured runs this and it says so.
+      - name: Measure this project's quality dimensions (never gating)
+        id: evaluators
+        if: steps.improve.outputs.has-changes == 'true'
+        shell: bash
+        continue-on-error: true
+        env:
+          GEN_NUMBER: ${{ steps.gen.outputs.number }}
+        run: node harness/scripts/run-evaluators.mjs
+
+      # Every {{THEMES_CADENCE}} generations, one model reads the same
+      # history window every suggesting model reads and is asked what
+      # principle explains it — abstraction rather than association. The
+      # script decides for itself whether this run is a cadence boundary
+      # and exits 0 saying so when it isn't, which is why it can run every
+      # generation instead of needing a second schedule kept in sync with
+      # this one. continue-on-error because a missed review is a missed
+      # review: the generation itself already succeeded, and this must not
+      # roll it back.
+      #
+      # It runs here, before the commit below, so the review rides the same
+      # commit as the generation it reviews. The consequence, stated rather
+      # than discovered: a cadence boundary reached on a run that shipped
+      # nothing has no commit to ride, and that boundary is skipped — the
+      # next one picks it up, or `FORCE_REVIEW=true` via workflow_dispatch
+      # does it by hand.
+      - name: Themes review, if this generation is a cadence boundary
+        id: themes
+        if: steps.improve.outputs.has-changes == 'true'
+        shell: bash
+        continue-on-error: true
+        env:
+{{PROVIDER_ENV_LINES}}
+          GEN_NUMBER: ${{ steps.gen.outputs.number }}
+        run: node harness/scripts/generate-themes-review.mjs
+
       - name: Commit and push the agent branch, if it has changes
         if: steps.improve.outputs.has-changes == 'true'
         shell: bash
@@ -165,6 +212,16 @@ jobs:
           SUMMARY: ${{ steps.improve.outputs.summary }}
         run: |
           git add -A -- {{ALLOWED_PATHS_GIT_ADD}}
+          # The harness's own record of this run: the generation record
+          # run-generation.mjs writes, and the themes review the step above
+          # writes at a cadence boundary. Added explicitly rather than left
+          # to allowed_paths, because they are not the agent's editable
+          # surface — a project that (rightly) refuses to let the agent
+          # rewrite its own history would otherwise never commit that
+          # history at all, and every future run would read an empty one.
+          for d in {{RECORD_DIRS_GIT_ADD}}; do
+            if [ -d "$d" ]; then git add -A -- "$d"; fi
+          done
           git commit -m "Generation $GEN_NUMBER: $SUMMARY"
           git push origin "$BRANCH"
 
@@ -183,22 +240,56 @@ jobs:
         run: |
 {{TEST_COMMAND_LINES}}
 
-      - name: Merge and tag, if every gate passed
-        id: promote
-        if: steps.tests.outcome == 'success'
+      {{MERGE_STEPS}}
+
+      # What this run actually SAW, as opposed to what it decided. Written
+      # so the NEXT generation's prompt can read it: every other signal in
+      # that prompt describes what the project IS, and until this step
+      # existed nothing described what it DID. See
+      # docs/curiosity/C10-runtime-evidence.md, and the incident behind it —
+      # a defect 239 green checks had never noticed, found on the first run
+      # of something that actually looked at the running product.
+      #
+      # Runs last, and `always()`, because the observations arrive at
+      # different points: the tests early, the deployment check at the very
+      # end. It commits to {{DEFAULT_BRANCH}} rather than to the agent
+      # branch, for the same reason the model snapshot does — this is the
+      # harness's own bookkeeping, and it has to be readable by the next run
+      # whether or not this generation's pull request is ever merged.
+      #
+      # HOW YOUR TESTS CONTRIBUTE: this records a TAP stream at
+      # $RUNNER_TEMP/tests.tap if one is there. Nothing writes it for you,
+      # because your test command is yours — a project whose runner can emit
+      # TAP (`node --test --test-reporter=tap`, pytest --tap, and others)
+      # tees it there; any other project writes a JSON fragment instead and
+      # passes it with --fragment. Contributing nothing is also fine: the
+      # section shrinks rather than lying.
+      - name: Record what this run observed at runtime
+        id: evidence
+        if: always() && steps.gen.outputs.number
         shell: bash
         continue-on-error: true
         env:
           GEN_NUMBER: ${{ steps.gen.outputs.number }}
-          BASE_BRANCH: {{DEFAULT_BRANCH}}
-        run: node harness/scripts/promote.mjs
+        run: |
+          args=()
+          if [ -f "$RUNNER_TEMP/tests.tap" ]; then args+=(--tap "$RUNNER_TEMP/tests.tap" --tap-name "this project's own tests"); fi
+          if [ -f "$RUNNER_TEMP/deploy-evidence.json" ]; then args+=(--fragment "$RUNNER_TEMP/deploy-evidence.json"); fi
+          node harness/scripts/record-runtime-evidence.mjs "${args[@]}"
 
-      - name: Verify the deployment
-        id: verify
-        if: steps.promote.outcome == 'success'
+      - name: Commit the runtime evidence
+        if: always() && steps.evidence.outputs.ran == 'true'
         shell: bash
-        continue-on-error: true
-        run: node harness/scripts/verify-deployment.mjs
+        env:
+          EVIDENCE_PATH: ${{ steps.evidence.outputs.path }}
+          GEN_NUMBER: ${{ steps.gen.outputs.number }}
+        run: |
+          git config user.email "self-improvement-bot@github-actions.local"
+          git config user.name "Self-Improvement Bot"
+          git checkout {{DEFAULT_BRANCH}}
+          git add -- "$EVIDENCE_PATH"
+          git commit -m "Runtime evidence for generation $GEN_NUMBER" || echo "No evidence to commit"
+          git push origin {{DEFAULT_BRANCH}}
 
       # Gate results only exist when a generation was actually attempted.
       # The digest step below is NOT gated on that — see its own comment.
@@ -211,6 +302,12 @@ jobs:
           REVIEW: ${{ steps.improve.outcome }}
           GUARD: ${{ steps.guard.outcome }}
           TESTS: ${{ steps.tests.outcome }}
+          # Exactly one of these two paths was rendered into this file (see
+          # the header). The other's step does not exist, so its `outcome`
+          # expression resolves to the empty string and `add` skips it —
+          # which is why this block can name both without either merge
+          # model having to know about the other.
+          PULL_REQUEST: ${{ steps.pr.outcome }}
           PROMOTE: ${{ steps.promote.outcome }}
           VERIFY: ${{ steps.verify.outcome }}
         run: |
@@ -220,6 +317,7 @@ jobs:
           add review "$REVIEW"
           add guard "$GUARD"
           add tests "$TESTS"
+          add pull-request "$PULL_REQUEST"
           add promote "$PROMOTE"
           add verify "$VERIFY"
           echo "json=$gates" >> "$GITHUB_OUTPUT"

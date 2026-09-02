@@ -51,8 +51,39 @@ export const DEFAULT_LEDGER_PATH = 'docs/escalations/ledger.json';
  */
 export const CONSENSUS = { models: 3, labs: 2 };
 
-/** Statuses a human sets. Anything not `open`/`flagged` is settled. */
-export const RESOLVED_STATUSES = new Set(['accepted', 'declined', 'superseded']);
+/**
+ * Statuses a human sets. Anything not `open`/`flagged` is settled.
+ *
+ * `retired` is the one status no human sets: an entry acquires it when
+ * enough models have independently judged it IRRELEVANT (see
+ * recordJudgements() below). It belongs here because a retired entry is
+ * settled — nothing should re-open it — but it is the models' verdict
+ * rather than the owner's, and buildEscalationBrief() says so.
+ */
+export const RESOLVED_STATUSES = new Set(['accepted', 'declined', 'superseded', 'retired']);
+
+/**
+ * How many generations an entry may sit below the consensus bar, untouched,
+ * before the next fan-out is asked about it directly.
+ *
+ * The gap this closes: `consensusOf()` counts supporters, and nothing counts
+ * silence. What actually kills a lone idea is that other models never
+ * mention it — it sits at 1/3 forever, and the mechanism scores inattention
+ * identically to judgement. Underneath that is the structural problem: a
+ * consensus bar is a majority filter, and majority filters select for
+ * obviousness, while the most valuable ambitious idea is close to
+ * definitionally the one fewest models thought of.
+ *
+ * Resurfacing does not lower the bar. It asks the question the bar was
+ * silently answering on the models' behalf.
+ */
+export const DEFAULT_RESURFACE_AFTER = 5;
+
+/** How many distinct models must independently call an entry irrelevant before it retires itself. */
+export const IRRELEVANT_TO_RETIRE = 3;
+
+/** The judgements a model may return about an entry it was asked to review. */
+export const JUDGEMENTS = new Set(['agree', 'disagree', 'irrelevant']);
 
 const TARGETS = new Set(['agent-brief', 'pipeline', 'hard-constraint', 'other']);
 
@@ -181,6 +212,41 @@ export function parseEscalation(text) {
     supports: parseReferences(field(source, 'ESCALATION SUPPORT')),
     dissents: parseReferences(field(source, 'ESCALATION DISSENT')),
   };
+}
+
+/**
+ * Parse an `ESCALATION REVIEW` block: a direct answer about entries that
+ * have been sitting below the bar, unengaged with, for long enough that the
+ * next fan-out is asked about them by name.
+ *
+ * Accepts what models actually write — `esc-004: AGREE — it blocks X`,
+ * `- esc-004 DISAGREE (the risk is real)`, `esc-004 irrelevant.` — one entry
+ * per line, in any order, with anything unrecognised dropped rather than
+ * guessed at. Silence stays silence: an entry nobody mentioned produces no
+ * judgement, which is the whole bug this mechanism exists to fix, so
+ * inventing one here would reintroduce it.
+ *
+ * @returns {Array<{id: string, judgement: 'agree'|'disagree'|'irrelevant', note: string}>}
+ */
+export function parseEscalationReview(text) {
+  const raw = field(String(text ?? ''), 'ESCALATION REVIEW');
+  if (isNone(raw)) return [];
+
+  const out = [];
+  const seen = new Set();
+  for (const rawLine of String(raw).split('\n')) {
+    const match = rawLine.match(/(esc-\d+)\D+?(agree|disagree|irrelevant)\b/i);
+    if (!match) continue;
+    const id = match[1].toLowerCase();
+    if (seen.has(id)) continue; // one judgement per model per entry per run
+    seen.add(id);
+    out.push({
+      id,
+      judgement: match[2].toLowerCase(),
+      note: clamp(rawLine.slice(match.index + match[0].length).replace(/^[\s—–\-:,.()]+/, ''), MAX_NOTE),
+    });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -326,6 +392,299 @@ export function recordRound({ generation, date, entries, ledger, threshold = CON
 }
 
 // ---------------------------------------------------------------------------
+// Judgements — what a model said when asked about an entry directly
+// ---------------------------------------------------------------------------
+
+/**
+ * Fold a round's `ESCALATION REVIEW` answers into the ledger.
+ *
+ * Three things happen, and only the first is a repeat of what already
+ * existed:
+ *
+ * - **AGREE** adds a supporter, exactly as `ESCALATION SUPPORT` does — so a
+ *   resurfaced entry can cross the bar in the same run it was asked about.
+ * - **DISAGREE** adds a dissenter. Dissent still does not subtract and does
+ *   not veto; recording it is what turns "nobody backed this" into "two
+ *   models looked at it and said no", which are different facts.
+ * - **IRRELEVANT** is the state that did not exist before, and it is the
+ *   useful one. Three distinct models saying *irrelevant* is a real verdict;
+ *   three models saying nothing was never a verdict at all. At
+ *   IRRELEVANT_TO_RETIRE distinct models the entry retires itself, with that
+ *   reason recorded — closing a loop that previously had no ending.
+ *
+ * Pure with respect to the filesystem, same as recordRound(): ledger in,
+ * new ledger out.
+ *
+ * @param {object} opts
+ * @param {string|number} opts.generation
+ * @param {string} [opts.date]
+ * @param {Array<{model: string, provider: string, judgements: Array}>} opts.entries
+ * @param {object} opts.ledger
+ */
+export function recordJudgements({ generation, date, entries, ledger }) {
+  const next = { ...ledger, escalations: (ledger.escalations ?? []).map((e) => ({ ...e })) };
+  const day = date ?? new Date().toISOString().slice(0, 10);
+
+  const agreed = [];
+  const disagreed = [];
+  const irrelevant = [];
+  const retired = [];
+
+  for (const entry of entries ?? []) {
+    const { model, provider, judgements } = entry;
+    for (const judgement of judgements ?? []) {
+      const target = next.escalations.find((e) => e.id === judgement.id);
+      if (!target || RESOLVED_STATUSES.has(target.status)) continue;
+
+      const record = { generation, date: day, model, provider, note: judgement.note || '' };
+
+      if (judgement.judgement === 'agree') {
+        if (already(target.supporters, model, generation)) continue;
+        target.supporters = [...(target.supporters ?? []), record];
+        agreed.push({ id: target.id, model, provider });
+      } else if (judgement.judgement === 'disagree') {
+        if (already(target.dissenters, model, generation)) continue;
+        target.dissenters = [...(target.dissenters ?? []), record];
+        disagreed.push({ id: target.id, model, provider });
+      } else if (judgement.judgement === 'irrelevant') {
+        target.irrelevant = target.irrelevant ?? [];
+        if (already(target.irrelevant, model, generation)) continue;
+        target.irrelevant = [...target.irrelevant, record];
+        irrelevant.push({ id: target.id, model, provider });
+      }
+    }
+  }
+
+  // Retirement is counted over DISTINCT models, not entries in the list —
+  // one model asked five times is one opinion, the same rule the consensus
+  // bar already applies to supporters.
+  for (const entry of next.escalations) {
+    if (RESOLVED_STATUSES.has(entry.status)) continue;
+    const models = distinct(entry.irrelevant ?? [], 'model');
+    if (models.length < IRRELEVANT_TO_RETIRE) continue;
+    entry.status = 'retired';
+    entry.resolution =
+      `Retired automatically: ${models.length} distinct models independently judged this irrelevant ` +
+      `to the project's goal (${models.join(', ')}). No human decision was needed or taken.`;
+    retired.push(entry);
+  }
+
+  return { ledger: next, agreed, disagreed, irrelevant, retired };
+}
+
+/**
+ * Entries that should be put to the next fan-out directly.
+ *
+ * Due when an entry is live, has NOT reached the bar, and nothing has
+ * happened to it — no supporter, no dissenter, no judgement — for
+ * `resurfaceAfter` generations. An entry that models are actively arguing
+ * about does not need prompting; one nobody has mentioned in five
+ * generations is exactly the case silence was being scored on.
+ *
+ * A flagged entry is never due: it is already with a human.
+ *
+ * @param {object} ledger
+ * @param {object} opts
+ * @param {string|number} opts.currentGeneration
+ * @param {number} [opts.resurfaceAfter]
+ * @param {object} [opts.threshold]
+ */
+export function resurfaceDue(ledger, { currentGeneration, resurfaceAfter = DEFAULT_RESURFACE_AFTER, threshold = CONSENSUS } = {}) {
+  const now = Number(String(currentGeneration).replace(/\D/g, '')) || 0;
+
+  return (ledger?.escalations ?? []).filter((entry) => {
+    if (entry.status !== 'open') return false;
+    if (consensusOf(entry, threshold).reached) return false;
+
+    const activity = [
+      ...(entry.supporters ?? []),
+      ...(entry.dissenters ?? []),
+      ...(entry.irrelevant ?? []),
+    ].map((a) => Number(String(a.generation).replace(/\D/g, '')) || 0);
+
+    const last = activity.length ? Math.max(...activity) : 0;
+    return now - last >= resurfaceAfter;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Work orders — what happens after a human says yes
+// ---------------------------------------------------------------------------
+
+/**
+ * Give every accepted entry a work order, if it does not have one.
+ *
+ * The gap this closes: acceptance was a status change and nothing else. No
+ * run was scheduled, no generation assigned it, no scope unlocked by it —
+ * the most expensive signal this system produces (three frontier models
+ * across two labs agreeing, plus a human's decision) terminated in a
+ * rendered paragraph and hoped a future model would pick it up.
+ *
+ * `accepted` STAYS `accepted` once the work completes: the human's decision
+ * does not expire, and `work.completed` is what stops it being re-queued.
+ * Overloading `status` to mean both would lose one of them.
+ */
+export function queueWorkOrders(ledger, { date, by = 'owner' } = {}) {
+  const next = { ...ledger, escalations: (ledger.escalations ?? []).map((e) => ({ ...e })) };
+  const day = date ?? new Date().toISOString().slice(0, 10);
+  const queued = [];
+
+  for (const entry of next.escalations) {
+    if (entry.status !== 'accepted') continue;
+    if (entry.work) continue;
+    entry.work = { queued: { date: day, by }, assigned: null, completed: null };
+    queued.push({ id: entry.id, title: entry.title });
+  }
+
+  return { ledger: next, queued };
+}
+
+/**
+ * Hand the oldest unassigned work order to a generation.
+ *
+ * Assignment is written before the run starts, which is what makes two runs
+ * racing for one order harmless: the second sees it assigned and takes the
+ * next item, or none.
+ *
+ * @returns {{ledger: object, order: object|null}} `order` is the escalation
+ *   entry itself, so the caller can render it into a prompt without a second
+ *   lookup.
+ */
+export function assignWorkOrder(ledger, { generation, date } = {}) {
+  const next = { ...ledger, escalations: (ledger.escalations ?? []).map((e) => ({ ...e })) };
+  const day = date ?? new Date().toISOString().slice(0, 10);
+
+  const candidate = next.escalations.find(
+    (e) => e.work?.queued && !e.work.assigned && !e.work.completed
+  );
+  if (!candidate) return { ledger: next, order: null };
+
+  candidate.work = { ...candidate.work, assigned: { generation, date: day } };
+  return { ledger: next, order: candidate };
+}
+
+/**
+ * Record how the generation that carried a work order actually went.
+ *
+ * **This is the label the whole component exists for.** `outcome` is the
+ * first thing in this harness that scores the system's own *reasoning*
+ * rather than its code: three models agreed, a human accepted, a generation
+ * implemented — and it was rejected by review, or it shipped and the
+ * deployment check failed, or it worked. Twenty of those rows is a real
+ * finding about whether cross-lab consensus predicts anything, and it is
+ * otherwise unobtainable.
+ *
+ * A run that was assigned an order and crashed still completes it, with that
+ * outcome. Leaving it assigned forever would quietly drain the queue without
+ * ever recording why.
+ */
+export function completeWorkOrder(ledger, { generation, outcome, pullRequestUrl = null, date } = {}) {
+  const next = { ...ledger, escalations: (ledger.escalations ?? []).map((e) => ({ ...e })) };
+  const day = date ?? new Date().toISOString().slice(0, 10);
+
+  const entry = next.escalations.find(
+    (e) => String(e.work?.assigned?.generation ?? '') === String(generation) && !e.work.completed
+  );
+  if (!entry) return { ledger: next, completed: null };
+
+  entry.work = {
+    ...entry.work,
+    completed: { generation, date: day, outcome, pullRequestUrl },
+  };
+
+  // 8d — dissent that was wrong is free calibration. A dissenter argued this
+  // would not work; it shipped. That is a fact about that model's judgement,
+  // derived from data the ledger already had, and it is one of the few
+  // honest signals about model judgement this system can produce for free.
+  // Marked only on an outcome that genuinely contradicts the objection:
+  // `approved` did. `abandoned` and `crashed` did not vindicate anyone —
+  // they mean the run failed, which is not the same as the objection being
+  // right, and claiming otherwise would be the mirror image of the bug in
+  // 8b (scoring silence as a verdict).
+  if (outcome === 'approved') {
+    entry.dissenters = (entry.dissenters ?? []).map((d) => ({
+      ...d,
+      contradicted: { generation, date: day, by: 'the accepted change shipped' },
+    }));
+  }
+
+  return { ledger: next, completed: entry };
+}
+
+/** Every work order that has finished, as the outcome rows a human would want to read. */
+export function workOrderOutcomes(ledger) {
+  return (ledger?.escalations ?? [])
+    .filter((e) => e.work?.completed)
+    .map((e) => ({
+      id: e.id,
+      title: e.title,
+      target: e.target,
+      accepted: e.resolution ?? null,
+      backing: consensusOf(e).models,
+      labs: consensusOf(e).labs,
+      generation: e.work.completed.generation,
+      outcome: e.work.completed.outcome,
+      pullRequestUrl: e.work.completed.pullRequestUrl ?? null,
+      contradictedDissenters: (e.dissenters ?? []).filter((d) => d.contradicted).map((d) => d.model),
+    }));
+}
+
+// ---------------------------------------------------------------------------
+// The minority report
+// ---------------------------------------------------------------------------
+
+/**
+ * Open entries with a strong case and low backing.
+ *
+ * The owner — who is the tiebreak anyway — currently only ever hears about
+ * an escalation once it has already reached consensus. The high-conviction
+ * idea one model argued hard for and nobody engaged with never reaches them,
+ * and that is precisely the item a human spots faster than three models
+ * will.
+ *
+ * Ranked by the length of the case, which is a crude proxy for conviction
+ * and is deliberately the only one used: anything cleverer would be this
+ * file inventing a quality judgement it has no basis for. Capped, because
+ * this rides along in a digest that already goes out and must not become
+ * the digest.
+ */
+export function minorityReport(ledger, { threshold = CONSENSUS, limit = 3 } = {}) {
+  return (ledger?.escalations ?? [])
+    .filter((e) => e.status === 'open')
+    .filter((e) => !consensusOf(e, threshold).reached)
+    .filter((e) => distinct(e.supporters ?? [], 'model').length < threshold.models)
+    .filter((e) => String(e.case ?? '').trim().length >= 200)
+    .sort((a, b) => String(b.case).length - String(a.case).length)
+    .slice(0, limit)
+    .map((e) => ({
+      id: e.id,
+      title: e.title,
+      target: e.target,
+      raisedBy: `${e.opened?.model} (${e.opened?.provider})`,
+      generation: e.opened?.generation,
+      backing: consensusOf(e, threshold).models,
+      case: e.case,
+    }));
+}
+
+/** The minority report as the plain-text block a digest can carry. Null when there is nothing to say. */
+export function renderMinorityReport(entries) {
+  if (!entries?.length) return null;
+  return [
+    'Ideas nobody has engaged with yet — one model argued for each of these and no',
+    'other model has backed or rejected it. You see them because a consensus bar is a',
+    'majority filter, and the most valuable ambitious idea is close to definitionally',
+    'the one fewest models thought of. No action is required.',
+    '',
+    ...entries.map((e) =>
+      `${e.id} — ${e.title}\n` +
+      `  Target: ${e.target} · Raised by ${e.raisedBy} in generation ${e.generation} · Backed by ${e.backing} model(s)\n` +
+      `  ${e.case}`
+    ),
+  ].join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // The prompt section
 // ---------------------------------------------------------------------------
 
@@ -342,18 +701,22 @@ const line = (entry, threshold) => {
  * argument, who is behind it and who is against it — because the decision
  * it informs is one line of the response.
  */
-export function buildEscalationBrief(ledger, { threshold = CONSENSUS } = {}) {
+export function buildEscalationBrief(ledger, { threshold = CONSENSUS, awaitingJudgement = [] } = {}) {
   const all = ledger?.escalations ?? [];
   if (all.length === 0) return null;
 
   const live = all.filter((e) => !RESOLVED_STATUSES.has(e.status));
   const settled = all.filter((e) => RESOLVED_STATUSES.has(e.status));
+  // The marker is what makes the ESCALATION REVIEW field answerable.
+  // Without it the field is unanswerable noise on every run where nothing
+  // is actually due, which is most of them.
+  const due = new Set(awaitingJudgement.map((e) => (typeof e === 'string' ? e : e.id)));
 
   const blocks = [];
 
   for (const entry of live) {
     const lines = [
-      `### ${entry.id} — ${entry.title}`,
+      `### ${entry.id} — ${entry.title}${due.has(entry.id) ? ' — **AWAITING JUDGEMENT**' : ''}`,
       `- Target: ${entry.target} · Status: ${entry.status} · Backing: ${line(entry, threshold)}`,
       `- Raised by \`${entry.opened?.model}\` (${entry.opened?.provider}) in generation ${entry.opened?.generation}`,
       `- Case: ${entry.case}`,
@@ -367,18 +730,46 @@ export function buildEscalationBrief(ledger, { threshold = CONSENSUS } = {}) {
     for (const d of entry.dissenters ?? []) {
       lines.push(`- Argued against by \`${d.model}\` (${d.provider}, gen ${d.generation}): ${d.note || 'no reason given'}`);
     }
+    for (const j of entry.irrelevant ?? []) {
+      lines.push(`- Judged irrelevant to this project's goal by \`${j.model}\` (${j.provider}, gen ${j.generation})${j.note ? `: ${j.note}` : ''}`);
+    }
     if (entry.status === 'flagged') {
       lines.push('- This one has reached the bar and is with the project\'s owner for a decision.');
+    }
+    if (due.has(entry.id)) {
+      lines.push('- **Nobody has engaged with this for several generations. Answer it in ESCALATION REVIEW below.**');
+    }
+    if (entry.work?.completed) {
+      lines.push(
+        `- Accepted, implemented in generation ${entry.work.completed.generation}, outcome: ${entry.work.completed.outcome}.`
+      );
+    } else if (entry.work?.assigned) {
+      lines.push(`- Accepted and assigned to generation ${entry.work.assigned.generation} — being implemented now.`);
+    } else if (entry.work?.queued) {
+      lines.push('- Accepted and queued: a future ambitious generation will be directed at this. Do not propose it as your own change.');
     }
     blocks.push(lines.join('\n'));
   }
 
   for (const entry of settled) {
-    blocks.push(
-      `### ${entry.id} — ${entry.title}\n` +
-      `- **${entry.status.toUpperCase()} by the project's owner.** ${entry.resolution ?? ''}\n` +
-      `- Do not raise this again unless you have an argument the decision did not consider.`
-    );
+    const byWhom = entry.status === 'retired'
+      ? '**RETIRED — enough models independently judged this irrelevant.**'
+      : `**${entry.status.toUpperCase()} by the project's owner.**`;
+    const lines = [
+      `### ${entry.id} — ${entry.title}`,
+      `- ${byWhom} ${entry.resolution ?? ''}`,
+      `- Do not raise this again unless you have an argument the decision did not consider.`,
+    ];
+    if (entry.work?.completed) {
+      lines.push(
+        `- It was implemented in generation ${entry.work.completed.generation} and the outcome was: ${entry.work.completed.outcome}.`
+      );
+    } else if (entry.work?.assigned) {
+      lines.push(`- It is assigned to generation ${entry.work.assigned.generation} and is being implemented now.`);
+    } else if (entry.work?.queued) {
+      lines.push('- It is queued for a future ambitious generation. Do not propose it as your own change.');
+    }
+    blocks.push(lines.join('\n'));
   }
 
   return [
@@ -388,6 +779,63 @@ export function buildEscalationBrief(ledger, { threshold = CONSENSUS } = {}) {
     `near-duplicate — ${threshold.models} distinct models across ${threshold.labs} labs sends it to a human for a decision.`,
     '',
     ...blocks,
+  ].join('\n');
+}
+
+/**
+ * The extra response field a run needs when, and only when, something is
+ * actually awaiting judgement.
+ *
+ * Conditional on purpose. A run with nothing due gets a prompt
+ * byte-identical to the one this harness produced before any of this
+ * existed — which is the property that makes the whole mechanism additive
+ * rather than a rewrite of a prompt every model in the rotation has been
+ * answering.
+ *
+ * "I had not considered it" is refused explicitly because it is the honest
+ * answer that recreates the bug: the entry would go back to sitting at 1/3
+ * with no verdict, which is where it has already been for five generations.
+ */
+export function buildEscalationReviewField(due) {
+  if (!due?.length) return null;
+  const ids = due.map((e) => (typeof e === 'string' ? e : e.id));
+  return `ESCALATION REVIEW: <REQUIRED. The escalation list above marks ${ids.length} entr${ids.length === 1 ? 'y' : 'ies'} AWAITING
+         JUDGEMENT: ${ids.join(', ')}. Nobody has engaged with ${ids.length === 1 ? 'it' : 'them'} for several
+         generations. For EACH, write one line — the id, then one of:
+           AGREE — and it becomes yours to back, counting toward consensus
+           DISAGREE — and why
+           IRRELEVANT — it does not bear on this project's goal
+         "I had not considered it" is not an answer. Consider it now.>`;
+}
+
+/**
+ * The directive a generation carrying a work order is given.
+ *
+ * A generation is normally asked to pick its own improvement. This one is
+ * not: three models agreed, a human accepted, and the point of the queue is
+ * that the decision actually gets acted on rather than sitting in the prompt
+ * as context. The suggesting model still writes the proposal — what it is
+ * for has already been decided.
+ */
+export function buildWorkOrderBrief(entry) {
+  if (!entry) return null;
+  return [
+    `This generation has one job, and it is not to pick your own improvement.`,
+    ``,
+    `${entry.id} — ${entry.title}`,
+    `Target: ${entry.target}`,
+    ``,
+    `${distinct(entry.supporters ?? [], 'model').length} distinct models across ` +
+      `${distinct(entry.supporters ?? [], 'provider').length} labs independently argued for this, and the project's owner ` +
+      `accepted it${entry.resolution ? `: "${entry.resolution}"` : '.'}`,
+    ``,
+    `The case, as it was made:`,
+    entry.case,
+    ``,
+    `Propose the change that delivers this. If you believe it should not be done ` +
+      `after all, say so in PROBLEM and propose the smallest honest alternative — but ` +
+      `understand that this was already argued, agreed and decided, so disagreeing ` +
+      `now needs an argument none of that considered.`,
   ].join('\n');
 }
 
@@ -416,4 +864,4 @@ export function renderForNotification(entry, { threshold = CONSENSUS } = {}) {
   ].join('\n');
 }
 
-export const __testing = { field, parseReferences, normaliseTarget, isNone, already, nextId };
+export const __testing = { field, parseReferences, normaliseTarget, isNone, already, nextId, distinct };

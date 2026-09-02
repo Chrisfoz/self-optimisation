@@ -1,6 +1,6 @@
 # C10 — Runtime evidence in the context pack
 
-**Status:** PROPOSED · **Phase:** any — **independent of everything else here**
+**Status:** ✅ **BUILT** (2026-09-02) · **Phase:** any — **independent of everything else here**
 **Drawn in:** [D1](../../learning/diagrams/proposed-curiosity-run.mmd), node `runlog`
 
 ---
@@ -18,6 +18,29 @@ code, made by reading code.
 
 It is also independent of every other component here and improves **every**
 proposal the harness makes, curiosity or not. Build it whenever.
+
+> **Built.** `buildRuntimeEvidence()` in `context-pack.mjs` (the read side,
+> exactly the interface below), `harness/lib/runtime-evidence.mjs` (the write
+> side — fragment merging, TAP parsing, score-dropping),
+> `harness/scripts/record-runtime-evidence.mjs` (the CLI the generated
+> workflow runs last, `always()`), and `--evidence` on
+> `verify-deployment.mjs` so the deploy check contributes what it observed
+> rather than only its verdict. 16 tests.
+>
+> Two things worth knowing that the spec below does not say:
+>
+> - **The composite score is dropped at the point of WRITING, not only at
+>   rendering.** A score that never reaches the file cannot leak into a
+>   prompt through some later reader that forgot the rule.
+> - **Your tests contribute, or they do not, and nothing pretends
+>   otherwise.** The recorder reads a TAP stream at `$RUNNER_TEMP/tests.tap`
+>   if one is there. Nothing writes it for you, because your test command is
+>   yours: a runner that can emit TAP tees it there, any other project writes
+>   a JSON fragment and passes `--fragment`, and a project that does neither
+>   simply records less. The section shrinks rather than lying — and an
+>   evidence file with nothing in it is never written at all, because
+>   `buildRuntimeEvidence()` would otherwise count it as a run it had
+>   evidence for.
 
 ## Why it matters more for curiosity than for anything else
 

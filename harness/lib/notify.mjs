@@ -176,6 +176,13 @@ async function composeWithFallback({ systemPrompt, userPrompt, buildFallback, di
  * @param {Array<{name: string, result: string, note?: string}>} r.gates
  * @param {string} [r.briefFeedback]
  * @param {number} [r.escalationsOpened] @param {number} [r.escalationsFlagged]
+ * @param {string} [r.minorityReport]  Open escalations with a strong case
+ *   and no backing, already rendered (escalations.mjs's
+ *   renderMinorityReport()). The owner only ever hears about an escalation
+ *   once it has reached consensus, so the high-conviction idea one model
+ *   argued hard for and nobody engaged with never reaches them — and that is
+ *   precisely the item a human spots faster than three models will. Omitted
+ *   entirely when there is nothing to report, which is the common case.
  * @param {string} [r.attemptsJson] @param {string} [r.proposalMd]  Raw file contents, if available.
  * @param {string} r.recipientName @param {string} r.projectDescription
  * @param {string[]} [r.calibrationExamples]
@@ -200,6 +207,7 @@ export async function buildGenerationDigestEmail(r, deps = {}) {
       gatesBlock(r.gates), ``,
       `What the suggesting model said about its own brief:`, `  ${r.briefFeedback || '(none given)'}`, ``,
       escalationsLine,
+      ...(r.minorityReport ? [``, r.minorityReport] : []),
     ].join('\n'),
   });
 
@@ -229,7 +237,15 @@ export async function buildGenerationDigestEmail(r, deps = {}) {
 
   return {
     subject: composed.subject.slice(0, 200),
-    body: [bannerLine, ``, ...creditLines, ``, composed.body, ``, gatesBlock(r.gates), ``, escalationsLine].join('\n'),
+    body: [
+      bannerLine, ``, ...creditLines, ``, composed.body, ``,
+      gatesBlock(r.gates), ``, escalationsLine,
+      // Appended after the model-written body rather than folded into it:
+      // this is a standing list a human skims, not part of the story of
+      // this run, and a digest model asked to weave it in would editorialise
+      // about ideas nobody has judged yet.
+      ...(r.minorityReport ? [``, r.minorityReport] : []),
+    ].join('\n'),
   };
 }
 

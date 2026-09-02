@@ -34,9 +34,10 @@ import { compileAllowlist } from '../lib/edit-format.mjs';
 import { globToRegExp } from '../lib/glob.mjs';
 import {
   buildSourceBundle, buildRepoManifest, buildTestIndex, buildArchitectureNotes,
-  buildGenerationIndex, buildGenerationHistory, recommendScope,
+  buildGenerationIndex, buildGenerationHistory, buildRuntimeEvidence, recommendScope,
 } from '../lib/context-pack.mjs';
 import { loadLatestThemesReview, buildThemesBrief } from '../lib/themes.mjs';
+import { buildMetricsBrief, loadLatestMetrics } from '../lib/evaluators.mjs';
 import { buildEscalationBrief, loadLedger } from '../lib/escalations.mjs';
 import { runGeneration } from '../lib/orchestrator.mjs';
 
@@ -148,7 +149,14 @@ const context = {
   ),
   platform: ctxConfig.platformNotes,
   feedback: null, // player-feedback equivalent: not ported (project-specific, see Portable-Harness-Design.md)
-  scorecard: null, // readiness-scorecard equivalent: not ported (project-specific plugin)
+  // The general form of carrotgame's readiness scorecard: whatever this
+  // project's evaluator plugins measured after the LAST generation, read
+  // back into this one. Null for a project with no evaluators configured,
+  // which drops the section from the prompt entirely.
+  qualityMetrics: buildMetricsBrief(loadLatestMetrics({ repoRoot, generationsDir })),
+  // What the last few runs actually SAW — not a verdict and not a score.
+  // Null for a project that has never written any, which is today's prompt.
+  runtime: buildRuntimeEvidence({ repoRoot, evidenceDir: ctxConfig.runtimeEvidenceDir || undefined }),
 };
 
 console.error(
@@ -156,7 +164,9 @@ console.error(
   `test index ${context.testIndex ? 'included' : 'unavailable'}, ` +
   `generation index ${context.generationIndex ? 'included' : 'unavailable'}, ` +
   `architecture notes ${context.architectureNotes ? 'included' : 'unavailable'}, ` +
-  `themes review ${context.themes ? 'included' : 'none yet'}\n`
+  `themes review ${context.themes ? 'included' : 'none yet'}, ` +
+  `measured quality dimensions ${context.qualityMetrics ? 'included' : 'none configured'}, ` +
+  `runtime evidence ${context.runtime ? 'included' : 'none recorded'}\n`
 );
 
 const projectDescription = adapter.project?.description || adapter.project?.id || 'this project';
@@ -187,6 +197,7 @@ try {
       screenshots: { images: [], source: null }, // visual capture: project-specific plugin, not wired by default
       ledgerPath: memory.ledgerPath || undefined,
       consensus: { models: memory.consensus.models ?? 3, labs: memory.consensus.labs ?? 2 },
+      resurfaceAfter: memory.resurfaceAfter ?? undefined,
     },
     { log: (msg) => console.error(msg) }
   );
@@ -208,6 +219,10 @@ if (result.attemptRecordPath) setOutput('attempt-record', result.attemptRecordPa
 setOutput('escalations-opened', String(result.escalations?.opened?.length ?? 0));
 setOutput('escalations-flagged', String(result.escalations?.flagged?.length ?? 0));
 setOutput('escalations-flagged-json', JSON.stringify(result.escalations?.flagged ?? []));
+
+// The outcome label: did the thing three models agreed on, and a human
+// accepted, actually work? Empty on every run that carried no work order.
+setOutput('work-order-completed', result.workOrder ? `${result.workOrder.id}:${result.workOrder.outcome}` : '');
 
 if (result.outcome === 'approved') {
   console.error(`\n✅ Approved on attempt ${result.attempts}`);

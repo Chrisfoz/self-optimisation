@@ -105,7 +105,7 @@ uniform:
 | `scripts/verify-production.mjs` | 157 | Staging & promotion — the live check | "Every other gate tests a branch; this one tests what a user opens" | ✅ **Ported (the `url` strategy)** — `harness/lib/verify-deployment.mjs` + `harness/scripts/verify-deployment.mjs`, dispatching on the adapter's `deployment.verify_strategy`. The HTML-canonicalisation trick (compare `<script>` contents and visible text, since hosts commonly rewrite markup on the way out) is genuinely generic, not carrotgame-specific, and ported verbatim. `registry`/`artifact` strategies were named in the schema but not implemented at the time this row was written — both have since shipped (see the revision log's third entry below), bringing this file's own suite to 37 tests. 14 tests at the time, including a fake-clock pattern (advance time inside the injected `sleep`) that exercises the full poll-until-timeout loop without a single real millisecond of waiting. Alongside it, `harness/lib/promote.mjs` (merge + tag + push, plus branch cleanup) — never its own file in the reference implementation, which does this as inline bash in the workflow's merge job; made into real code for the same reason `guard.mjs` is real code rather than trusted-by-inspection bash. 6 tests against a **real two-repo setup** (a genuine bare "origin" plus a working clone, not simulated), including one that provokes an actual git merge conflict and confirms it throws rather than landing something broken. |
 | `scripts/send-digest-email.mjs`, `send-escalation-email.mjs`, `lib/format-digest.mjs` | 247+128+77 | Reporting | Plain-language-via-LLM digest pattern, best-effort-with-reliable-floor posture | ✅ **Ported** — `harness/lib/notify.mjs` (`buildGenerationDigestEmail()`, `buildEscalationNoticeEmail()`, both plain-language-with-a-reliable-terse-fallback) + `harness/scripts/send-digest.mjs` / `send-escalation-notice.mjs` (CLI wrappers). The reference implementation hardcodes SendGrid directly inside the email-writing code; the port separates the two completely — a `registerSender(name, send)`/`getSender(name)` registry (mirroring `llm-provider.mjs`'s own `registerProvider()` pattern) means nothing above the registry ever imports `fetch` or knows SendGrid exists. `sendViaSendGrid` ships as the one built-in sender; a project adds Slack/a webhook/another email API by registering its own under its own name and pointing `notify.provider` at it in `project-adapter.yml` — no harness code changes. Two computed-not-guessed facts carried over unchanged from the reference implementation, because they exist to prevent a real incident it had: `gatesBlock()` and `blockedByLine()` compute "what actually blocked the merge" from real gate results in code and hand it to the model as a stated fact, never leaving it to infer — a real run once had an automated allowlist check fail while the AI review had genuinely APPROVED, and a digest-writing model invented "the reviewer said no" despite the true verdict being right there in its prompt. `calibrationExamples` (real, well-received email bodies from a project's own history, quoted into the system prompt to calibrate register) is optional config (`notify.calibration_examples`, a list of file paths) rather than the reference implementation's two examples hardcoded as JS string literals — a fresh project with no history yet still gets a working prompt from the rules alone. 23 tests, including the registry (`getSender('sendgrid') === sendViaSendGrid`, a project registering and immediately resolving its own sender), the fallback triggering on a thrown error / truncated response / unparseable response, and `blockedByLine()`'s five scenarios (merged, a failing gate with its own note, a failing gate with none, nothing failed but it still didn't merge, a skipped gate correctly not treated as a blocker).. **Amended for the same reason as the detector row above:** the generated workflow gated its digest step on a generation number existing, which made every no-generation outcome unreportable — a crashed release check, a lab shipping something nothing could reach, and a failed preflight all sent no email at all. `buildNoGenerationEmail()` and `NO_GENERATION_REASONS` now cover the four cases distinctly, `send-digest.mjs` sends one of them when `GEN_NUMBER` is absent instead of exiting, and the scaffolded step runs on `if: always()` with `CHECK_RESULT`/`PREFLIGHT_RESULT`/`RELEASE_DETECTED` passed in. |
 | `scripts/lib/gh-output.mjs` | 30 | Plumbing | GitHub Actions `$GITHUB_OUTPUT` writer | GitHub Actions–specific; other CI targets (GitLab CI, Buildkite) need their own thin equivalent behind the same call sites |
-| `scripts/lib/themes.mjs`, `generate-themes.mjs`, `generate-themes-review.mjs` | 84+84+89 | Longitudinal learning (the every-10th-generation abstraction step) | Entire mechanism — reads history, asks a pinned model for "what we noticed → what it means", feeds back into next context pack | ✅ **Ported (lib only)** — `harness/lib/themes.mjs` (read side, nearly verbatim) and `harness/lib/generate-themes.mjs` (prompt + response parser). One genuinely carrotgame-specific string found and fixed: the system prompt named "two children's browser games" directly; `buildThemesSystemPrompt()` now takes a `projectDescription` parameter instead. `generate-themes-review.mjs` (the CLI that actually calls a model) is **not** ported — it needs "generation history" as an input, which only exists once `context-pack.mjs` and an orchestrator have produced real `docs/generations/gen-NNN/` records; building a CLI around data nothing yet produces would be exactly the kind of fiction §8.4 and `ARCHITECTURE.md` argue against. 16 tests (6 in `themes.test.mjs`, 10 in `generate-themes.test.mjs`). |
+| `scripts/lib/themes.mjs`, `generate-themes.mjs`, `generate-themes-review.mjs` | 84+84+89 | Longitudinal learning (the every-10th-generation abstraction step) | Entire mechanism — reads history, asks a pinned model for "what we noticed → what it means", feeds back into next context pack | ✅ **Ported (lib only)** — `harness/lib/themes.mjs` (read side, nearly verbatim) and `harness/lib/generate-themes.mjs` (prompt + response parser). One genuinely carrotgame-specific string found and fixed: the system prompt named "two children's browser games" directly; `buildThemesSystemPrompt()` now takes a `projectDescription` parameter instead. `generate-themes-review.mjs` (the CLI that actually calls a model) was held back until `run-generation.mjs` produced real `docs/generations/gen-NNN/` records to read — building a CLI around data nothing yet produces would be exactly the kind of fiction §8.4 and `ARCHITECTURE.md` argue against — and is **now ported**, as the write side: it decides whether a run is a cadence boundary (`isThemesReviewDue()`, pure), assembles the window with the same `buildGenerationHistory()` the suggestion stage uses, calls one model, fails closed on an unparseable response, and writes `<themesDir>/review-NNN.json`. This is what finally reads `memory.themes_review.cadence_generations`. 37 tests (8 in `themes.test.mjs`, 22 in `generate-themes.test.mjs`, 7 driving the CLI as a real child process). |
 
 **Not portable, reference-only:** `scripts/lib/player-feedback.mjs` (Supabase
 rating widget — a worked example of "only include real signal, omit the
@@ -160,9 +160,11 @@ self_optimisation/
 │   │   └── CONTRIBUTING-A-PROVIDER.md              # the 06-starter-kit §"adding a provider" checklist, promoted to its own doc
 │   └── plugins/
 │       └── evaluators/
-│           ├── visual-canvas/       # ported visual-check.mjs + wordless-play.mjs,
-│           │                        # relabelled as ONE example plugin, not the default
-│           └── README.md            # the interface a quality-dimension plugin implements (§8.2)
+│           ├── source-weight/       # ✅ the ONE shipped example plugin — chosen because it
+│           │                        # needs no tooling and this repo's tests can run it;
+│           │                        # visual-canvas joins Checkstyle/mypy/Roslyn as a
+│           │                        # documented extension point instead
+│           └── README.md            # ✅ the interface a quality-dimension plugin implements (§8.2)
 │
 ├── templates/                       # what `init` fills in and writes to the target repo
 │   ├── agent-brief.md.tmpl          # ✅ built — from learning/06-starter-kit.md §1, with the
@@ -344,16 +346,30 @@ from what still needs real work, rather than letting the plugin language in
   until one of these exists and has been rehearsed on a real repo above the
   full-dump size threshold.
 - **"Visual/wordless-play" was never the general case — it's one instance of
-  a plugin category.** The real abstraction is *domain-specific quality
-  dimensions beyond pass/fail*, evaluated non-gating like carrotgame's
-  readiness scorecard. Reframe `visual-check.mjs`/`wordless-play.mjs` as the
-  one shipped example plugin (`harness/plugins/evaluators/visual-canvas/`,
-  §4), document the interface a plugin implements (input: working tree +
-  generation record; output: a named metric, never gating unless a human
-  later decides to promote it), and leave the ecosystem-specific plugins
-  (Checkstyle + JaCoCo delta for Java, mypy/ruff + coverage for Python,
-  Roslyn analyzers for C#) as a documented extension point rather than
-  something v1 ships.
+  a plugin category.** ✅ **Done.** The real abstraction is *domain-specific
+  quality dimensions beyond pass/fail*, evaluated non-gating like
+  carrotgame's readiness scorecard. `harness/lib/evaluators.mjs` is the
+  runner, `harness/plugins/evaluators/README.md` is the interface (input:
+  working tree + generation record + this plugin's own config; output: named
+  metrics with a value, a unit and which direction is better — never gating),
+  and `harness/plugins/evaluators/source-weight/` is the one shipped example.
+  The shipped example is deliberately NOT the visual one: a canvas renderer
+  cannot be exercised by this repository's own tests, and an example nobody
+  can run is a specification, not an example. The canvas checks join
+  Checkstyle + JaCoCo for Java, mypy/ruff + coverage for Python and Roslyn
+  for C# as documented extension points, which is what §8.2 argued for
+  anyway.
+
+  Three things the runner enforces rather than trusting each plugin to
+  honour, because a plugin is third-party code: a plugin that throws, hangs
+  past its timeout, or returns a malformed metric produces a recorded error
+  and nothing else (a measurement that can break the loop is a gate wearing a
+  metric's clothes); metrics are normalised on the way out; and the brief
+  those metrics are rendered into tells the model in as many words that they
+  are not targets. Results land in `<generationsDir>/gen-NNN/metrics.json`
+  and are read back into the NEXT generation's prompt through the section
+  carrotgame's readiness scorecard used to occupy — which was hardcoded
+  `null` until now.
 - **"Did it actually ship" assumed a fetchable URL.** `verify-production.mjs`'s
   pattern — fetch the live thing, compare the commit — only applies to
   deployed web services. §6's new `deployment.verify_strategy` field
@@ -374,6 +390,28 @@ from what still needs real work, rather than letting the plugin language in
   injection concern already flagged for the workflow YAML's `${{ }}`
   interpolation applies to any shell string built from model- or
   user-supplied text, on any OS.
+
+  **The audit has now been done** (2026-09-02), on Linux, and the code came
+  back clean on the three things it asked about, with one real finding:
+
+  - No hardcoded `/tmp` anywhere; tests use `os.tmpdir()`. Filesystem access
+    goes through `path.join`/`path.resolve` in every module that touches
+    disk — no path is built by string concatenation.
+  - Every child process is `execFileSync('git', [...])` with an argv array,
+    so nothing model-supplied is ever parsed by a shell. The one exception is
+    `verify-deployment.mjs`'s `build_command`/`smoke_command`, which are
+    `execSync` of a string — but that string is the project's own adapter
+    config, written by the human who installed the harness, and running it as
+    a shell command is the entire point of the field. No model output reaches
+    it.
+  - **Found and fixed:** two scripts built the path they *record* with
+    `path.join()`. A repo-relative path in a record is a git path, and
+    `docs\generations\gen-001\metrics.json` written by a Windows developer
+    is a different string from the one CI writes for the same file, silently.
+    Recorded and reported paths now use forward slashes everywhere, matching
+    the convention `orchestrator.mjs` already followed; `path.join()` stays
+    for the actual filesystem call, where the separator genuinely has to be
+    the platform's.
 - **The generated workflow YAML should pin `shell: bash` on every step.**
   GitHub-hosted `windows-latest` and `macos-latest` runners both ship Git
   Bash, so the existing heredoc/`jq`/`sed` patterns keep working across all
@@ -393,12 +431,18 @@ from what still needs real work, rather than letting the plugin language in
   shelling out to `jq` — Node already has this for free, and it removes a
   dependency the local path would otherwise silently assume is on the
   developer's PATH.
-- **This has only been exercised on Windows so far** (this document's own
-  authoring environment). Node cross-platform support makes portability
-  *plausible*, not *verified* — treat "works on Mac and Linux too" as
-  unconfirmed until `init` and one rehearsed generation have actually been
-  run on each, not as a property that follows automatically from using
-  Node.js.
+- **Windows and Linux exercised; Mac not yet, and no non-Ubuntu CI runner
+  yet.** This document was authored on Windows. As of 2026-09-02 the whole
+  test suite — including `tests/e2e/full-loop.test.mjs`, which drives the
+  real chain against a real git remote and a real child-process test run —
+  passes on Linux, and `harness/cli/init.mjs` has been run there against a
+  fresh git repository end to end, producing a workflow that parses as valid
+  YAML. That is a real second data point, and it is not the whole claim:
+  **the LLM calls were not made** (no lab API key in that environment), and
+  no run has happened on macOS or on a non-`ubuntu-latest` GitHub runner.
+  Node cross-platform support makes the rest *plausible*, not *verified* —
+  treat "works on Mac too" as unconfirmed until `init` and one rehearsed
+  generation have actually been run there.
 
 ### 8.4 Honesty note
 
@@ -491,12 +535,14 @@ principle: a project's filled-in `agent-brief.md` (see
 system prompt, not a summary of it restated in the harness's own words a
 second time. Same for the reviewer.
 
-Not ported, and deliberately: `generate-themes-review.mjs` (the CLI that
-calls a model to produce a themes review) still needs real generation
-history as input, which now genuinely exists once a project has run
-`run-generation.mjs` enough times to accumulate real
-`docs/generations/gen-NNN/` records — the blocker was never the compiler
-(done) or the orchestrator (done), only real records existing yet.
+Held back at the time, and since built: `generate-themes-review.mjs` (the
+CLI that calls a model to produce a themes review) needed real generation
+history as input, which exists once a project has run `run-generation.mjs`
+enough times to accumulate real `docs/generations/gen-NNN/` records — the
+blocker was never the compiler (done) or the orchestrator (done), only real
+records existing yet. They do, so it is built, and the generated workflow
+runs it after every generation and lets it decide for itself whether that
+generation is a cadence boundary.
 
 **Revised again, after staging & promotion and the notifier:** both are now
 ✅ — `harness/lib/promote.mjs` + `harness/lib/verify-deployment.mjs` (the
@@ -576,13 +622,14 @@ in GitHub Actions rather than only against a local git repo and unit
 tests — the one kind of verification a repository working on itself can't
 provide from inside itself.
 
-**One open seam, named here so it's not only in `ARCHITECTURE.md`:**
-`workflow.yml.tmpl` always auto-merges an approved change; `console/DESIGN.md`
-(written afterward) argues for opening a pull request by default instead,
-autonomous merge as an opt-in. `orchestrator.mjs`'s `recordPullRequestUrl()`
-and `harness/scripts/record-pull-request.mjs` exist to support this; the
-template doesn't call them yet. See `ARCHITECTURE.md`'s "Known gap" for the
-full account.
+**That open seam, closed:** `workflow.yml.tmpl` used to always auto-merge an
+approved change, where `console/DESIGN.md` (written afterward) argued for
+opening a pull request by default and autonomous merge as an opt-in. The
+template now renders whichever of the two paths `constitution.approval_class`
+selects — the pull-request path calls `orchestrator.mjs`'s
+`recordPullRequestUrl()` through `harness/scripts/record-pull-request.mjs`,
+and anything unrecognised fails closed to it. See `ARCHITECTURE.md`'s "The
+merge model, reconciled" for the full account.
 
 Wiring the orchestrator's new adapter fields (`roles.*`, `context.*`) into
 `harness/project-adapter.example.yml` surfaced one more real bug the same

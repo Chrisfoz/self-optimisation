@@ -4,13 +4,16 @@ A front end for installing and configuring the harness, so that the person
 who benefits from a self-improving repository doesn't have to be the person
 who can hand-write `project-adapter.yml`.
 
-**Status: proposal.** Nothing in this document is built. It is written to
-the same standard as `Portable-Harness-Design.md` — every claim about what
-the harness does today is checked against the code, and every field the
-console would expose is marked LIVE (something reads it) or RESERVED
-(nothing does, yet). Read §2 before §5: the console's real prerequisite is
-not front-end work, it's the generator that `Portable-Harness-Design.md` §6
-already specified and nobody has written.
+**Status: proposal, with phase 0 built.** The console itself — sign-in, the
+form, the pull request, the run view — is not built. The generator
+underneath it is: `harness/lib/scaffold.mjs` + `harness/cli/init.mjs`, with
+`tests/lib/scaffold.test.mjs` covering it. This document is written to the
+same standard as `Portable-Harness-Design.md` — every claim about what the
+harness does today is checked against the code, and every field the console
+would expose is marked LIVE (something reads it) or RESERVED (nothing does,
+yet). Read §2 before §5: the console's remaining prerequisite is answer
+validation on the generator that exists, plus the phase-1 backend §8.5
+made necessary.
 
 Three pages sit beside this file, each a self-contained artifact body:
 
@@ -95,9 +98,12 @@ unless it says otherwise.
 
 ## 2. Three corrections before any of this gets built
 
-### 2.1 The console is a front end for `init`, and `init` doesn't exist
+### 2.1 The console is a front end for `init` — and `init` now exists
 
-**Update, two days after this section was written:** `init` now exists.
+**Update, two days after this section was written:** `init` now exists, and
+the rest of this section is kept only as the record of the argument that
+produced it. Read the update; the "original argument, for the record" below
+describes a state of the repository that is no longer true.
 `README.md`'s status table no longer ends with two ❌ rows for it — both are
 ✅ Built: `harness/cli/init.mjs` (the CLI itself) and `harness/lib/scaffold.mjs`
 (the pure-function generator underneath it — `renderAdapterYaml()`,
@@ -132,10 +138,13 @@ drift from the adapter schema the moment `harness/lib/adapter.mjs` gains a
 field.
 
 The correct order is generator → CLI → console, with all three sharing one
-pure-function library:
+pure-function library. (What actually got built is this shape under
+different names — `harness/lib/scaffold.mjs` and `harness/cli/init.mjs`, not
+`install.mjs` and `scripts/init.mjs` — and without `validateAnswers()`. The
+sketch below is the proposal, not a description of the tree.)
 
 ```
-harness/lib/install.mjs          ← new. Pure functions, no I/O, no network.
+harness/lib/install.mjs          ← proposed name; shipped as scaffold.mjs
   generateAdapter(answers)       → string (project-adapter.yml)
   generateAgentBrief(answers)    → string
   generateReviewerBrief(answers) → string
@@ -196,14 +205,28 @@ implication, test commands and approval class. Checked against the code:
 | `constitution.frozen_paths`, `append_only_paths`, `frozen_fields`, `churn_ceiling` | ✅ `check-guarded-paths.mjs` |
 | `roles.*`, `memory.*`, `context.*` | ✅ `run-generation.mjs` |
 | `deployment.*`, `notify.*` | ✅ `verify-deployment.mjs`, `promote.mjs`, `send-digest.mjs` |
-| **`cadence.schedule_cron`** | ❌ **nothing** |
-| **`evaluation.test_commands`** | ❌ **nothing** |
-| **`approval_class`** | ❌ **nothing** |
+| `constitution.approval_class` | ✅ `scaffold.mjs` — selects the generated workflow's merge path |
+| **`cadence.schedule_cron`** | ⚪ **nothing, by design** — baked into the workflow's cron at scaffold time |
+| **`evaluation.test_commands`** | ⚪ **nothing, by design** — baked into the workflow's test steps at scaffold time |
 
 A form that renders a friendly cadence dropdown writing into
 `cadence.schedule_cron` would produce a user who believes their loop runs
 monthly when nothing schedules it. That's a worse outcome than the README,
 which at least says so.
+
+**Two of the three rows have since moved, in opposite directions.**
+`approval_class` is now LIVE: `scaffold.mjs` reads it and renders one of two
+merge paths into the workflow, with anything unrecognised failing closed to
+the pull-request one (§Step 7 is therefore implementable as written).
+`cadence.schedule_cron` and `evaluation.test_commands` have been relabelled
+from RESERVED to **recorded, by design** — the decision is that nothing will
+ever read them back, because both are baked into the generated workflow and
+a value baked into a generated file should have exactly one source of truth
+at run time. The closing section of `harness/project-adapter.example.yml`
+carries that reasoning. For the console this is a real distinction: a
+RESERVED field is a promise not yet kept, a recorded one is an honest echo
+of something that already took effect elsewhere, and they should not render
+the same way.
 
 Two consequences for the console:
 
@@ -364,9 +387,14 @@ it), mirrored into `cadence.schedule_cron` (RESERVED, rendered as such).
 - **Merge automatically once tests and review pass** (advanced; gated behind
   a green rehearsal, and arguably behind N successful generations)
 
-Writes: the generated workflow's merge job, plus `approval_class`
-(RESERVED). Defaulting a non-technical user into autonomous merge is the
-single worst decision this console could make.
+Writes: the generated workflow's merge steps, plus
+`constitution.approval_class` — both LIVE as of the merge-model
+reconciliation. Defaulting a non-technical user into autonomous merge is the
+single worst decision this console could make, so the generator does not
+merely default to the pull-request path: it *falls back* to it for any value
+it doesn't recognise (`harness/lib/adapter.mjs`'s `normalizeApprovalClass()`).
+A console bug that sends a malformed answer opens a pull request; it does not
+start merging.
 
 ### Step 8 — Budget
 
@@ -399,7 +427,9 @@ Turn that constraint into the safety property instead:
 
 1. **Open a pull request** with all four files — but the workflow is written
    with `on: workflow_dispatch` only, no `schedule:` block. The console never
-   pushes to the default branch itself.
+   pushes to the default branch itself. (Built: `renderWorkflowTemplate()`
+   omits the `schedule:` block, leaving a commented cron and a line saying
+   how to switch it on, when its answers carry `includeSchedule: false`.)
 2. **Merge it.** Now the workflow exists on the default branch and can be
    dispatched, but nothing runs on its own. Merging has switched nothing on.
 3. **Rehearse once** — the console dispatches a run, polls it, and shows what
@@ -425,20 +455,22 @@ critical path entirely.
 
 | Phase | Deliverable | Depends on |
 |---|---|---|
-| **0** | `harness/lib/install.mjs` + `templates/` + tests — the generator, as pure functions | nothing — buildable today |
+| **0** | ✅ **Built** as `harness/lib/scaffold.mjs` + `harness/templates/` + `tests/lib/scaffold.test.mjs` — the generator, as pure functions. Still missing: `validateAnswers()` (§2.1) | — |
 | **1** | **The console.** Sign-in, repo picker, all nine steps, sealed-box secrets, the PR, dispatch, and the run view (§8.4) | phase 0 |
 | **2** | Reusable workflow + published package (§3) — install shrinks to a four-file write | phase 0 |
 | **3** | Escalation decisions from the console (§7) | phase 1 |
 | **4** | "Draft my brief for me" (§7), multi-repo view | phase 1 |
 | — | `npx self-optimisation init` — the same generator behind a CLI, for people who prefer one | phase 0, whenever |
 
-**Phase 0 stays first, and it is not front-end work.** The console needs
+**Phase 0 came first, and it was not front-end work.** The console needed
 something to generate `project-adapter.yml`, two briefs and a workflow from
-nine answers, and that thing belongs in `harness/lib/install.mjs` as pure
-functions with a test file — not inside a browser app where `npm test` can't
-reach it and where the invariants in §2.1 can't be checked. It is perhaps two
-days of work and everything else stands on it. Building the console first and
-the generator inside it is the one sequencing mistake worth naming twice.
+nine answers, and that thing belonged in a pure-function library with a test
+file — not inside a browser app where `npm test` can't reach it and where the
+invariants in §2.1 can't be checked. It is `harness/lib/scaffold.mjs`:
+`renderAdapterYaml()`, `renderWorkflowTemplate()`, `renderReadme()`,
+`requiredProviders()`, driven by `harness/cli/init.mjs`. What phase 1 still
+has to add to it is `validateAnswers()` — the invariant checks §2.1 calls the
+whole value of the thing, which neither front end has yet.
 
 **Phase 1 needs a small backend, and that's a real revision, not a rounding
 error.** The original version of this section said "almost no backend,"
@@ -552,7 +584,8 @@ Worth naming, because it's the argument for phase 4+ existing at all:
 That last one is the strongest reason to build this beyond frictionless
 onboarding. The harness's central constraint is *an agent can argue a rule
 is wrong but cannot change it; only a human can*. Right now the human side
-of that is unbuilt. The console is where it goes.
+of that is a JSON file and an email. The console is where the rest of it
+goes.
 
 ---
 
@@ -831,12 +864,12 @@ section documents the shape so that step is informed, not blind.
 
 ## 10. Recommendation
 
-Build `harness/lib/install.mjs` next — the generator, as pure functions with
-a test file. It is the top unbuilt item in the README's status table, it is
-perhaps two days, and every screen in the console is a caller of it. Building
-the console first and letting the generator grow inside it is the one
-sequencing mistake that costs real rework, because the invariants in §2.1
-stop being testable the moment they live in a browser app.
+The generator this section originally recommended building next is built:
+`harness/lib/scaffold.mjs`, driven by `harness/cli/init.mjs`, covered by
+`tests/lib/scaffold.test.mjs`. Every screen in the console is a caller of it.
+The one piece of it still missing is `validateAnswers()` (§2.1) — build that
+into the same library rather than into a browser app, for the same reason:
+the invariants stop being testable the moment they live in one.
 
 Then build the console as phase 1, end to end, and skip the CLI until someone
 asks for it. Three rules make it a front end this harness can stand behind
@@ -845,10 +878,12 @@ rather than one that oversells it:
 - **Keys go browser → GitHub, never through us** (§2.2). The database has a
   `CHECK` constraint enforcing it, and the privacy policy is short because
   of it.
-- **A control nothing reads is rendered as such** (§2.3). `cadence`,
-  `test_commands` and `approval_class` are still consumed by nothing; a
-  cheerful dropdown over a dead field is how a tool loses a user's trust in
-  one step.
+- **A control nothing reads is rendered as such** (§2.3). `approval_class`
+  is LIVE now; `cadence.schedule_cron` and `evaluation.test_commands` are
+  recorded echoes of something already baked into the generated workflow,
+  which is a different thing from a field awaiting work and should look
+  different. A cheerful dropdown over a dead field is how a tool loses a
+  user's trust in one step.
 - **The repository is the truth; we hold a cache** (§8.3, §8.4). Config,
   history and escalations all live in the user's repo as files they can read
   without us. That is what makes deleting an account cost them nothing, and

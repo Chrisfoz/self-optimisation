@@ -46,9 +46,10 @@
 
 import fs from 'fs';
 import path from 'path';
-import { loadAdapter, notifyConfig, contextConfig } from '../lib/adapter.mjs';
+import { loadAdapter, notifyConfig, contextConfig, memoryConfig } from '../lib/adapter.mjs';
 import { callModelWithHeadroom } from '../lib/llm-provider.mjs';
 import { buildGenerationDigestEmail, buildNoGenerationEmail, NO_GENERATION_REASONS, getSender } from '../lib/notify.mjs';
+import { loadLedger, minorityReport, renderMinorityReport } from '../lib/escalations.mjs';
 
 function parseArgs(argv) {
   const out = {};
@@ -142,6 +143,20 @@ const read = (relative) => {
 
 const calibrationExamples = notify.calibrationExamplesPaths.map(read).filter(Boolean);
 
+// The minority report: open cases with a strong argument and no backing.
+// Read straight from the ledger rather than passed through the workflow —
+// it is a standing list, not a fact about this run, and the digest is the
+// only place a human sees it at all.
+const memory = memoryConfig(adapter);
+const minority = renderMinorityReport(
+  minorityReport(loadLedger({ repoRoot, ledgerPath: memory.ledgerPath || undefined }), {
+    threshold: {
+      models: memory.consensus.models ?? 3,
+      labs: memory.consensus.labs ?? 2,
+    },
+  })
+);
+
 const email = await buildGenerationDigestEmail(
   {
     genLabel: `generation ${genNumber}`,
@@ -156,6 +171,7 @@ const email = await buildGenerationDigestEmail(
     briefFeedback: process.env.BRIEF_FEEDBACK,
     escalationsOpened: Number(process.env.ESC_OPENED || 0),
     escalationsFlagged: Number(process.env.ESC_FLAGGED || 0),
+    minorityReport: minority,
     attemptsJson: read(`${generationsDir}/gen-${genNumber}/attempts.json`),
     proposalMd: read(`${generationsDir}/gen-${genNumber}/proposal.md`),
     recipientName: notify.recipientName || notify.recipient,

@@ -13,6 +13,7 @@
  */
 
 import { dump as dumpYaml } from 'js-yaml';
+import { normalizeApprovalClass } from './adapter.mjs';
 
 /** Single-quote a path/command for safe use in a bash argument list — the same escaping bash itself expects. */
 function shellQuote(value) {
@@ -101,6 +102,13 @@ export function buildAdapterObject(a) {
         max_files: Number.isFinite(a.churnMaxFiles) ? a.churnMaxFiles : 50,
         max_lines: Number.isFinite(a.churnMaxLines) ? a.churnMaxLines : 10000,
       },
+      // LIVE, and normalised rather than echoed: this is the field
+      // renderWorkflowTemplate() selects the generated workflow's merge
+      // path from, so writing back an unrecognised value would leave a
+      // file claiming a merge model the workflow beside it doesn't
+      // implement. Anything unknown resolves to human-approval-required —
+      // see adapter.mjs's normalizeApprovalClass() for why that direction.
+      approval_class: normalizeApprovalClass(a.approvalClass),
     },
     roles: {
       agent_brief_path: a.agentBriefPath || '.claude/agents/improve.md',
@@ -116,6 +124,7 @@ export function buildAdapterObject(a) {
       escalation_consensus: {
         models: Number.isFinite(a.consensusModels) ? a.consensusModels : 3,
         labs: Number.isFinite(a.consensusLabs) ? a.consensusLabs : 2,
+        resurface_after: Number.isFinite(a.resurfaceAfter) ? a.resurfaceAfter : 5,
       },
       themes_review: {
         dir: a.themesDir || 'docs/themes',
@@ -124,6 +133,7 @@ export function buildAdapterObject(a) {
     },
     context: {
       generations_dir: a.generationsDir || 'docs/generations',
+      runtime_evidence_dir: a.runtimeEvidenceDir || 'docs/runtime',
       strategy: a.contextStrategy || 'full-dump',
       test_files: a.testFiles || [],
       purposes: a.purposes || {},
@@ -134,10 +144,23 @@ export function buildAdapterObject(a) {
       verify_strategy: a.deploymentStrategy || 'none',
       ci: { runner: a.runner || 'ubuntu-latest' },
     },
-    // RESERVED — no test-command runner reads this back out of the adapter
-    // yet (see ARCHITECTURE.md); recorded here anyway so the file stays an
-    // honest record of what init.mjs actually baked into the generated
-    // workflow's test steps, not silently missing from it.
+    // RECORDED, and deliberately never read back — see the closing section
+    // of harness/project-adapter.example.yml for the reasoning. Both of
+    // these are baked into the generated workflow (the cron into
+    // `on.schedule`, the commands into the two test steps), and a value
+    // baked into a generated file should have exactly one source of truth
+    // at run time: that file. They are written here anyway so the adapter
+    // stays an honest record of what this project was scaffolded with,
+    // rather than silently missing it.
+    cadence: {
+      trigger: 'model-release',
+      schedule_cron: a.cadenceCron || '0 0 1 * *',
+      // Whether that cron was actually rendered into the workflow, or left
+      // commented out pending a rehearsal (console/DESIGN.md §Step 9). The
+      // difference matters to anyone reading this file to find out why
+      // nothing has run.
+      scheduled: a.includeSchedule !== false,
+    },
     evaluation: {
       test_commands: a.testCommands || [],
       preflight_required: true,
@@ -201,6 +224,143 @@ export function renderAdapterYaml(answers) {
 }
 
 /**
+ * The `on.schedule:` block, or a comment saying there deliberately isn't
+ * one and how to add it.
+ *
+ * `console/DESIGN.md` §Step 9's two-phase onboarding turns a GitHub
+ * constraint into the safety property: `workflow_dispatch` only works for a
+ * workflow already on the default branch, so "open a PR, rehearse before
+ * merging" is not something the platform permits. Shipping without a
+ * `schedule:` block instead means merging switches nothing on — the
+ * rehearsal is a button press, and the cron arrives afterward as its own
+ * one-line change. Until then there is no cron in the repository to fire,
+ * which makes "the schedule stays off until a rehearsal passes" a fact
+ * about the file rather than a promise about the process.
+ *
+ * The `init` CLI defaults this ON, because someone running a CLI in their
+ * own repo has already done the equivalent of merging; the console defaults
+ * it off for its first pull request.
+ */
+function scheduleBlock(answers) {
+  const cron = answers.cadenceCron || '0 0 1 * *';
+  if (answers.includeSchedule === false) {
+    return [
+      "  # No `schedule:` block yet, on purpose — this workflow runs only when",
+      '  # you ask it to, from the Actions tab. Rehearse it once by hand, read',
+      '  # the run end to end, and only then add the cron below as its own',
+      '  # small change:',
+      '  #',
+      '  # schedule:',
+      `  #   - cron: '${cron}'`,
+    ].join('\n');
+  }
+  return ['  schedule:', `    - cron: '${cron}'`].join('\n');
+}
+
+/**
+ * The steps between "tests passed" and "report what happened" — the merge
+ * model, rendered as YAML rather than branched at runtime.
+ *
+ * Exactly one of the two paths ends up in the generated file, so which
+ * merge model a repository got is answerable by reading its workflow
+ * instead of by cross-referencing an adapter field against harness code.
+ * The steps the other path would have used simply don't exist, and the
+ * gate-collecting step downstream already tolerates that: an `outcome`
+ * expression for a step that isn't in the file resolves to the empty
+ * string, which it skips.
+ *
+ * `human-approval-required` (the default) pushes, gates, opens the pull
+ * request, and records its URL back into that generation's attempts.json
+ * via harness/scripts/record-pull-request.mjs — the write
+ * `writeAttemptRecord()` cannot do itself, because the PR doesn't have a
+ * URL until after run-generation.mjs has exited (console/DESIGN.md §8.4).
+ * It runs no deployment verification: nothing has been deployed yet, and
+ * won't be until a person merges.
+ *
+ * `autonomous-merge` is the original path — promote.mjs merges and tags,
+ * then verify-deployment.mjs checks what that shipped.
+ */
+function mergeSteps(answers) {
+  const approvalClass = normalizeApprovalClass(answers.approvalClass);
+  const defaultBranch = answers.defaultBranch || 'main';
+  const generationsDir = answers.generationsDir || 'docs/generations';
+
+  if (approvalClass === 'autonomous-merge') {
+    return `- name: Merge and tag, if every gate passed
+        id: promote
+        if: steps.tests.outcome == 'success'
+        shell: bash
+        continue-on-error: true
+        env:
+          GEN_NUMBER: \${{ steps.gen.outputs.number }}
+          BASE_BRANCH: ${defaultBranch}
+        run: node harness/scripts/promote.mjs
+
+      - name: Verify the deployment
+        id: verify
+        if: steps.promote.outcome == 'success'
+        shell: bash
+        continue-on-error: true
+        run: node harness/scripts/verify-deployment.mjs --evidence "$RUNNER_TEMP/deploy-evidence.json"`;
+  }
+
+  // `gh` is pre-installed on GitHub-hosted runners and authenticates from
+  // GH_TOKEN, which is why this path needs no third-party action and no
+  // credential beyond the job's own token. The title and body are built
+  // from env: values inside the script — SUMMARY is model-generated text
+  // and must never reach a `run:` block through `${{ }}` interpolation.
+  return `- name: Open a pull request, if every gate passed
+        id: pr
+        if: steps.tests.outcome == 'success'
+        shell: bash
+        continue-on-error: true
+        env:
+          GH_TOKEN: \${{ github.token }}
+          BASE_BRANCH: ${defaultBranch}
+          BRANCH: \${{ steps.gen.outputs.branch }}
+          GEN_NUMBER: \${{ steps.gen.outputs.number }}
+          SUMMARY: \${{ steps.improve.outputs.summary }}
+          RUN_URL: \${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}
+          GENERATIONS_DIR: ${generationsDir}
+        run: |
+          body=$(printf '%s\\n' \\
+            "Opened by the self-improvement loop. Every gate passed against this branch —" \\
+            "preflight, the independent review, the guarded-path check, and this project's" \\
+            "own tests. The merge is yours." \\
+            "" \\
+            "- Summary: $SUMMARY" \\
+            "- Proposal: \\\`$GENERATIONS_DIR/gen-$GEN_NUMBER/proposal.md\\\`" \\
+            "- Attempt record: \\\`$GENERATIONS_DIR/gen-$GEN_NUMBER/attempts.json\\\`" \\
+            "- Workflow run: $RUN_URL")
+          url=$(gh pr create \\
+            --base "$BASE_BRANCH" \\
+            --head "$BRANCH" \\
+            --title "Generation $GEN_NUMBER: $SUMMARY" \\
+            --body "$body" | tail -n 1)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      # The one field writeAttemptRecord() cannot fill in itself: the PR
+      # has no URL until the step above returns one, by which point
+      # run-generation.mjs has long exited. Its own step, not part of the
+      # one above, so a failure to record is visibly a failure to record
+      # rather than a pull request that looks like it was never opened.
+      - name: Record the pull request URL in this generation's attempt record
+        if: steps.pr.outputs.url
+        shell: bash
+        continue-on-error: true
+        env:
+          BRANCH: \${{ steps.gen.outputs.branch }}
+          GEN_NUMBER: \${{ steps.gen.outputs.number }}
+          PR_URL: \${{ steps.pr.outputs.url }}
+          GENERATIONS_DIR: ${generationsDir}
+        run: |
+          node harness/scripts/record-pull-request.mjs "$GEN_NUMBER" "$PR_URL" --generations-dir "$GENERATIONS_DIR"
+          git add -A -- "$GENERATIONS_DIR"
+          git commit -m "Generation $GEN_NUMBER: record pull request URL" || echo "Nothing to record"
+          git push origin "$BRANCH"`;
+}
+
+/**
  * Fill `harness/templates/workflow.yml.tmpl`'s `{{PLACEHOLDER}}` tokens
  * (plain `{{ }}`, never GitHub's own `${{ }}` expression syntax — the two
  * don't collide as substrings, so a literal `.replaceAll` per token is
@@ -216,6 +376,14 @@ export function renderWorkflowTemplate(template, answers) {
   );
   const testCommandLines = indentBlock((answers.testCommands || []).join('\n'), 10);
   const allowedPathsGitAdd = (answers.allowedPaths || []).map(shellQuote).join(' ');
+  // The harness's own records, committed alongside whatever the agent
+  // changed. Deduped because a project is free to point both at the same
+  // place, and `git add` twice over one directory is harmless but reads
+  // like a mistake.
+  const recordDirsGitAdd = [...new Set([
+    answers.generationsDir || 'docs/generations',
+    answers.themesDir || 'docs/themes',
+  ])].map(shellQuote).join(' ');
 
   // The template places {{NOTIFY_STEPS}} after a literal 6-space prefix on
   // its own line, so this block's FIRST line must have no leading spaces
@@ -276,15 +444,29 @@ export function renderWorkflowTemplate(template, answers) {
   // relying on today's strings staying accident-free.
   const sub = (str, token, value) => str.replaceAll(token, () => value);
 
+  // Only the pull-request path needs to create one, and a workflow should
+  // not hold a permission its own steps never use.
+  const permissionLines =
+    normalizeApprovalClass(answers.approvalClass) === 'autonomous-merge'
+      ? '  contents: write'
+      : ['  contents: write', '  pull-requests: write'].join('\n');
+
   let out = template;
-  out = sub(out, '{{CRON}}', answers.cadenceCron || '0 0 1 * *');
+  out = sub(out, '{{SCHEDULE_BLOCK}}', scheduleBlock(answers));
+  out = sub(out, '{{PERMISSION_LINES}}', permissionLines);
   out = sub(out, '{{RUNNER}}', answers.runner || 'ubuntu-latest');
   out = sub(out, '{{PROVIDER_ENV_LINES}}', providerEnvLines);
   out = sub(out, '{{PROVIDERS_CSV}}', answers.providers.map((p) => p.name).join(','));
   out = sub(out, '{{SNAPSHOT_PATH}}', answers.snapshotPath || '.agent/model-snapshot.json');
   out = sub(out, '{{TEST_COMMAND_LINES}}', testCommandLines);
   out = sub(out, '{{ALLOWED_PATHS_GIT_ADD}}', allowedPathsGitAdd);
+  out = sub(out, '{{RECORD_DIRS_GIT_ADD}}', recordDirsGitAdd);
+  out = sub(out, '{{THEMES_CADENCE}}', String(Number.isFinite(answers.themesCadence) ? answers.themesCadence : 10));
   out = sub(out, '{{DEFAULT_BRANCH}}', answers.defaultBranch || 'main');
+  // Same first-line-unindented convention as {{NOTIFY_STEPS}} below: the
+  // template supplies the 6 spaces before the token, so this block's own
+  // first line must not.
+  out = out.replace('{{MERGE_STEPS}}', () => mergeSteps(answers));
   out = out.replace('{{NOTIFY_STEPS}}', () => notifySteps);
   return out;
 }
@@ -309,6 +491,53 @@ export function renderReadme(answers) {
   const notifyLine = answers.notify ? `- \`${answers.notify.envKey}\` — sends the generation digest via ${answers.notify.provider}` : null;
   const secretLines = [providerLines, notifyLine].filter(Boolean).join('\n');
 
+  const approvalClass = normalizeApprovalClass(answers.approvalClass);
+  const approvalSection =
+    approvalClass === 'autonomous-merge'
+      ? `**\`autonomous-merge\`** — when every gate passes (preflight, the independent
+review, the guarded-path check, your own tests), the workflow merges the agent
+branch into \`${answers.defaultBranch || 'main'}\` itself and tags the generation
+\`gen-NNN\`. Nobody is asked first. Every generation is a tag specifically so
+this stays reversible: \`git revert gen-NNN\`, or bisect between two of them.
+
+This is the advanced setting. If you did not mean to choose it, set
+\`constitution.approval_class: human-approval-required\` in
+\`project-adapter.yml\` and re-run init with \`--force\` to regenerate the
+workflow — the merge model is baked into the workflow file, not read from the
+adapter at run time.`
+      : `**\`human-approval-required\`** (the default) — when every gate passes
+(preflight, the independent review, the guarded-path check, your own tests),
+the workflow opens a **pull request** and stops. You merge it, or you don't.
+Nothing reaches \`${answers.defaultBranch || 'main'}\` without you.
+
+The pull request's URL is written back into that generation's
+\`attempts.json\`, so the record of a run says where it ended up.
+
+To switch to autonomous merge later, set
+\`constitution.approval_class: autonomous-merge\` in \`project-adapter.yml\`
+and re-run init with \`--force\` — the merge model is baked into the workflow
+file, not read from the adapter at run time.`;
+
+  const cadenceSection =
+    answers.includeSchedule === false
+      ? `**There is no schedule yet.** The workflow runs only when you ask it to,
+from the Actions tab. That is deliberate: merging this in switches nothing on.
+Once a rehearsal run has passed and its output makes sense to you, add the
+cron as its own small change:
+
+\`\`\`yaml
+on:
+  schedule:
+    - cron: '${answers.cadenceCron || '0 0 1 * *'}'
+\`\`\`
+
+Model releases are the real trigger, not the calendar — a quiet period runs
+the detector and does nothing else. See \`learning/01-principles.md\`
+principle 1.`
+      : `Runs on \`${answers.cadenceCron || '0 0 1 * *'}\` (cron, UTC). Model releases are
+the real trigger, not the calendar — a quiet period runs the detector and
+does nothing else. See \`learning/01-principles.md\` principle 1.`;
+
   return `# Self-Improvement — what init just installed
 
 Generated by \`harness/cli/init.mjs\` for **${answers.projectId}**. This is the
@@ -332,11 +561,13 @@ for themselves.
 
 ${secretLines || '(none — no providers or notifier were configured)'}
 
+## What happens when a generation passes every gate
+
+${approvalSection}
+
 ## Cadence
 
-Runs on \`${answers.cadenceCron || '0 0 1 * *'}\` (cron, UTC). Model releases are
-the real trigger, not the calendar — a quiet period runs the detector and
-does nothing else. See \`learning/01-principles.md\` principle 1.
+${cadenceSection}
 
 ## Rehearse before turning the schedule on
 
@@ -344,7 +575,10 @@ does nothing else. See \`learning/01-principles.md\` principle 1.
 2. Push \`project-adapter.yml\`, the workflow, and the filled briefs.
 3. Use "Run workflow" (workflow_dispatch) once, by hand, and read the run's
    log end to end — every step logs what it decided and why.
-4. Only once that run's outcome makes sense to you, let the schedule take
-   over unattended.
+4. Only once that run's outcome makes sense to you, ${
+    answers.includeSchedule === false
+      ? 'add the `schedule:` block above'
+      : 'let the schedule take over unattended'
+  }.
 `;
 }

@@ -79,6 +79,30 @@ constitution:
     max_files: 50
     max_lines: 10000
 
+  # --- LIVE: harness/lib/scaffold.mjs reads this when it renders your
+  # workflow, and harness/lib/adapter.mjs's approvalClass() is the accessor.
+  # What happens once a generation has passed every gate:
+  #
+  #   human-approval-required  the workflow opens a pull request and stops.
+  #                            You merge it, or you don't. (DEFAULT)
+  #   autonomous-merge         the workflow merges the agent branch into
+  #                            your default branch itself and tags the
+  #                            generation. Nobody is asked first.
+  #
+  # ANY OTHER VALUE — a typo, a blank, something a future tool wrote that
+  # this version doesn't know — resolves to human-approval-required. Fail
+  # closed: an unrecognised value must never be the reason a project starts
+  # merging its own changes unattended.
+  #
+  # This is read at SCAFFOLD time, not at run time: the choice is rendered
+  # into .github/workflows/self-improve.yml as one of two sets of steps, so
+  # changing it here does nothing until you re-run
+  # `node harness/cli/init.mjs --force` to regenerate the workflow. That is
+  # deliberate — which merge model a repository has should be answerable by
+  # reading its workflow file, not by trusting that a config file and a
+  # generated file still agree.
+  approval_class: human-approval-required
+
 # --- LIVE: harness/scripts/run-generation.mjs reads these three sections --
 # Everything below this point is what turns the pieces above into an actual
 # run of the loop — see ARCHITECTURE.md for the diagram this powers.
@@ -121,6 +145,27 @@ memory:
   escalation_consensus:
     models: 3
     labs: 2
+    # How many generations an escalation may sit BELOW that bar, with nobody
+    # mentioning it either way, before the next fan-out is asked about it by
+    # name. Optional; harness/lib/escalations.mjs defaults to 5.
+    #
+    # Why this exists: the bar counts supporters, and nothing counted
+    # silence. What actually kills a lone idea is that other models never
+    # mention it — it sits at 1/3 forever, and inattention scored identically
+    # to judgement. A resurfaced entry is put to the models directly and they
+    # must answer AGREE, DISAGREE or IRRELEVANT; three distinct IRRELEVANT
+    # judgements retire it, which is a real verdict where silence never was.
+    # This does not lower the bar. It asks the question the bar was silently
+    # answering on the models' behalf.
+    resurface_after: 5
+  # Every N generations, one model reads the same history window every
+  # suggesting model reads and is asked what principle explains it —
+  # abstraction rather than association. Written by
+  # harness/scripts/generate-themes-review.mjs, read back into every
+  # subsequent suggestion prompt by harness/lib/themes.mjs. The script
+  # decides for itself whether a run is a cadence boundary, so the generated
+  # workflow runs it every generation rather than keeping a second schedule
+  # in sync with the first.
   themes_review:
     dir: docs/themes
     cadence_generations: 10
@@ -129,6 +174,14 @@ context:
   # Where generation records accumulate — attempts.json, proposal.md — one
   # directory per run.
   generations_dir: docs/generations
+
+  # Where the record of what each run actually OBSERVED goes — see
+  # harness/scripts/record-runtime-evidence.mjs and
+  # docs/curiosity/C10-runtime-evidence.md. Every other block in the
+  # suggestion prompt describes what this project IS; this is the only one
+  # that describes what it DID. Optional: a project that records none simply
+  # never gets the section.
+  runtime_evidence_dir: docs/runtime
 
   # Optional: a doc with standing context about how this project's loop is
   # built, sent to the suggestion stage in full. append_only_marker, if your
@@ -229,15 +282,33 @@ deployment:
 #     # - docs/calibration/example-1.md     # bodies from YOUR project's own history —
 #                                            # optional; omit until you have some
 
-# --- RESERVED: the workflow template and CI wiring exist now (see
-# ARCHITECTURE.md), but nothing reads these three fields back out of an
-# existing project-adapter.yml — cadence is baked into the generated
-# workflow's cron at scaffold time, not re-read later, and approval_class is
-# parsed by nothing yet (see console/DESIGN.md §2.3 for the current
-# LIVE/RESERVED accounting). Filling them in now is still free and
-# forward-compatible.
-
-# approval_class: autonomous-merge   # or human-approval-required
+# --- RECORDED, not reserved: these two sections are a written record of
+# what init.mjs baked into your generated workflow. Nothing reads them back
+# out of this file at run time, and — unlike approval_class, which used to
+# sit here — nothing ever will. That is the decision, not a gap:
+#
+#   cadence.schedule_cron   becomes `on.schedule.cron` in the generated
+#                           workflow. GitHub Actions is what actually runs
+#                           on a schedule; a cron here that Actions never
+#                           reads would produce a user who believes their
+#                           loop runs monthly when nothing schedules it
+#                           (console/DESIGN.md §2.3).
+#   evaluation.test_commands becomes the preflight and post-change test
+#                           steps in that same workflow. A run must fail on
+#                           the commands CI actually ran, not on a list in a
+#                           file the agent's own branch could in principle
+#                           have edited between the two.
+#
+# The shared reason: a value that is baked into a generated file has exactly
+# one source of truth at run time — the generated file. Reading it back from
+# here as well would create two, which can silently disagree, and the
+# disagreement would be invisible precisely when it mattered. Change either
+# of these and re-run `node harness/cli/init.mjs --force` to regenerate the
+# workflow; editing this file alone changes nothing.
+#
+# cadence.trigger is documentation of intent with no mechanism behind it at
+# all: the real trigger is a model release (learning/01-principles.md,
+# principle 1), and the cron is only how often the harness goes looking.
 
 # cadence:
 #   trigger: model-release
@@ -246,3 +317,28 @@ deployment:
 # evaluation:
 #   test_commands: []
 #   preflight_required: true
+
+# --- LIVE: harness/scripts/run-evaluators.mjs reads this ------------------
+# Quality-dimension evaluator plugins — the measurements that are NOT gates.
+# `test_commands` above are the gates: they run in CI and a failure stops the
+# generation. These run afterwards and can stop nothing. A plugin that
+# throws, hangs, or returns nonsense produces a recorded error and the
+# generation proceeds — see harness/plugins/evaluators/README.md, which is
+# the interface a plugin implements and the reasoning for enforcing
+# "non-gating" in the runner rather than trusting each plugin.
+#
+# Results are written to <generations_dir>/gen-NNN/metrics.json and read back
+# into the NEXT generation's suggestion prompt, as measured context that is
+# explicitly not a target. A project with none configured gets a prompt
+# byte-identical to one from before any of this existed.
+#
+# `module` is resolved relative to the project root, so your own plugin lives
+# in your own repository, version-controlled beside the thing it measures.
+# Nothing has to be contributed back to this harness to be used.
+
+# evaluation:
+#   evaluators:
+#     - module: harness/plugins/evaluators/source-weight/index.mjs
+#       config:
+#         paths: ['src/**/*.js']     # defaults to the whole tree
+#         largeFileLines: 500

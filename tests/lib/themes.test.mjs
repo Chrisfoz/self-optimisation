@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadLatestThemesReview, buildThemesBrief } from '../../harness/lib/themes.mjs';
+import { loadLatestThemesReview, buildThemesBrief, reviewedGenerations } from '../../harness/lib/themes.mjs';
 
 function tempRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'themes-test-'));
@@ -63,4 +63,28 @@ test('buildThemesBrief formats real themes for the prompt', () => {
   assert.match(brief, /2026-02-01/);
   assert.match(brief, /1\. Noticed: Three generations/);
   assert.match(brief, /Means: Fixed budgets guess/);
+});
+
+
+// --- reviewedGenerations ------------------------------------------------------
+// Read from the filenames rather than by opening each file: the filename is
+// what loadLatestThemesReview() sorts on, so it is the thing that has to be
+// unique.
+
+test('reviewedGenerations returns [] for a project that has never reached a cadence boundary', (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  assert.deepEqual(reviewedGenerations({ repoRoot }), []);
+});
+
+test('reviewedGenerations lists the generations covered, ignoring anything else in the directory', (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  const dir = path.join(repoRoot, 'docs/themes');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'review-010.json'), '{}');
+  fs.writeFileSync(path.join(dir, 'review-020.json'), '{}');
+  fs.writeFileSync(path.join(dir, 'README.md'), 'notes');
+  fs.writeFileSync(path.join(dir, 'review-draft.json'), '{}');
+  assert.deepEqual(reviewedGenerations({ repoRoot }), ['010', '020']);
 });
