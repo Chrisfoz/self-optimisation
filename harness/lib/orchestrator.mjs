@@ -372,6 +372,31 @@ export async function gatherProposals(promptConfig, models, deps = {}) {
 // ---------------------------------------------------------------------------
 
 /**
+ * The ranking rubric, by scope. `focused` is the original text, unchanged.
+ * `ambitious` exists because the original was one of four places the
+ * harness pulled every generation toward the smallest safe change (see
+ * docs/Review-SWOT-2026-09.md F1): an ambitious run earns its headroom by
+ * shipping cleanly twice, and then had the same rubric pick "a few
+ * localised edits" from its fan-out.
+ */
+export const RANK_RUBRIC = {
+  focused: `Judge only on the merit of the change itself:
+- How much it improves the outcome the change claims to strengthen
+- Whether it is genuinely implementable as a few localised edits
+- Whether it risks breaking a frozen test invariant or a stated constraint
+- Whether it fixes something real rather than adding decoration
+
+Prefer a fix to something broken over an addition. Prefer a change that helps the common case over one that helps an edge case.`,
+  ambitious: `This generation is explicitly AMBITIOUS: the recent generations all merged cleanly, and structural work is in scope. Judge on:
+- How much it changes what the project can do or how it works, not how small it is — the smallest proposal is not the default winner here
+- Whether it is ONE coherent idea that could be reversed in one revert if it turns out badly, rather than a collection of small ones or a change that quietly rewrites everything
+- Whether it risks breaking a frozen test invariant or a stated constraint
+- Whether it fixes something real or opens something new that the project's stated purpose actually calls for
+
+Prefer the proposal with the largest genuine effect at an acceptable reversibility. Do not prefer a proposal merely because it is safer or smaller.`,
+};
+
+/**
  * Choose which proposal to implement, when more than one exists. The
  * ranker is given proposals with their authors withheld, so it judges the
  * idea rather than the brand — see learning/01-principles.md for the
@@ -385,8 +410,13 @@ export async function gatherProposals(promptConfig, models, deps = {}) {
  * @param {string} [opts.manifest] @param {string} [opts.testIndex]
  * @param {Array} opts.proposals
  * @param {string} [opts.rankModel]
+ * @param {'focused'|'ambitious'} [opts.scope]  The run's scope. The rubric
+ *   used to be scope-blind — it preferred "a few localised edits" and "a
+ *   fix over an addition" on every run — so an ambitious generation, whose
+ *   whole point is structural work, still had its smallest proposal chosen.
+ *   Default 'focused', which keeps the prompt byte-identical to before.
  */
-export async function rankProposals({ projectDescription, manifest = '', testIndex = null, proposals, rankModel = 'claude-opus-5' }, deps = {}) {
+export async function rankProposals({ projectDescription, manifest = '', testIndex = null, proposals, rankModel = 'claude-opus-5', scope = 'focused' }, deps = {}) {
   const call = deps.call ?? callModelWithHeadroom;
   const log = deps.log ?? (() => {});
 
@@ -394,13 +424,7 @@ export async function rankProposals({ projectDescription, manifest = '', testInd
 
   const system = `You are choosing between improvement proposals for ${projectDescription}, written by different frontier models that each looked at the same code.
 
-Judge only on the merit of the change itself:
-- How much it improves the outcome the change claims to strengthen
-- Whether it is genuinely implementable as a few localised edits
-- Whether it risks breaking a frozen test invariant or a stated constraint
-- Whether it fixes something real rather than adding decoration
-
-Prefer a fix to something broken over an addition. Prefer a change that helps the common case over one that helps an edge case.
+${RANK_RUBRIC[scope] ?? RANK_RUBRIC.focused}
 
 Respond in EXACTLY this format:
 CHOICE: <the number of the winning proposal>
@@ -1053,7 +1077,7 @@ export async function runGeneration(config, deps = {}) {
   const crashState = { suggestResult: null, proposal: null, fanOut: null, attempts: [], by: null };
 
   try {
-    const ranking = await rankProposals({ projectDescription, manifest: context.manifest, testIndex: context.testIndex, proposals, rankModel }, { call: callFor('rank'), log });
+    const ranking = await rankProposals({ projectDescription, manifest: context.manifest, testIndex: context.testIndex, proposals, rankModel, scope: scope.scope }, { call: callFor('rank'), log });
     const winner = proposals[ranking.index];
     const suggestResult = winner.result;
     const proposal = winner.text;

@@ -313,3 +313,44 @@ test('a record with no pull-request state renders exactly as before (byte-identi
   writeGen(repoRoot, 'gen-001', { proposal: PROPOSAL, attempts: CLEAN });
   assert.equal(buildGenerationHistory({ repoRoot, limit: 1 }), before);
 });
+
+// --- Ambition no longer punishes itself (docs/Review-SWOT-2026-09.md F1) ------
+
+const AMBITIOUS_FAILED = { outcome: 'abandoned', scope: 'ambitious', attempts: [{ attempt: 1, outcome: 'rejected-by-review' }] };
+
+test('recommendScope: a lone ambitious failure costs one focused generation, not the whole streak', (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  writeGen(repoRoot, 'gen-001', { attempts: CLEAN });
+  writeGen(repoRoot, 'gen-002', { attempts: CLEAN });
+  assert.equal(recommendScope({ repoRoot, required: 2 }).scope, 'ambitious');
+  writeGen(repoRoot, 'gen-003', { attempts: AMBITIOUS_FAILED });
+  const owed = recommendScope({ repoRoot, required: 2 });
+  assert.equal(owed.scope, 'focused');
+  assert.match(owed.reason, /one focused generation is owed/);
+  writeGen(repoRoot, 'gen-004', { attempts: CLEAN });
+  assert.equal(recommendScope({ repoRoot, required: 2 }).scope, 'ambitious', 'clean, clean, ambitious-failed, clean → ambitious again');
+});
+
+test('recommendScope: two ambitious failures in a row are counted in full', (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  writeGen(repoRoot, 'gen-001', { attempts: CLEAN });
+  writeGen(repoRoot, 'gen-002', { attempts: CLEAN });
+  writeGen(repoRoot, 'gen-003', { attempts: AMBITIOUS_FAILED });
+  writeGen(repoRoot, 'gen-004', { attempts: AMBITIOUS_FAILED });
+  writeGen(repoRoot, 'gen-005', { attempts: CLEAN });
+  assert.equal(recommendScope({ repoRoot, required: 2 }).scope, 'focused', 'the window is gen-004 (failed) and gen-005');
+  writeGen(repoRoot, 'gen-006', { attempts: CLEAN });
+  assert.equal(recommendScope({ repoRoot, required: 2 }).scope, 'ambitious');
+});
+
+test('recommendScope: a focused failure still resets the streak as before', (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  writeGen(repoRoot, 'gen-001', { attempts: CLEAN });
+  writeGen(repoRoot, 'gen-002', { attempts: CLEAN });
+  writeGen(repoRoot, 'gen-003', { attempts: { outcome: 'abandoned', scope: 'focused', attempts: [{ attempt: 1, outcome: 'rejected-by-review' }] } });
+  writeGen(repoRoot, 'gen-004', { attempts: CLEAN });
+  assert.equal(recommendScope({ repoRoot, required: 2 }).scope, 'focused');
+});

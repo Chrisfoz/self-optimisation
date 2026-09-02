@@ -691,3 +691,20 @@ test('runGeneration: with no budget configured, nothing is refused and spend is 
   assert.equal(result.outcome, 'approved');
   assert.equal(result.spend.estimatedCalls, 2);
 });
+
+// --- Scope-aware ranking (docs/Review-SWOT-2026-09.md F1) --------------------
+
+test('rankProposals: the focused rubric is the original, and the ambitious one stops preferring the smallest proposal', async () => {
+  const seen = [];
+  const call = async ({ system }) => { seen.push(system); return { text: 'CHOICE: 2\nREASON: bigger.' }; };
+  const proposals = [{ id: 'a', text: 'CHANGE: small' }, { id: 'b', text: 'CHANGE: structural' }];
+  await rankProposals({ projectDescription: 'p', proposals, rankModel: 'r' }, { call });
+  await rankProposals({ projectDescription: 'p', proposals, rankModel: 'r', scope: 'focused' }, { call });
+  await rankProposals({ projectDescription: 'p', proposals, rankModel: 'r', scope: 'ambitious' }, { call });
+  assert.equal(seen[0], seen[1], 'no scope and focused are byte-identical');
+  assert.match(seen[0], /implementable as a few localised edits/);
+  assert.notEqual(seen[2], seen[0]);
+  assert.match(seen[2], /the smallest proposal is not the default winner/);
+  assert.doesNotMatch(seen[2], /a few localised edits/);
+  assert.match(seen[2], /reversed in one revert/);
+});

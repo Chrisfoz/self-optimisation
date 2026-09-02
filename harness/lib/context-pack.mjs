@@ -681,10 +681,36 @@ function hadRealProposal(repoRoot, generationsDir, dir) {
 }
 
 /**
+ * Was this an ambitious generation that did not ship? Read from the record
+ * (`scope` is written by writeAttemptRecord()); a pre-record generation, or
+ * a focused one, answers false.
+ */
+function ambitiousAndFailed(repoRoot, generationsDir, dir) {
+  const raw = read(repoRoot, `${generationsDir}/${dir}/attempts.json`);
+  if (!raw) return false;
+  try {
+    const record = JSON.parse(raw);
+    return record.scope === 'ambitious' && record.outcome !== 'approved';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Earn the headroom, or spend it. The ceiling moves with the evidence: a
  * run of generations that merged on the first attempt buys one ambitious
  * generation; anything less keeps the loop conservative. Deliberately not
  * a random or rotating schedule — the trigger is competence.
+ *
+ * One asymmetry, added after the 2026-09 review (docs/Review-SWOT-2026-09.md
+ * F1): an ambitious generation that fails is expected to fail more often
+ * than a focused one — that is what ambitious means — and it used to reset
+ * the entire streak, so the gate consumed the very signal ambition
+ * degrades and the loop dampened its own ambition. Now a single ambitious
+ * failure costs ONE clean generation rather than `required`: it is skipped
+ * from the window, and the next run must be focused. Two ambitious
+ * failures in a row are counted in full, because at that point the
+ * evidence really does say to slow down.
  *
  * @param {{repoRoot?: string, generationsDir?: string, required?: number}} [opts]
  */
@@ -699,7 +725,36 @@ export function recommendScope({ repoRoot = process.cwd(), generationsDir = DEFA
     };
   }
 
-  const recent = all.slice(-required);
+  // The most recent generation was an ambitious failure: it costs this run.
+  const last = all[all.length - 1];
+  if (ambitiousAndFailed(repoRoot, generationsDir, last)) {
+    return {
+      scope: 'focused',
+      reason: `the last generation (${last}) was ambitious and did not ship; one focused generation is owed before ambition is retried`,
+    };
+  }
+
+  // Skip a lone ambitious failure from the window (it has already been
+  // paid for by the focused run that followed it) — but not two in a row.
+  const window = [];
+  for (let i = all.length - 1; i >= 0 && window.length < required; i--) {
+    const dir = all[i];
+    const previous = all[i - 1];
+    const loneAmbitiousFailure =
+      ambitiousAndFailed(repoRoot, generationsDir, dir) &&
+      !(previous && ambitiousAndFailed(repoRoot, generationsDir, previous));
+    if (loneAmbitiousFailure) continue;
+    window.unshift(dir);
+  }
+
+  if (window.length < required) {
+    return {
+      scope: 'focused',
+      reason: `only ${window.length} generation(s) count toward the streak after setting aside a lone ambitious failure; ${required} clean ones unlock ambitious scope`,
+    };
+  }
+
+  const recent = window;
   const clean = recent.filter((dir) => landedCleanly(repoRoot, generationsDir, dir));
 
   if (clean.length === required) {
