@@ -398,6 +398,7 @@ what comes next and why.
 | A proposal for a second longitudinal pass — one that asks what the project still doesn't understand about itself, rather than what pattern is repeating | [`docs/Curiosity-Engine-Design.md`](docs/Curiosity-Engine-Design.md), with a build spec per component in [`docs/curiosity/`](docs/curiosity/) |
 | A proposal for a browser-based install flow — connect, configure, store keys, open the PR, rehearse — instead of running `init.mjs` by hand | [`console/DESIGN.md`](console/DESIGN.md) |
 | An outside review of the concept and the code, a SWOT, and the workplan additions it proposes to run this as a product | [`docs/Review-SWOT-2026-09.md`](docs/Review-SWOT-2026-09.md) |
+| A second review, two days later, and a proposed six-phase plan for a tenfold improvement against the portable-harness objective — reach, yield, magnitude, trust, each with a number to move | [`docs/Review-10x-2026-09.md`](docs/Review-10x-2026-09.md) |
 
 ## How the three pieces fit together
 
