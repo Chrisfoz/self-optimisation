@@ -12,7 +12,7 @@ portable pattern you'd lift into another project. Read
 | Layer | Where | Shows |
 |---|---|---|
 | **The whole project, today** | Below, on this page — new, added to answer "how do console/harness/curiosity relate" | Console + harness + curiosity as one picture, solid where built, dashed where proposed — the only diagram that spans all three |
-| **This repo's real status (the harness alone)** | Below, on this page | What's actually built in the harness specifically, annotated ✅/🚧/❌ |
+| **This repo's real status (the harness alone)** | Below, on this page — now **two** diagrams: one cycle end to end, then what happens inside the loop | What's actually built in the harness specifically. Everything drawn is real code with a test file; the warm-toned boxes are the ways a cycle ends without shipping, not unbuilt work |
 | **Portable pattern** | [`learning/diagrams/generic-loop.mmd`](learning/diagrams/generic-loop.mmd), `generic-guardrails.mmd`, `generic-context.mmd` — embedded and viewable in [`learning/02-blueprint.md`](learning/02-blueprint.md) and [`learning/05-guardrails-and-trust.md`](learning/05-guardrails-and-trust.md) | The abstract loop and guardrail layers, project-neutral — what you'd draw for *any* installation, including one that isn't this harness at all |
 | **Reference implementation, concretely** | [`learning/diagrams/worked-example-run.mmd`](learning/diagrams/worked-example-run.mmd), `worked-example-harness.mmd` — both embedded below since GitHub doesn't render a bare `.mmd` file as a picture | The same pattern as it actually runs in the reference implementation (real job names, real check counts, real token costs) — useful for seeing what the abstraction looks like once it's hit a real, live system |
 | **Proposed, not built** | [`learning/diagrams/proposed-curiosity-run.mmd`](learning/diagrams/proposed-curiosity-run.mmd), `proposed-curiosity-memory.mmd`, `proposed-curiosity-authorisation.mmd`, indexed at [`docs/curiosity/README.md`](docs/curiosity/README.md) | The curiosity design's own three diagrams — a second longitudinal pass, none of it built. Do not read as documentation of the harness. |
@@ -21,9 +21,11 @@ portable pattern you'd lift into another project. Read
 
 Console, harness, and curiosity live at three different maturity levels, and
 no other diagram in this repository shows them on the same page. Solid boxes
-are real and running; dashed, warm-toned boxes are proposed and do not exist
-yet — the same convention [`learning/diagrams/README.md`](learning/diagrams/README.md)
-uses for the curiosity diagrams, applied here to the console too.
+are real and running; dashed, warm-toned boxes are not yet fully real — the
+same convention [`learning/diagrams/README.md`](learning/diagrams/README.md)
+uses for the curiosity diagrams, applied here to the console too. Curiosity
+is dashed because most of it is unbuilt, not all: four of its ten components
+have shipped, and the box says which.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
@@ -40,13 +42,13 @@ flowchart TD
   scaffoldReal ==>|"writes"| adapter["project-adapter.yml +<br/>.github/workflows/self-improve.yml"]
 
   subgraph harnessloop["BUILT · the harness loop — detailed below"]
-    adapter --> loop["suggest -> implement -> review -> refine<br/>-> themes -> guard -> test -> notify"]
+    adapter --> loop["validate -> suggest -> implement -> review<br/>-> refine -> themes -> guard -> test -> notify"]
   end
 
   loop -->|"constitution.approval_class:<br/>human-approval-required (DEFAULT)"| pr["open a pull request —<br/>gh pr create, then<br/>recordPullRequestUrl()"]
   loop -->|"approval_class:<br/>autonomous-merge (opt-in)"| merge["autonomous merge<br/>promote.mjs, then verify"]
 
-  loop -.->|"every proposal's<br/>OPEN QUESTION field"| curiosity["PROPOSED · docs/curiosity/<br/>curiosity ledger, open questions, spikes —<br/>attaches onto escalations.mjs,<br/>themes.mjs, context-pack.mjs"]
+  loop -.->|"every proposal's<br/>OPEN QUESTION field"| curiosity["PART BUILT · docs/curiosity/<br/>4 of 10: the goal, UNKNOWN questions,<br/>escalation follow-through, runtime evidence.<br/>The ledger and spikes wait on the A-prime gate."]
   curiosity -.->|"read back<br/>next run, once built"| loop
   style curiosity fill:#F3E3D4,stroke:#9FB0BE,stroke-dasharray: 5 5
 ```
@@ -61,128 +63,139 @@ the loop itself to change shape.
 
 ## What's actually built here, today
 
-**The core loop is real as of this diagram's last edit.** Suggest →
-implement → review → refine runs end to end via
-`harness/scripts/run-generation.mjs`, against your own project's adapter
-and brief files. Staging & promotion, deployment verification (all four
-strategies now), and the notifier are real too, each a standalone tested
-CLI — and now `harness/cli/init.mjs` + `harness/templates/workflow.yml.tmpl`
-chain the loop, the guard, the tests, promotion, verification and
-notification into one generated workflow for a new project, so nothing
-below is a human running each script by hand anymore.
+**Two diagrams, because there are two questions.** The first is *what one
+cycle does*, from the schedule firing to an email arriving — the order the
+generated workflow actually runs, including all five ways a cycle can end
+without shipping anything. The second is *what happens inside the loop*: the
+one Node process where suggest → implement → review → refine lives, and
+everything that feeds the prompt it starts from.
+
+Everything in both is real code with its own test file. `harness/cli/init.mjs`
+and `harness/templates/workflow.yml.tmpl` chain all of it into one generated
+workflow for a new project, and `harness/scripts/rehearse.mjs` runs the same
+chain locally, on demand — so nothing here is a human invoking each script by
+hand any more.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
 flowchart TD
-  cron(["schedule / workflow_dispatch"]) --> detector
+  cron(["schedule · Run workflow · a models list typed by hand"]) --> pause{"SELF_IMPROVE_PAUSED?"}
+  pause -->|"set"| stopPaused(["stop. nothing polled, nothing spent —<br/>and the digest says PAUSED"])
 
-  subgraph detect["Detector — copy examples/workflows/watch-releases.yml"]
-    detector["✅ Model-Release Detector<br/>harness/lib/model-release-detector.mjs"]
-    probe["✅ Reachability Probe<br/>harness/lib/probe-models.mjs"]
-    detector --> probe
-  end
+  pause -->|"not set"| validate["✅ Validate the adapter<br/>validate.mjs — every editable path exists,<br/>nothing allowed is also frozen, briefs filled in,<br/>every watched or pinned lab registered"]
+  validate -->|"invalid"| stopInvalid(["stop. the digest says VALIDATE_FAILED —<br/>never reported as a quiet cycle"])
 
-  detector -->|"nothing new"| idle(["stop. no cost,<br/>no commit"])
-  probe -->|"survivors"| rungen
+  validate -->|"valid"| trigger{"what starts this run?"}
 
-  subgraph loop["The loop — harness/scripts/run-generation.mjs, end to end, tested"]
-    adapter["✅ Adapter + briefs<br/>harness/lib/adapter.mjs (js-yaml)<br/>project-adapter.yml + agent-brief.md + reviewer-brief.md"]
-    rungen["✅ runGeneration()<br/>harness/lib/orchestrator.mjs"]
-    router["✅ Provider Router<br/>llm-provider.mjs + 9 providers/*.mjs"]
-    context["✅ Context Compiler<br/>context-pack.mjs (7/9 functions)"]
-    propose["✅ Suggest + Rank<br/>gatherProposals() + rankProposals()<br/>fan out, authors withheld"]
-    executor["✅ Implement<br/>edit-format.mjs — targeted edits,<br/>all-or-nothing"]
-    reviewer["✅ Review<br/>review.mjs — fresh context,<br/>fails closed"]
-    refine["✅ Refine<br/>rejected? restore to pristine,<br/>retry up to maxAttempts"]
-    memory["✅ Memory<br/>escalations.mjs + themes.mjs<br/>folded in every run;<br/>generate-themes-review.mjs writes<br/>a new review every N generations;<br/>an accepted escalation becomes a<br/>work order a later run carries out"]
-    evaluators["✅ Quality dimensions<br/>evaluators.mjs + plugins/evaluators/<br/>measured, never gating"]
-    runtime["✅ Runtime evidence<br/>runtime-evidence.mjs — what the tests<br/>and the deploy check actually SAW"]
+  trigger -->|"a model id the snapshot<br/>has never seen"| detector["✅ Model-release detector<br/>model-release-detector.mjs<br/>+ model-aliases + unfixable-models"]
+  trigger -->|"models named by hand"| campaign["✅ Campaign mode<br/>campaign.mjs — stamped campaign: true<br/>so release-driven history stays separable"]
 
-    adapter --> context --> propose
-    propose --> router
-    propose --> executor --> reviewer
-    reviewer -->|"rejected"| refine --> executor
-    propose -.-> memory
-    memory -.->|"read back next run"| context
-    reviewer -.-> evaluators
-    evaluators -.->|"metrics.json, read back next run"| context
-    runtime -.->|"docs/runtime/gen-NNN.json,<br/>read back next run"| context
-  end
+  detector --> readback
+  campaign --> readback["✅ Read back earlier pull requests<br/>pull-requests.mjs — merged / closed / open,<br/>then report.mjs regenerates REPORT.md.<br/>Runs on EVERY cycle, including a quiet one:<br/>a person's merge or close is the one verdict<br/>in this loop that is not the harness<br/>grading itself."]
 
-  rungen -.->|"composes all of this"| adapter
+  readback --> anything{"anything to run on?"}
+  anything -->|"nothing new"| stopQuiet(["stop. no cost, no commit —<br/>the digest still reports the quiet cycle"])
+  anything --> probe["✅ Reachability probe<br/>probe-models.mjs — the real request shape,<br/>drop whatever cannot answer it"]
 
-  reviewer -->|"approved"| approved(["✅ change on disk,<br/>attempts.json + proposal.md written"])
-  refine -->|"attempts exhausted"| abandoned(["✅ tree restored to pristine,<br/>attempts.json written — real data,<br/>not a wasted run"])
+  probe -->|"nothing reachable"| stopUnreachable(["stop. the digest says a lab shipped<br/>something nothing could reach"])
+  probe --> preflight["✅ Preflight — the project's own tests<br/>the baseline must be green before<br/>anything is spent"]
 
-  subgraph wired["Chained by the generated workflow"]
-    guardstep["✅ Guard as a CI step<br/>harness/lib/guard.mjs, called against<br/>the orchestrator's own branch"]
-    teststep["✅ The project's own tests, as CI steps<br/>evaluation.test_commands rendered<br/>straight into the workflow"]
-    promote["✅ Merge + tag<br/>harness/lib/promote.mjs"]
-    verify["✅ Deploy verification<br/>harness/lib/verify-deployment.mjs<br/>url + registry + artifact + none"]
-    notify["✅ Notifier — plain-language digest<br/>harness/lib/notify.mjs<br/>pluggable sender"]
-    workflow["✅ harness/templates/workflow.yml.tmpl<br/>+ harness/cli/init.mjs, the scaffolder<br/>that generates it"]
-  end
+  preflight --> loop["✅ THE LOOP · one Node process<br/>run-generation.mjs — see the next diagram"]
 
-  approved -.->|"chained by"| guardstep --> teststep --> promote --> verify --> notify
-  workflow -.->|"generates all of the above,<br/>chained, for a new project"| loop
+  loop -->|"nothing shipped"| held
+  loop -->|"a change on disk"| guard["✅ Guard<br/>check-guarded-paths.mjs — frozen paths,<br/>append-only paths, frozen JSON fields,<br/>churn ceiling, and the committed goal"]
 
-  style detect fill:#DCE7F0,stroke:#4A5C6A
-  style loop fill:#DCE7F0,stroke:#4A5C6A
-  style wired fill:#DCE7F0,stroke:#4A5C6A
+  guard -->|"a frozen path moved"| held(["✅ left unmerged for inspection —<br/>attempts.json written either way"])
+  guard --> tests["✅ The project's own tests, again,<br/>against the agent branch"]
+  tests -->|"any suite red"| held
+
+  tests --> approval{"constitution.approval_class"}
+  approval -->|"human-approval-required<br/>THE DEFAULT"| pr["✅ Open a pull request<br/>gh pr create, then record-pull-request.mjs<br/>writes the URL into attempts.json.<br/>Nothing is deployed until a person merges."]
+  approval -->|"autonomous-merge<br/>opt-in only"| merge["✅ Merge + tag<br/>promote.mjs"]
+  merge --> verify["✅ Deploy verification<br/>verify-deployment.mjs<br/>url · registry · artifact · none"]
+
+  pr --> evidence
+  verify --> evidence
+  held --> evidence["✅ Runtime evidence<br/>record-runtime-evidence.mjs — what this run<br/>actually SAW, not what it decided"]
+
+  evidence --> digest(["✅ Digest — notify.mjs<br/>plain language with a terse fallback.<br/>Runs on EVERY outcome above, including<br/>all four ways to reach no generation."])
+
+  merge -.->|"shipped, and should not have"| revert["✅ revert-generation.mjs<br/>reverts the merge, records it,<br/>the next run reads it as a failure"]
+  pr -.-> revert
+
+  rehearse["✅ rehearse.mjs — the same chain,<br/>locally, on demand, on a real branch.<br/>Never pushes, never opens a PR, never merges."]
+  rehearse -.->|"runs exactly these steps"| validate
+
+  style stopPaused fill:#F3E3D4,stroke:#9FB0BE
+  style stopInvalid fill:#F3E3D4,stroke:#9FB0BE
+  style stopQuiet fill:#F3E3D4,stroke:#9FB0BE
+  style stopUnreachable fill:#F3E3D4,stroke:#9FB0BE
+  style held fill:#F3E3D4,stroke:#9FB0BE
 ```
 
-**Added 2026-09-02, not yet drawn above:** every model call is recorded
-(`spend.mjs`) and a generation has a token cap; the fate of every pull
-request is read back at the top of each cycle (`pull-requests.mjs`) and a
-shipped generation can be reverted (`rollback.mjs`), both of which the next
-prompt and the earned-ambition check read; the owner sets how ambitious a
-run may be (`context.ambition`, `docs/Ambition-Control.md`); the rank seat
-defaults to a different family than the implementer and a rotating model
-can earn the implement seat (`seats.mjs`); a generated `REPORT.md` carries
-the paper's metrics (`report.mjs`); campaign mode runs a generation on
-models named by hand; the committed goal (`project.goal`) sits above the
-brief and the reviewer judges against it; and a themes review may name
-what it cannot tell (`UNKNOWN`). Each is a `harness/lib/` module with its
-own test file. See `WORKPLAN.md` Tier 0 and Tier 5.
+**One cycle, above.** Every box is real code with its own test file. The
+five rounded, warm-toned boxes are the ways a cycle ends without shipping
+anything — and each of them still sends a digest saying *which* kind of
+nothing happened, because "the loop checked and there was nothing to do"
+and "the loop never ran" are the same silence from an inbox
+(`learning/03-failure-modes.md` records three separate times that
+distinction was collapsed, each found only after a month's email failed to
+arrive).
 
-**Added 2026-09-06, not yet drawn above:** the adapter is now validated
-structurally (`validate.mjs`) — every editable path exists, no allowed path
-contradicts a frozen or append-only one, `.github/**` is frozen unless
-deliberately overridden, brief files carry no unfilled `[placeholder]`s,
-every watched or pinned lab is registered — run by `init` on what it just
-scaffolded, by the new local rehearsal command, and as the generated
-workflow's own first step, gating the release check on its success and
-reaching the digest as its own no-generation reason ahead of a crashed
-check. And there is now a way to run the whole chain locally on demand
-(`rehearse.mjs`): validate, preflight, detect or campaign, probe, a real
-`agent/gen-NNN` branch through the real orchestrator, guard, tests, a
-printed verdict — never pushing, opening a pull request, or merging. Both
-close the two buildable-without-an-API-key findings of
-`docs/Review-10x-2026-09.md`'s Phase 0; see `WORKPLAN.md` Tier 0.5.
+**Inside the loop, below.** The box marked THE LOOP above is one Node
+process, because a review → refine → review cycle has to be able to loop and
+GitHub Actions cannot loop a job.
 
-**Also added 2026-09-06, and not drawn above either:** a project's own probes
-can now hand back what they *saw*, not only a number
-(`docs/Tool-Use-Design.md` phase 1). An evaluator plugin gets one directory
-it may write to and may return **images** and **observations** alongside its
-metrics; the images from the last generation are attached to the next
-suggestion call — filling the `screenshots` socket that has been fed
-`{images: [], source: null}` since the port — and the observations are read
-into its prompt. A second plugin slot, `evaluation.visual_capture`, runs the
-same interface *inside* a generation so the reviewer sees a render of the
-change under review, filling `review.mjs`'s `captureVisual` hook, which has
-answered "no visual capture configured for this project" for just as long.
-This is the socket a Blender render, a physics probe or a headless browser
-plugs into; the harness ships none of them, the same way `providers/` ships
-nine labs and `llm-provider.mjs` hardcodes none. The rest of the tool-use
-design — a tool contract with per-seat allowlists, MCP as one source behind
-it, and model-authored tools that take effect only in the generation after
-the one that wrote them — is design only, in
-[`docs/Tool-Use-Design.md`](docs/Tool-Use-Design.md).
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
+flowchart TD
+  subgraph ctx["What the suggestion prompt is assembled from — every block dropped entirely when its input is absent"]
+    goal["✅ The committed goal<br/>project.goal — frozen, sits above the brief"]
+    brief["✅ The project's own agent brief<br/>IS the system prompt, whole, not a summary"]
+    source["✅ Source bundle + repo manifest<br/>fenced as untrusted input"]
+    index["✅ Every generation on record,<br/>recent ones in full — including the<br/>owner's merge or close on each PR"]
+    ledger["✅ Escalation ledger, themes review,<br/>open questions, any work order<br/>a human accepted"]
+    dims["✅ Measured dimensions + observations<br/>evaluators.mjs — measured, never gates"]
+    shots["✅ Renders from the last generation<br/>loadVisualEvidence — with the provenance<br/>stated, so 'current' cannot mean stale"]
+    runtime["✅ Runtime evidence — what the last<br/>runs OBSERVED, not what the code says"]
+  end
 
-**Read this diagram as what's real, not a roadmap with checkboxes filled
+  ctx ==> suggest["✅ STAGE 1 · SUGGEST<br/>every newly released model, in parallel,<br/>each on its own lab's API. One lab failing<br/>costs its proposal, not the generation."]
+
+  suggest --> more{"more than one proposal?"}
+  more -->|"no"| implement
+  more -->|"yes · authors withheld"| rank["✅ STAGE 1b · RANK<br/>seats.mjs picks a model from a DIFFERENT<br/>family than the implementer"]
+  rank --> implement["✅ STAGE 2 · IMPLEMENT<br/>the pinned model — or the suggester's own<br/>edits, tried first and free — or a rotating<br/>model that EARNED the seat"]
+
+  implement --> apply{"✅ edit-format.mjs<br/>allowlist + each SEARCH unique,<br/>every file validated in memory<br/>BEFORE a byte reaches disk"}
+  apply -->|"refused · nothing written"| refine
+  apply -->|"applied all-or-nothing"| review["✅ STAGE 3 · REVIEW<br/>review.mjs — fresh context, pinned model,<br/>judged against the goal.<br/>No verdict is a REJECTION."]
+
+  capture["✅ visual_capture — a render of THIS<br/>change, made for the reviewer"] -.-> review
+
+  review -->|"REJECTED"| refine["✅ STAGE 4 · REFINE<br/>restore the pristine tree, hand back the<br/>real rejection text, try again"]
+  refine --> implement
+
+  review -->|"APPROVED"| shipped(["✅ the change on disk,<br/>proposal.md + attempts.json"])
+  refine -->|"attempts exhausted"| abandoned(["✅ tree restored to pristine,<br/>attempts.json written — a failed<br/>run is data, not a wasted one"])
+
+  budget["✅ spend.mjs — every call's tokens,<br/>projected before the fan-out and checked<br/>between attempts against budget.max_generation_tokens"]
+  budget -.-> suggest
+  budget -.-> implement
+
+  shipped --> records[("✅ the record every future run reads")]
+  abandoned --> records
+  records -.->|"read back next generation"| ctx
+
+  style ctx fill:#DCE7F0,stroke:#4A5C6A
+```
+
+**Read these diagrams as what's real, not a roadmap with checkboxes filled
 in.** Every box is real: the detector via
-`examples/workflows/watch-releases.yml`, and the loop via
-`harness/scripts/run-generation.mjs` run directly — 34 tests against fake
+`examples/workflows/watch-releases.yml`, the whole chain locally via
+`harness/scripts/rehearse.mjs`, and the loop via
+`harness/scripts/run-generation.mjs` run directly — `npm test` prints the
+current check count against fake
 model responses, plus `tests/e2e/full-loop.test.mjs`: two automated tests
 that drive the whole chain — suggest → implement → review → guard → test →
 promote (autonomous merge) → verify → notify — in the generated workflow's
@@ -206,8 +219,9 @@ exists, optionally smoke-run it), and `none`; `notify.mjs` sends a
 plain-language digest with a reliable terse fallback, delivery behind a
 `registerSender()` registry so SendGrid is one registered sender, not a
 hardcoded dependency. What used to be "each piece real but nothing chains
-them" is now chained: `harness/templates/workflow.yml.tmpl` renders detect
--> probe -> preflight -> improve -> themes -> guard -> test -> promote -> verify ->
+them" is now chained: `harness/templates/workflow.yml.tmpl` renders validate
+-> detect -> probe -> preflight -> improve -> themes -> guard -> test ->
+pull request (or promote -> verify) ->
 notify as one sequential-steps GitHub Actions job (Actions can't loop or
 dynamically branch jobs — see the reference-implementation diagram below
 for what that constrains), and `harness/cli/init.mjs` asks the

@@ -8,25 +8,29 @@ lets each newly released frontier model propose one improvement, gated by
 that project's own tests before anything ships.
 
 **Status: the whole loop is real, end to end, including the generated
-workflow.** Suggest → implement → review → refine → guard → test → promote
-→ verify → notify runs against your own project's adapter and brief
-files — `harness/scripts/run-generation.mjs` is a working entry point, not
-a design sketch, and `harness/cli/init.mjs` now scaffolds a new
-installation's `project-adapter.yml` and
-`.github/workflows/self-improve.yml` in one pass rather than requiring you
-to wire each script's CI step together by hand. The reference
-implementation is a separate, real project (two educational HTML games)
-that has run this loop for 18+ real generations, including real incidents;
-this repository is the work of extracting that into something
-project-agnostic. Staging & promotion (`harness/lib/promote.mjs`,
-`verify-deployment.mjs` — now all four `deployment.verify_strategy` values:
-`url`, `registry`, `artifact`, `none`) and a notifier (`harness/lib/notify.mjs`)
-that emails a plain-language digest of what happened, with a reliable
-terse fallback if that call fails, are both real and both chained
-automatically by the generated workflow now, not standalone CLIs waiting
-for a human to invoke them in sequence. See [`ARCHITECTURE.md`](ARCHITECTURE.md)
-for the full picture, and [Status in detail](#status-in-detail) for the
-per-component table.
+workflow.** Validate → detect → probe → preflight → suggest → implement →
+review → refine → guard → test → pull request → notify runs against your own
+project's adapter and brief files. `harness/cli/init.mjs` scaffolds a new
+installation's `project-adapter.yml` and `.github/workflows/self-improve.yml`
+in one pass, and `harness/scripts/rehearse.mjs` runs that entire chain
+**locally, on demand**, on a real branch — so the loop can be exercised
+without waiting for a lab to ship something. Autonomous merge and the
+deployment verification that follows it (all four
+`deployment.verify_strategy` values: `url`, `registry`, `artifact`, `none`)
+are the opt-in path; opening a pull request and stopping is the default.
+
+The reference implementation is a separate, real project (two educational
+HTML games) that has run this loop for 18+ real generations, including real
+incidents; this repository is the work of extracting that into something
+project-agnostic.
+
+**The one thing not yet true:** no generation with a real model call has run
+through `harness/` itself — the reference implementation runs its own
+scripts, and this repository's tests fake the three model calls at the
+narrowest boundary. Closing that is the next item in
+[`WORKPLAN.md`](WORKPLAN.md) and it needs a lab API key rather than more
+code. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the two diagrams, and
+[Status in detail](#status-in-detail) for the per-component table.
 
 ---
 
@@ -221,12 +225,13 @@ Open it and:
 The workflow runs monthly by default (matching the reference cadence — see
 principle 1 again for why monthly, not weekly). Use the **Run workflow**
 button under the Actions tab to try it immediately rather than waiting.
-**What this workflow actually does today:** checks your chosen labs, commits
-the updated snapshot, and opens a GitHub issue when a genuinely new model
-appears. It does **not** implement, review, or merge anything — that part of
-the loop isn't built yet (see below). This is deliberately still useful on
-its own: a monthly nudge that a model worth trying now exists, with your
-project already wired for the day the rest of the loop ships.
+**What this particular workflow does:** checks your chosen labs, commits the
+updated snapshot, and opens a GitHub issue when a genuinely new model
+appears. It deliberately stops there — it is the detector alone, useful on
+its own as a monthly nudge that a model worth trying now exists. The **full**
+loop (suggest → implement → review → guard → test → pull request → notify) is
+built, and `harness/cli/init.mjs` generates the workflow that runs it; see
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for both diagrams and Step 6 below.
 
 ---
 
@@ -245,7 +250,7 @@ you fill it in today, checked against the code rather than assumed:
 | Which labs to watch | `project-adapter.yml` → `providers.watched` | **Used immediately** — read by `check-model-releases.mjs` on every run |
 | Frozen / append-only paths, frozen JSON fields, churn ceiling | `project-adapter.yml` → `constitution.frozen_paths` / `append_only_paths` / `frozen_fields` / `churn_ceiling` | **Used immediately** — `harness/scripts/check-guarded-paths.mjs` enforces these against a real git diff today |
 | Which paths an agent may edit or create | `project-adapter.yml` → `constitution.allowed_paths` / `create_only_paths` | **Used immediately** — `run-generation.mjs` compiles this into `edit-format.mjs`'s allowlist and enforces it against every edit the orchestrator produces |
-| Your actual test commands | Given to `harness/cli/init.mjs` when it scaffolds a new installation; echoed into `project-adapter.yml` → `evaluation.test_commands` (still reserved — nothing reads it back out of the file yet, see `ARCHITECTURE.md`) | **Used immediately** — rendered straight into the generated workflow's preflight and post-guard test steps; if you add or change commands later, edit both the workflow and `evaluation.test_commands` by hand, since re-running `init` won't overwrite an existing workflow file |
+| Your actual test commands | Given to `harness/cli/init.mjs` when it scaffolds a new installation; echoed into `project-adapter.yml` → `evaluation.test_commands` (read back by `harness/scripts/rehearse.mjs` for a local run; the generated workflow uses its own baked-in copy, deliberately — one source of truth for what CI runs) | **Used immediately** — rendered straight into the generated workflow's preflight and post-guard test steps; if you add or change commands later, edit both the workflow and `evaluation.test_commands` by hand, since re-running `init` won't overwrite an existing workflow file |
 | How ambitious each run may be | `project-adapter.yml` → `context.ambition` (`focused` / `earned` / `ambitious`), or per run from the Actions tab's **Run workflow** → `scope` | **Used immediately** — `run-generation.mjs` reads it every run. `earned` is the default; the gates are the same at every setting; see [`docs/Ambition-Control.md`](docs/Ambition-Control.md) for the risks and for `revert-generation.mjs`, which exists because of this dial |
 | What "better" means for your project | your own filled-in `agent-brief.md`, at the path named by `project-adapter.yml` → `roles.agent_brief_path` | **Used immediately, and used whole** — `run-generation.mjs` reads the file and sends it as the suggestion stage's entire system prompt, not a summary of it |
 | Where digest/escalation emails go, and how they're sent | `project-adapter.yml` → `notify.recipient` / `notify.from` / `notify.provider`, plus `<PROVIDER>_API_KEY` (e.g. `SENDGRID_API_KEY`) in `.env`/Secrets | **Used immediately** — `send-digest.mjs` / `send-escalation-notice.mjs` read these and actually send, once you (or your workflow) invoke them; SendGrid ships built in, other senders are added via `notify.mjs`'s `registerSender()` |
@@ -376,7 +381,7 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | **Orchestrator** (`harness/lib/orchestrator.mjs` + `harness/scripts/run-generation.mjs`) | ✅ **Built, tested, and runnable** — suggest → implement → review → refine, end to end, against your own adapter and brief files |
 | Independent reviewer (`harness/lib/review.mjs`) | ✅ Built, tested, wired into the orchestrator |
 | Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested — still awaiting a workflow step that runs it against a real PR from the orchestrator, since that's CI wiring, not harness code |
-| Automated evaluator — test-command runner (`evaluation.test_commands`) | ❌ Not built, and — now that the loop itself is real — turns out not to need any harness *code*: a project's test commands become CI steps directly, the same way the guard already runs as one |
+| Automated evaluator — test-command runner (`evaluation.test_commands`) | ✅ Built, in the two places it belongs. In CI it needs no harness *code*: a project's test commands are rendered straight into the generated workflow as steps, the same way the guard runs as one, so a run fails on the commands CI actually ran. `harness/scripts/rehearse.mjs` reads the adapter's own copy to run the identical gates locally — the one deliberate reader of that field, documented in `adapter.mjs`'s `evaluationConfig()` |
 | Quality-dimension evaluator plugins (`harness/lib/evaluators.mjs`, `harness/plugins/evaluators/`) | ✅ Built, tested, wired — the measurements that are explicitly **not** gates. A plugin gets the working tree and the generation record and returns named metrics; it cannot fail a generation, however badly it behaves. One shipped example (`source-weight`), the interface documented, ecosystem-specific plugins (Checkstyle, mypy, Roslyn, the canvas checks) left as extension points |
 | Probes that render, simulate or observe — and the two sockets that carry what they saw ([`docs/Tool-Use-Design.md`](docs/Tool-Use-Design.md) phase 1) | ✅ Built, tested — a plugin may now write into one given directory and return **images** and **observations**, not just numbers. Images from the last generation are attached to the next suggestion call (with their provenance stated, so "current" cannot mean a stale render); observations are read into its prompt. `evaluation.visual_capture` runs the same interface *inside* a generation so the **reviewer** sees a render of the change under review. This is where Blender, a physics probe or a headless browser belongs — the harness ships none of them and has no opinion about your ecosystem. Phases 2–5 (a tool contract, MCP, model-authored tools) are design only |
 | Runtime evidence (`harness/lib/runtime-evidence.mjs`, `context-pack.mjs`'s `buildRuntimeEvidence()`) | ✅ Built, tested, wired (`docs/curiosity/C10`): what the tests, the deploy check and any project probe **actually observed**, read back into the next generation's prompt. Every other block in that prompt describes what the project *is*; this is the only one that describes what it *did*. Observations, never scores — and when the budget runs out it is the totals that go, not a skipped test's name |
@@ -432,11 +437,15 @@ status marks below don't read as contradictions:
    `harness/cli/init.mjs`'s terminal prompts rather than a web form. The
    console's real remaining work is a browser front end for a generator
    that already exists, not the generator itself.
-2. **Run** (✅ built): the generated workflow schedules the detector, and
-   once a new model appears, runs the real suggest → implement → review →
-   refine → guard → test → promote → verify → notify loop end to end — see
-   "What's actually built here, today" in [`ARCHITECTURE.md`](ARCHITECTURE.md).
-   This is the only one of the three stages that runs unattended today.
+2. **Run** (✅ built): the generated workflow validates the adapter, checks
+   the watched labs, and once a new model appears runs the real suggest →
+   implement → review → refine → guard → test → **pull request** → notify
+   loop end to end (autonomous merge, and the deployment verification that
+   follows it, are the opt-in path). `harness/scripts/rehearse.mjs` runs the
+   same chain locally on demand, so this stage can be exercised without
+   waiting for a release — see the two diagrams in
+   [`ARCHITECTURE.md`](ARCHITECTURE.md). This is the only one of the three
+   stages that runs unattended today.
 3. **Learn** (🚧 partly built): `docs/curiosity/` designs a second, slower
    pass over the same run history — harvesting open questions from every
    proposal, promoting the corroborated ones into a themes review, and
@@ -529,15 +538,18 @@ self_optimisation/
 ├── Model-Release-Driven-Software-Improvement-Paper-Outline.md
 ├── package.json                     # one dependency (js-yaml, for adapter.mjs/
 │                                     # scaffold.mjs only); `npm test` runs harness/'s own suite
-├── docs/                            # research corpus, plus curiosity/ — a proposed
-│                                     # second longitudinal pass, design only, not built
+├── docs/                            # research corpus, the design documents, and
+│                                     # curiosity/ — a second longitudinal pass, 4 of
+│                                     # its 10 components built, the rest gated on A'
 ├── console/                         # a proposed browser-based install flow — the UI
 │                                     # (about/mockup/privacy.html, DESIGN.md) is design
 │                                     # and wireframe only, not built; its Supabase schema
 │                                     # (console/supabase/migrations/) is BUILT and live
 │                                     # against a real project, ahead of the UI it backs
 ├── tests/                           # tests for the harness's OWN code (see above)
-│   └── lib/
+│   ├── lib/                         # one file per harness/lib/ module
+│   ├── scripts/                     # the CLIs, driven as real child processes
+│   └── e2e/                         # the whole chain, real git, real test runs
 ├── learning/                        # principles, blueprint, failure modes,
 │                                     # starter kit, diagrams — ported from the
 │                                     # reference implementation, written to
@@ -550,16 +562,22 @@ self_optimisation/
 │       └── watch-releases.yml       # copy-pasteable — see "Getting started" above
 └── harness/
     ├── .env.example                 # copy to .env at your project root — see Step 3
-    ├── lib/
+    ├── lib/                           # pure logic — no process.exit, no stdio.
+    │   │                               # `ls harness/lib/` for the current list; the
+    │   │                               # load-bearing four, in dependency order:
     │   ├── llm-provider.mjs           # provider-blind registry, transport, retry/headroom
     │   ├── edit-format.mjs            # SEARCH/REPLACE parser, allowlist supplied by the caller
-    │   ├── glob.mjs                   # adapter glob strings -> RegExp
-    │   ├── model-release-detector.mjs # pure: snapshot-diff, ranking, no fs/env/console
-    │   └── probe-models.mjs           # reachability + context-window fit check
+    │   ├── orchestrator.mjs           # runGeneration() — the four stages, composed
+    │   └── adapter.mjs                # the only file that knows what YAML is
     ├── scripts/                       # CLI wrappers — own the filesystem/env/stdio
-    │   ├── check-model-releases.mjs, probe-models.mjs, run-generation.mjs
-    │   ├── check-guarded-paths.mjs, promote.mjs, verify-deployment.mjs
-    │   └── send-digest.mjs, send-escalation-notice.mjs
+    │   ├── validate.mjs               # check the adapter before anything is spent
+    │   ├── rehearse.mjs               # the whole chain, locally, on a real branch
+    │   ├── run-generation.mjs         # the loop itself; the workflow's "improve" step
+    │   └── ...                        # detector, probe, guard, promote, verify, digest,
+    │                                   # evaluators, themes, report, revert, PR read-back
+    ├── plugins/
+    │   └── evaluators/                # the non-gating quality dimensions: the interface,
+    │                                   # and one shipped example (source-weight)
     ├── templates/                     # agent-brief.md.tmpl, reviewer-brief.md.tmpl,
     │                                   # workflow.yml.tmpl — filled in by cli/init.mjs
     ├── cli/
@@ -572,16 +590,15 @@ self_optimisation/
         └── CONTRIBUTING-A-PROVIDER.md
 ```
 
-This tree omits several real, tested `harness/lib/` files for brevity
-(`orchestrator.mjs`, `adapter.mjs`, `guard.mjs`, `context-pack.mjs`,
-`review.mjs`, `promote.mjs`, `verify-deployment.mjs`, `notify.mjs`,
-`escalations.mjs`, `themes.mjs`, `scaffold.mjs`, `api-errors.mjs`) and one
-`harness/scripts/` file (`record-pull-request.mjs`) — see
-[Status in detail](#status-in-detail) or `ls harness/lib/` for the complete,
-current list rather than trusting this diagram to stay exhaustive.
-`Portable-Harness-Design.md` §10 has the build order; provider router,
-edit-format, the release detector and the reachability probe were step 4's
-first four, in the dependency order §7's kernel table implies. Context
-compiler is next, and is real design work rather than a port — see §8.2's
-note on why `estimateContextSize()` doesn't reduce to a small standalone
-function in the reference implementation.
+**This tree names a handful of files, not all of them, on purpose.** An
+exhaustive list here would be a second inventory to keep in step with the
+directory itself, and it has already drifted once — `ls harness/lib/` and
+`ls harness/scripts/` are the current answer, and
+[Status in detail](#status-in-detail) says what each component does and
+whether it is built. That is the same call this repository made about test
+counts: point at the command, don't hand-copy the number
+([`learning/01-principles.md`](learning/01-principles.md) principle 23).
+
+`Portable-Harness-Design.md` §10 has the build order and its revision log;
+`ARCHITECTURE.md` has the two diagrams showing how these pieces actually
+run.

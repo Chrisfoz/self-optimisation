@@ -5,9 +5,13 @@ who benefits from a self-improving repository doesn't have to be the person
 who can hand-write `project-adapter.yml`.
 
 **Status: proposal, with phase 0 built.** The console itself — sign-in, the
-form, the pull request, the run view — is not built. The generator
-underneath it is: `harness/lib/scaffold.mjs` + `harness/cli/init.mjs`, with
-`tests/lib/scaffold.test.mjs` covering it. This document is written to the
+form, the pull request, the run view — is not built. Everything underneath it
+is: `harness/lib/scaffold.mjs` + `harness/cli/init.mjs` generate the files,
+`harness/lib/validate.mjs` checks the answers (§2.1's `validateAnswers()`,
+shipped 2026-09-06), and `harness/scripts/rehearse.mjs` runs the whole chain
+locally — which is most of what §Step 9's "rehearse before the schedule is
+turned on" asks a user to do. `tests/lib/scaffold.test.mjs` and
+`tests/lib/validate.test.mjs` cover them. This document is written to the
 same standard as `Portable-Harness-Design.md` — every claim about what the
 harness does today is checked against the code, and every field the console
 would expose is marked LIVE (something reads it) or RESERVED (nothing does,
@@ -117,12 +121,20 @@ before any front end is still correct and is exactly what got built —
 `renderWorkflowTemplate` roughly 1:1. What's still genuinely missing, checked
 against `scaffold.mjs`'s real exports: no `generateAgentBrief`/
 `generateReviewerBrief` equivalent (`init.mjs` copies the `.tmpl` files
-as-is rather than rendering them from answers) and no `validateAnswers()` —
-the invariant-checking function this section argues is "the whole value of
-the thing" doesn't exist in either the CLI or a library yet. The console's
-real remaining prerequisite is narrower than this section originally framed
-it: not "build a generator," but "add answer-validation to the generator
-that exists, then wrap it in a browser form instead of `init.mjs`'s prompts."
+as-is rather than rendering them from answers).
+
+**The `validateAnswers()` half of this argument has since shipped**, as
+`harness/lib/validate.mjs`'s `validateAdapter()` — the invariant checks this
+section argues are "the whole value of the thing": every editable path
+exists, allowed never overlaps frozen or append-only, `.github/**` is frozen
+unless deliberately overridden, brief files exist and carry no unfilled
+`[placeholder]`s, every watched or pinned lab is registered. It runs from
+`init.mjs` on what it just scaffolded, from `rehearse.mjs` before a local
+run, and as the generated workflow's own first step. So the console's
+remaining prerequisite is narrower still than this section's revised framing:
+not "build a generator" and no longer "add answer-validation to it" — just
+"wrap the generator and its validator in a browser form instead of
+`init.mjs`'s prompts."
 
 The original argument, for the record:
 
@@ -900,9 +912,10 @@ section documents the shape so that step is informed, not blind.
 The generator this section originally recommended building next is built:
 `harness/lib/scaffold.mjs`, driven by `harness/cli/init.mjs`, covered by
 `tests/lib/scaffold.test.mjs`. Every screen in the console is a caller of it.
-The one piece of it still missing is `validateAnswers()` (§2.1) — build that
-into the same library rather than into a browser app, for the same reason:
-the invariants stop being testable the moment they live in one.
+`validateAnswers()` (§2.1) is no longer missing either: it shipped as
+`harness/lib/validate.mjs`'s `validateAdapter()`, in the library rather than
+in a browser app, for exactly the reason this paragraph gives — the
+invariants stop being testable the moment they live in one.
 
 Then build the console as phase 1, end to end, and skip the CLI until someone
 asks for it. Three rules make it a front end this harness can stand behind
