@@ -25,9 +25,10 @@
  *   SPEND_TOKENS
  *
  * When GEN_NUMBER is ABSENT no generation ran, and this still sends an email
- * saying which of the four no-generation outcomes occurred. Read in this
+ * saying which of the five no-generation outcomes occurred. Read in this
  * order, first match wins:
  *   PAUSED            == "true"     -> the owner flipped the kill switch
+ *   VALIDATE_RESULT   != "success"  -> the adapter itself failed validation
  *   CHECK_RESULT      != "success"  -> the release check never completed
  *   PREFLIGHT_RESULT  != "success"  -> the project's own checks failed first
  *   RELEASE_DETECTED  == "true"     -> something shipped, nothing was reachable
@@ -88,7 +89,7 @@ if (!apiKey) {
 
 // A cycle with no generation still sends an email, and WHICH email depends on
 // why there was no generation. Requiring GEN_NUMBER here used to make that
-// impossible: the four outcomes below all arrive with no generation number,
+// impossible: the five outcomes below all arrive with no generation number,
 // and the script exited before it could say anything about any of them.
 //
 // That is not a cosmetic gap. The one case most needing a human — a lab
@@ -102,6 +103,8 @@ if (!genNumber) {
   const reason =
     process.env.PAUSED === 'true'
       ? NO_GENERATION_REASONS.PAUSED
+      : process.env.VALIDATE_RESULT && process.env.VALIDATE_RESULT !== 'success'
+      ? NO_GENERATION_REASONS.VALIDATE_FAILED
       : process.env.CHECK_RESULT && process.env.CHECK_RESULT !== 'success'
       ? NO_GENERATION_REASONS.CHECK_FAILED
       : process.env.PREFLIGHT_RESULT && process.env.PREFLIGHT_RESULT !== 'success'

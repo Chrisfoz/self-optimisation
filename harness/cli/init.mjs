@@ -45,10 +45,11 @@ import { execFileSync } from 'node:child_process';
 import readline from 'node:readline/promises';
 import '../providers/index.mjs';
 import { getProvider, registeredProviders, resolveProvider } from '../lib/llm-provider.mjs';
-import { renderAdapterYaml, renderWorkflowTemplate, renderReadme } from '../lib/scaffold.mjs';
+import { renderAdapterYaml, renderWorkflowTemplate, renderReadme, buildAdapterObject } from '../lib/scaffold.mjs';
 import { harnessVersion, checkUpgrade } from '../lib/version.mjs';
 import { describeSeats } from '../lib/seats.mjs';
 import { normalizeAmbition } from '../lib/adapter.mjs';
+import { validateAdapter } from '../lib/validate.mjs';
 
 // path.join(..., '../x'), not import.meta.dirname — that global needs Node
 // 20.11+, and package.json's engines field only promises 20.6.0.
@@ -348,7 +349,15 @@ function writeFiles(answers) {
 
   writeIfAbsentOrForced('SELF-IMPROVE-README.md', renderReadme(answers), 'the install README');
 
-  console.log('\nDone. Read SELF-IMPROVE-README.md next — it says exactly what still needs a human before the schedule should run unattended.');
+  console.log('\nChecking what was just written...');
+  const { errors, warnings } = validateAdapter(buildAdapterObject(answers), { repoRoot, env: process.env });
+  for (const e of errors) console.log(`   ❌ ${e}`);
+  for (const w of warnings) console.log(`   ⚠️  ${w}`);
+  if (!errors.length && !warnings.length) console.log('   No issues found.');
+  console.log(
+    '\nDone. Read SELF-IMPROVE-README.md next — it says exactly what still needs a human before the schedule should run unattended.' +
+    (errors.length ? ' Fix the error(s) above first — `node harness/scripts/validate.mjs` re-checks them any time.' : '')
+  );
 }
 
 await main();

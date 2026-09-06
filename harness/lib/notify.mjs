@@ -288,6 +288,13 @@ export async function buildGenerationDigestEmail(r, deps = {}) {
  */
 export const NO_GENERATION_REASONS = {
   QUIET: 'quiet',
+  // The adapter itself failed harness/lib/validate.mjs's checks — an
+  // editable path that doesn't exist, a frozen/allowed overlap, an
+  // unregistered watched provider — before a single lab was even asked.
+  // Checked ahead of CHECK_FAILED for the same reason CHECK_FAILED is
+  // checked ahead of the quiet default: a config that was wrong the moment
+  // it was written must never be reported as a month with nothing to do.
+  VALIDATE_FAILED: 'validate-failed',
   CHECK_FAILED: 'check-failed',
   ALL_UNREACHABLE: 'all-unreachable',
   PREFLIGHT_FAILED: 'preflight-failed',
@@ -325,6 +332,23 @@ export function buildNoGenerationEmail({ reason, runUrl, labs = [], detail = '',
         `To resume: in the repository's Settings -> Secrets and variables ->`,
         `Actions -> Variables, delete SELF_IMPROVE_PAUSED or set it to anything`,
         `other than "true". The next scheduled run picks up where it left off.`,
+        ...footer,
+      ].join('\n'),
+    };
+  }
+
+  if (reason === NO_GENERATION_REASONS.VALIDATE_FAILED) {
+    return {
+      subject: '❌ The adapter failed validation — nothing was checked or spent',
+      body: [
+        `The cycle stopped before any lab was asked anything, because ${projectName}'s project-adapter.yml did not pass validation${detail ? ` (${detail})` : ''}.`,
+        ``,
+        `This is a configuration problem, not a quiet cycle or a model`,
+        `problem — something in the adapter is structurally wrong (an`,
+        `editable path that doesn't exist, an allowlist that contradicts`,
+        `the frozen paths, an unregistered provider). Run`,
+        `\`node harness/scripts/validate.mjs\` locally to see exactly what,`,
+        `fix it, and the next cycle will pick up where this one stopped.`,
         ...footer,
       ].join('\n'),
     };

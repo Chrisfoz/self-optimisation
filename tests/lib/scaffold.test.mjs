@@ -553,8 +553,8 @@ test('renderWorkflowTemplate: regenerates the operational report in the same boo
 test('renderWorkflowTemplate: campaign mode replaces the release check when models are named, and never touches the snapshot', () => {
   const out = renderWorkflowTemplate(template, baseAnswers());
   assert.match(out, /models:\n\s+description: 'Campaign mode/);
-  assert.match(out, /id: campaign\n\s+if: steps\.pause\.outputs\.paused != 'true' && github\.event\.inputs\.models/);
-  assert.match(out, /id: check\n\s+if: steps\.pause\.outputs\.paused != 'true' && !github\.event\.inputs\.models/);
+  assert.match(out, /id: campaign\n\s+if: steps\.pause\.outputs\.paused != 'true' && steps\.validate\.outcome == 'success' && github\.event\.inputs\.models/);
+  assert.match(out, /id: check\n\s+if: steps\.pause\.outputs\.paused != 'true' && steps\.validate\.outcome == 'success' && !github\.event\.inputs\.models/);
   assert.match(out, /Commit the updated model snapshot\n\s+if: .*!github\.event\.inputs\.models/);
   assert.match(out, /id: probe\n\s+if: steps\.check\.outputs\.has-new == 'true' \|\| steps\.campaign\.outputs\.has-new == 'true'/);
   assert.match(out, /CAMPAIGN: \$\{\{ steps\.campaign\.outputs\.has-new \}\}/);

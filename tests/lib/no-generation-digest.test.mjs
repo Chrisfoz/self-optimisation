@@ -49,6 +49,16 @@ test('a crashed release check says outright that the cycle is unknown, not quiet
   assert.match(body, /job result: failure/);
 });
 
+test('an invalid adapter says outright it is a configuration problem, not a quiet cycle', () => {
+  const { subject, body } = buildNoGenerationEmail({
+    reason: NO_GENERATION_REASONS.VALIDATE_FAILED,
+    detail: 'exit 1',
+  });
+  assert.match(subject, /failed validation/i);
+  assert.match(body, /before any lab was asked anything/i);
+  assert.match(body, /node harness\/scripts\/validate\.mjs/);
+});
+
 test('an unreachable-candidate cycle is not reported as nothing shipping', () => {
   const { subject, body } = buildNoGenerationEmail({
     reason: NO_GENERATION_REASONS.ALL_UNREACHABLE,
@@ -113,6 +123,25 @@ test('the release check cannot kill the job before the digest reports it', () =>
   const checkStep = wf.slice(wf.indexOf('- name: Check for new model releases'), wf.indexOf('- name: Commit the updated model snapshot'));
   assert.match(checkStep, /continue-on-error: true/);
   assert.match(checkStep, /release-detected=/, 'the check must emit releaseDetected for the digest to read');
+});
+
+test('the adapter is validated before anything is checked or spent, and a bad config cannot kill the job', () => {
+  const wf = renderWorkflowTemplate(readFileSync('harness/templates/workflow.yml.tmpl', 'utf8'), ANSWERS);
+  const validateStep = wf.slice(wf.indexOf("- name: Validate the project's adapter"), wf.indexOf('- name: Use the models named by hand'));
+  assert.match(validateStep, /id: validate/);
+  assert.match(validateStep, /continue-on-error: true/);
+  assert.match(validateStep, /run: node harness\/scripts\/validate\.mjs/);
+
+  const campaignStep = wf.slice(wf.indexOf('- name: Use the models named by hand'), wf.indexOf('- name: Check for new model releases'));
+  assert.match(campaignStep, /if: .*steps\.validate\.outcome == 'success'.*github\.event\.inputs\.models/);
+  const checkStep = wf.slice(wf.indexOf('- name: Check for new model releases'), wf.indexOf('- name: Commit the updated model snapshot'));
+  assert.match(checkStep, /if: .*steps\.validate\.outcome == 'success'.*!github\.event\.inputs\.models/);
+});
+
+test('the digest step receives VALIDATE_RESULT, checked ahead of CHECK_RESULT', () => {
+  const wf = renderWorkflowTemplate(readFileSync('harness/templates/workflow.yml.tmpl', 'utf8'), ANSWERS);
+  const step = wf.slice(wf.indexOf('- name: Send the generation digest'), wf.indexOf('- name: Send an escalation notice'));
+  assert.match(step, /VALIDATE_RESULT: \$\{\{ steps\.validate\.outcome \}\}/);
 });
 
 test('the probe step does not overwrite releaseDetected', () => {
