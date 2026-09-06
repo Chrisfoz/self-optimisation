@@ -145,6 +145,21 @@ brief and the reviewer judges against it; and a themes review may name
 what it cannot tell (`UNKNOWN`). Each is a `harness/lib/` module with its
 own test file. See `WORKPLAN.md` Tier 0 and Tier 5.
 
+**Added 2026-09-06, not yet drawn above:** the adapter is now validated
+structurally (`validate.mjs`) — every editable path exists, no allowed path
+contradicts a frozen or append-only one, `.github/**` is frozen unless
+deliberately overridden, brief files carry no unfilled `[placeholder]`s,
+every watched or pinned lab is registered — run by `init` on what it just
+scaffolded, by the new local rehearsal command, and as the generated
+workflow's own first step, gating the release check on its success and
+reaching the digest as its own no-generation reason ahead of a crashed
+check. And there is now a way to run the whole chain locally on demand
+(`rehearse.mjs`): validate, preflight, detect or campaign, probe, a real
+`agent/gen-NNN` branch through the real orchestrator, guard, tests, a
+printed verdict — never pushing, opening a pull request, or merging. Both
+close the two buildable-without-an-API-key findings of
+`docs/Review-10x-2026-09.md`'s Phase 0; see `WORKPLAN.md` Tier 0.5.
+
 **Read this diagram as what's real, not a roadmap with checkboxes filled
 in.** Every box is real: the detector via
 `examples/workflows/watch-releases.yml`, and the loop via

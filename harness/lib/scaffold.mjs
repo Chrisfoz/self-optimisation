@@ -442,6 +442,7 @@ export function renderWorkflowTemplate(template, answers) {
           ${notifyEnvLine}
           GEN_NUMBER: \${{ steps.gen.outputs.number }}
           PAUSED: \${{ steps.pause.outputs.paused }}
+          VALIDATE_RESULT: \${{ steps.validate.outcome }}
           CHECK_RESULT: \${{ steps.check.outcome }}
           PREFLIGHT_RESULT: \${{ steps.preflight.outcome }}
           RELEASE_DETECTED: \${{ steps.check.outputs.release-detected }}

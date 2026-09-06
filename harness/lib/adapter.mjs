@@ -451,6 +451,25 @@ export function notifyConfig(adapter) {
 }
 
 /**
+ * `evaluation.test_commands`, read back — the one deliberate exception to
+ * the "recorded, never read back" rule this same field carries in
+ * `harness/project-adapter.example.yml`'s closing section. That rule is
+ * about the GENERATED WORKFLOW having exactly one source of truth for what
+ * CI runs, so a compromised agent branch can never make preflight and the
+ * post-change test step disagree about what "the tests" means. A local
+ * rehearsal (`harness/scripts/rehearse.mjs`) isn't CI and produces no
+ * generated file to be the other source of truth — reading the adapter
+ * here is the ONLY way it can know what to run at all, and it reads the
+ * base branch's copy for both its preflight and post-change runs within
+ * one invocation, so the risk that rule guards against doesn't apply.
+ * Nothing else may treat this as authoritative for what CI executes.
+ */
+export function evaluationConfig(adapter) {
+  const raw = adapter?.evaluation?.test_commands;
+  return { testCommands: Array.isArray(raw) ? raw.filter((c) => typeof c === 'string' && c.trim()) : [] };
+}
+
+/**
  * The token cap one generation may spend, or null for no cap. Consumed by
  * harness/lib/orchestrator.mjs's runGeneration(): projected before the
  * fan-out and checked between attempts. Tokens rather than money on

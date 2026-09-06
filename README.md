@@ -162,6 +162,20 @@ reads as more of it gets built — see
 for the fuller schema, real values and all, and `ARCHITECTURE.md` for which
 of its sections are actually consumed today versus still reserved.
 
+Once `project-adapter.yml`, `constitution.allowed_paths`, and the two brief
+files exist, `node harness/scripts/validate.mjs` checks the adapter for the
+config mistakes that would otherwise only surface mid-run — an editable
+path that doesn't exist, an allowlist that contradicts the frozen paths, an
+unregistered provider — and `node --env-file=.env harness/scripts/rehearse.mjs`
+runs the *whole* loop locally on a real branch: detect or campaign, probe,
+preflight, the actual suggest → implement → review cycle, guard, your own
+tests — everything the generated workflow does except push, open a pull
+request, or merge. With no lab key configured it's a safe, deterministic
+no-op; with keys, it's the fastest way to see a real generation before
+turning the schedule on. `node harness/scripts/rehearse.mjs --models
+claude-opus-5` forces a campaign generation on a model you name, rather
+than waiting for a new release.
+
 ### Step 5 — GitHub setup: repository secrets
 
 `.env` is for your machine only. For the detector to run on a schedule in
@@ -356,6 +370,8 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Model-release detector (`harness/lib/model-release-detector.mjs`) | ✅ Built, tested |
 | Reachability probe (`harness/lib/probe-models.mjs`) | ✅ Built, tested |
 | Adapter loader (`harness/lib/adapter.mjs`, reads `project-adapter.yml`) | ✅ Built, tested — the one file in the harness with an npm dependency (`js-yaml`), scoped deliberately narrowly |
+| Adapter validation (`harness/lib/validate.mjs`, `harness/scripts/validate.mjs`) | ✅ Built, tested — every editable path exists, allowed paths never overlap frozen or append-only ones, `.github/**` is frozen unless deliberately overridden, brief files exist and are flagged for unfilled `[placeholder]`s, every watched or pinned lab is registered and warned about if its key is missing. Run by `init` (advisory), `rehearse` (blocking), and as the generated workflow's own first step — a failure reaches the digest as its own no-generation reason, never as a quiet cycle |
+| Local rehearsal (`harness/lib/rehearse.mjs`, `harness/scripts/rehearse.mjs`) | ✅ Built, tested — the same chain the generated workflow runs (validate → preflight → detect or campaign → probe → a local `agent/gen-NNN` branch → the real orchestrator → guard → tests), as a thin sequencer over the same CLIs the workflow calls, so it can never drift from what the workflow does. Never pushes, opens a pull request, or merges; deterministic and network-free with no lab key configured |
 | Context compiler (`harness/lib/context-pack.mjs`) | ✅ Built, tested (7 of 9 functions — screenshots/scorecard stay project-specific plugins) — wired: `run-generation.mjs` calls its builders to assemble every prompt |
 | **Orchestrator** (`harness/lib/orchestrator.mjs` + `harness/scripts/run-generation.mjs`) | ✅ **Built, tested, and runnable** — suggest → implement → review → refine, end to end, against your own adapter and brief files |
 | Independent reviewer (`harness/lib/review.mjs`) | ✅ Built, tested, wired into the orchestrator |

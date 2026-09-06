@@ -408,6 +408,14 @@ test('budgetConfig: reads a positive cap, and treats absent, zero or junk as no 
   assert.deepEqual(budgetConfig(null), { maxGenerationTokens: null });
 });
 
+test('evaluationConfig: reads test_commands, drops non-string entries, defaults to empty', async () => {
+  const { evaluationConfig } = await import('../../harness/lib/adapter.mjs');
+  assert.deepEqual(evaluationConfig({ evaluation: { test_commands: ['npm test', '  ', 42, 'npm run lint'] } }), { testCommands: ['npm test', 'npm run lint'] });
+  assert.deepEqual(evaluationConfig({}), { testCommands: [] });
+  assert.deepEqual(evaluationConfig(null), { testCommands: [] });
+  assert.deepEqual(evaluationConfig({ evaluation: { test_commands: 'npm test' } }), { testCommands: [] });
+});
+
 test('normalizeAmbition and contextConfig: the three levels pass through, and anything else is "earned", never "ambitious"', async () => {
   const { normalizeAmbition, contextConfig, DEFAULT_AMBITION } = await import('../../harness/lib/adapter.mjs');
   assert.equal(DEFAULT_AMBITION, 'earned');

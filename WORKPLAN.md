@@ -18,7 +18,19 @@ call.
 
 ## Start here
 
-**→ Tier 2.1a, three design-partner installs, with campaign mode on.**
+**→ Tier 0.5's one open item: a real generation through `harness/`, then
+Tier 2.1a.** [`docs/Review-10x-2026-09.md`](docs/Review-10x-2026-09.md)
+(2026-09-04) found the finding everything else waits on: no generation
+with a real model call has ever run through `harness/` (F12) — the
+reference implementation runs its own scripts, the e2e test fakes the
+three model calls, and the one real run had no key. Tier 0.5 below closed
+the two parts of that finding buildable without an API key (a local
+`rehearse` command, and adapter validation); P0.1 — an actual real
+generation, which needs the owner's own lab keys and authorization to
+spend against them — is still open and is genuinely the next thing to do,
+ahead of 2.1a: a design-partner rehearsal is worth far more once it's
+known the loop works against a real model at all.
+
 Tier 0, Tier 1 and the buildable half of Tier 5 are done (2026-09-02). The
 harness now records cost, reads the owner's verdict back from every pull
 request, ranks with a different family, no longer pulls every run toward
@@ -27,6 +39,62 @@ have is a second project: every number it can now report is still n=1.
 2.1a decides whether 2.2 is urgent or theoretical, and nothing should claim
 multi-language support until it has happened. 4.3a (A′ on carrotgame's
 history) can run in parallel, since it needs only records that exist.
+
+---
+
+## Tier 0.5 — a rehearsal door and adapter validation
+
+From [`docs/Review-10x-2026-09.md`](docs/Review-10x-2026-09.md) Phase 0
+(P0.1–P0.3). The finding: every check this repository has ever run fakes
+the three model calls, so a change to a prompt, a rubric or the edit
+format is validated only against the fixtures it was written against
+(F12, F20) — and install has never had the structural validation
+`console/DESIGN.md` §2.1 calls "the whole value of the thing" (F18).
+
+- [x] **P0.3 — Adapter schema validation.** `harness/lib/validate.mjs`'s
+  `validateAdapter()`: every `constitution.allowed_paths` entry exists,
+  `allowed_paths` never overlaps `frozen_paths`/`append_only_paths`,
+  `.github/**` is frozen unless deliberately overridden, brief files
+  exist and are flagged for unfilled `[placeholder]`s, `providers.watched`
+  and every pinned seat resolve to a registered provider, and a warning
+  names any needed lab whose key isn't set in the given environment.
+  `harness/scripts/validate.mjs` is the CLI; `init.mjs` runs it on what it
+  just scaffolded and prints the result without failing the scaffold.
+  *Done when:* an adapter with an editable path that does not exist fails
+  before any model is called, with the path named. **Done** — also wired
+  as the generated workflow's first real step (`id: validate`,
+  continue-on-error, gating the campaign/check steps on its success), and
+  the digest's no-generation reasons gained `VALIDATE_FAILED`, checked
+  ahead of `CHECK_FAILED` so an invalid adapter is never reported as a
+  quiet cycle.
+- [x] **P0.2 — `harness rehearse`.** `harness/scripts/rehearse.mjs`: the
+  same chain the generated workflow runs — validate, preflight, detect or
+  campaign, probe, a local `agent/gen-NNN` branch, `run-generation.mjs`,
+  commit, guard, tests, a printed verdict — as a thin sequencer over the
+  same CLIs the workflow calls, so it can never drift from what the real
+  workflow does. Never pushes, never opens a pull request, never merges.
+  With no lab API key configured it is fully deterministic (no network
+  call happens at all — a watched provider with no key reports `skipped`)
+  and exits 0 having changed only the model snapshot, which is what makes
+  it safe to run in CI as a test rather than only by hand.
+  *Done when:* the e2e test drives the chain through this command rather
+  than by calling each library in sequence. **Partly done** — `rehearse.mjs`
+  exists, is tested at the CLI level for every deterministic path (missing
+  or invalid adapter, dirty tree, no keys, a bad campaign id, a failing
+  preflight), and reuses `run-generation.mjs` itself rather than
+  reimplementing it; `tests/e2e/full-loop.test.mjs` still drives the chain
+  by calling each library directly rather than through this command, which
+  is the one piece of the original *done when* not yet true.
+- [ ] **P0.1 — A real generation through `harness/`.** A scratch
+  repository, a filled adapter and briefs, two lab keys, one campaign
+  generation (`node harness/scripts/rehearse.mjs --models <id>`) on a
+  current model. Fix whatever breaks. **Blocked on the owner's own API
+  keys and authorization to spend against them** — nothing in this
+  environment can do this step; run it locally or in a session with real
+  keys configured. (F12)
+  *Done when:* a `gen-001/attempts.json` with `spend.estimatedCalls: 0`
+  is committed to a public example repository, and the workflow run (or
+  `rehearse.mjs` invocation) that produced it is linked from `README.md`.
 
 ---
 
