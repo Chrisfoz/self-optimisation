@@ -423,6 +423,36 @@ export function evaluatorConfig(adapter) {
 }
 
 /**
+ * The optional visual-capture plugin — the project-supplied hook that
+ * renders the working tree AFTER a generation's edits are applied and
+ * attaches the images to the review call (`harness/lib/review.mjs`'s
+ * `captureVisual`, which has defaulted to "no visual capture configured for
+ * this project" since the port).
+ *
+ * Same interface as an evaluator plugin (harness/plugins/evaluators/README.md)
+ * and loaded the same way, because it IS one — the only difference is when
+ * it runs and who reads the result. An evaluator runs after the generation
+ * and its images reach the NEXT suggestion prompt; this runs inside the
+ * generation and its images reach THIS review. See docs/Tool-Use-Design.md
+ * §5 for why the review seat's tools are deliberately a different, smaller,
+ * read-only set than the implementer's.
+ *
+ * Null when unconfigured, which is what keeps the review prompt identical to
+ * one from before this existed.
+ *
+ * @returns {{module: string, name: string|null, config: object}|null}
+ */
+export function visualCaptureConfig(adapter) {
+  const raw = adapter?.evaluation?.visual_capture;
+  if (!raw || typeof raw !== 'object' || typeof raw.module !== 'string' || !raw.module.trim()) return null;
+  return {
+    module: raw.module.trim(),
+    name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : null,
+    config: raw.config && typeof raw.config === 'object' ? raw.config : {},
+  };
+}
+
+/**
  * Notify config — ready for harness/lib/notify.mjs. `provider` names a
  * sender registered via notify.mjs's registerSender() — 'sendgrid' ships
  * built in; Slack/webhook/another email API are added by a project

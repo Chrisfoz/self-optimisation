@@ -160,6 +160,25 @@ printed verdict — never pushing, opening a pull request, or merging. Both
 close the two buildable-without-an-API-key findings of
 `docs/Review-10x-2026-09.md`'s Phase 0; see `WORKPLAN.md` Tier 0.5.
 
+**Also added 2026-09-06, and not drawn above either:** a project's own probes
+can now hand back what they *saw*, not only a number
+(`docs/Tool-Use-Design.md` phase 1). An evaluator plugin gets one directory
+it may write to and may return **images** and **observations** alongside its
+metrics; the images from the last generation are attached to the next
+suggestion call — filling the `screenshots` socket that has been fed
+`{images: [], source: null}` since the port — and the observations are read
+into its prompt. A second plugin slot, `evaluation.visual_capture`, runs the
+same interface *inside* a generation so the reviewer sees a render of the
+change under review, filling `review.mjs`'s `captureVisual` hook, which has
+answered "no visual capture configured for this project" for just as long.
+This is the socket a Blender render, a physics probe or a headless browser
+plugs into; the harness ships none of them, the same way `providers/` ships
+nine labs and `llm-provider.mjs` hardcodes none. The rest of the tool-use
+design — a tool contract with per-seat allowlists, MCP as one source behind
+it, and model-authored tools that take effect only in the generation after
+the one that wrote them — is design only, in
+[`docs/Tool-Use-Design.md`](docs/Tool-Use-Design.md).
+
 **Read this diagram as what's real, not a roadmap with checkboxes filled
 in.** Every box is real: the detector via
 `examples/workflows/watch-releases.yml`, and the loop via

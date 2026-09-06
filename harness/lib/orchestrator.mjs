@@ -288,8 +288,18 @@ export const DEFAULT_SCOPE_TEXT = {
  * @param {{images: Array, source: string|null}} [opts.screenshots]
  */
 export function buildSuggestUserPrompt({ genLabel, context, screenshots = { images: [], source: null } }) {
+  // Provenance, when the caller knows it. The reference implementation told
+  // every model these images showed "the current state" while silently
+  // serving a stale baseline, because a failed generation created a folder
+  // with no screenshots in it and shadowed the last real ones
+  // (learning/03-failure-modes.md, "One failed generation hid the current
+  // screenshots"). loadVisualEvidence() fixes the selection; saying WHICH
+  // generation they came from, and that they show the state this change
+  // starts from rather than its result, is the other half — a model told
+  // "current" cannot notice it is looking at something old.
+  const from = screenshots.source ? ` They were rendered at ${screenshots.source}, so they show the state this change starts from, not its result.` : '';
   const shots = screenshots.images.length
-    ? `\n# Screenshots\nThe ${screenshots.images.length} image(s) attached to this message show the current state of the project. Judge visual details from these rather than inferring them from source alone.\n`
+    ? `\n# Screenshots\nThe ${screenshots.images.length} image(s) attached to this message show the current state of the project.${from} Judge visual details from these rather than inferring them from source alone.\n`
     : '';
 
   return `${genLabel}

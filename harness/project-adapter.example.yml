@@ -420,3 +420,30 @@ deployment:
 #       config:
 #         paths: ['src/**/*.js']     # defaults to the whole tree
 #         largeFileLines: 500
+
+# --- LIVE: a plugin may also RENDER, simulate or probe, and hand back what
+# it saw rather than only a number — see docs/Tool-Use-Design.md. It writes
+# into the one directory the runner gives it (`artifactsDir`, inside that
+# generation's own record folder) and returns:
+#
+#   { metrics: [...],
+#     artifacts: [ {kind: 'image', file: 'frame.png', label: 'level 3'},
+#                  {kind: 'observation', label: 'reachability',
+#                   text: 'apex 1.9m; the gap at x=44 needs 2.1m'} ] }
+#
+# Images are ATTACHED to the next generation's suggestion call; observations
+# are read into its prompt as prose. This is where Blender, a physics probe,
+# a headless browser or a build-size check belongs — the harness ships none
+# of them and has no opinion about your ecosystem.
+
+# --- LIVE: the same interface, run INSIDE a generation instead of after it.
+# harness/scripts/run-generation.mjs loads this one and hands it to
+# harness/lib/review.mjs as `captureVisual`, so the REVIEWER sees a render of
+# the change under review rather than only its diff. Fails safe: a plugin
+# that throws, hangs or renders nothing leaves the review exactly as it is
+# without one. Omit the whole block for that (the default).
+#
+#   visual_capture:
+#     module: tools/render-for-review.mjs
+#     config:
+#       viewport: 390x844

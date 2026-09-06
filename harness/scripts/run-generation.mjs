@@ -26,10 +26,11 @@
  */
 
 import fs from 'fs';
+import os from 'node:os';
 import path from 'path';
 import '../providers/index.mjs';
 import { setOutput, oneLine } from '../lib/gh-output.mjs';
-import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig, goalConfig, snapshotPath as adapterSnapshotPath } from '../lib/adapter.mjs';
+import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig, goalConfig, visualCaptureConfig, snapshotPath as adapterSnapshotPath } from '../lib/adapter.mjs';
 import { getProvider } from '../lib/llm-provider.mjs';
 import { pickCrossFamilyRanker, describeSeats, promotionCandidate } from '../lib/seats.mjs';
 import { loadRecords } from '../lib/report.mjs';
@@ -40,7 +41,7 @@ import {
   buildGenerationIndex, buildGenerationHistory, buildRuntimeEvidence, recommendScope, fenceUntrusted,
 } from '../lib/context-pack.mjs';
 import { loadLatestThemesReview, buildThemesBrief, buildOpenQuestionsBrief } from '../lib/themes.mjs';
-import { buildMetricsBrief, loadLatestMetrics } from '../lib/evaluators.mjs';
+import { buildMetricsBrief, loadLatestMetrics, loadVisualEvidence, loadEvaluatorPlugin, createVisualCapture } from '../lib/evaluators.mjs';
 import { buildEscalationBrief, loadLedger } from '../lib/escalations.mjs';
 import { runGeneration } from '../lib/orchestrator.mjs';
 
@@ -240,6 +241,41 @@ console.error(
 
 const projectDescription = adapter.project?.description || adapter.project?.id || 'this project';
 
+// --- what this project's own probes can show a model ----------------------
+// Two sockets, both of which have existed since the port and been fed
+// nothing (docs/Tool-Use-Design.md §3). They are deliberately fed from
+// different places: the suggesting model sees what the LAST generation
+// rendered (the state this change starts from), the reviewer sees what THIS
+// change actually produced. A project with no plugins configured gets
+// exactly what it got before — no images, and review.mjs's own "not
+// available" line.
+const screenshots = loadVisualEvidence({ repoRoot, generationsDir });
+if (screenshots.images.length) {
+  console.error(`🖼️  ${screenshots.images.length} render(s) from ${screenshots.source} attached to the suggestion prompt`);
+}
+
+const visualCapture = visualCaptureConfig(adapter);
+let captureVisual = null;
+if (visualCapture) {
+  try {
+    const plugin = await loadEvaluatorPlugin({ repoRoot, ...visualCapture });
+    captureVisual = createVisualCapture({
+      plugin,
+      repoRoot,
+      // Outside the working tree on purpose: this runs mid-generation, and a
+      // renderer writing into the tree would corrupt the very diff under
+      // review.
+      artifactsDir: fs.mkdtempSync(path.join(os.tmpdir(), 'visual-capture-')),
+      log: (msg) => console.error(msg),
+    });
+    console.error(`🖼️  Visual capture: ${plugin.name} will render the change for the reviewer`);
+  } catch (err) {
+    // Fails safe, like every other helper here: a capture plugin that cannot
+    // even be loaded costs the reviewer its pictures, never the generation.
+    console.error(`⚠️  evaluation.visual_capture (${visualCapture.module}) could not be loaded: ${err.message} — the review will run on the diff alone.`);
+  }
+}
+
 // --- run ---
 let result;
 try {
@@ -263,7 +299,17 @@ try {
       projectDescription,
       testDescription: null, // a project with test_commands configured could join them into prose here
       context,
-      screenshots: { images: [], source: null }, // visual capture: project-specific plugin, not wired by default
+      // What this project's own probes rendered last generation — the
+      // suggestion prompt's screenshots socket, fed for the first time (see
+      // docs/Tool-Use-Design.md §3). `{images: [], source: null}` for a
+      // project whose plugins render nothing, which is the value this line
+      // was hardcoded to before.
+      screenshots,
+      // The review seat's own eyes, rendered from the tree the edits
+      // produced rather than from last generation's record. Absent unless
+      // the project configured evaluation.visual_capture, in which case
+      // review.mjs keeps its existing "not available" line.
+      ...(captureVisual ? { captureVisual } : {}),
       ledgerPath: memory.ledgerPath || undefined,
       consensus: { models: memory.consensus.models ?? 3, labs: memory.consensus.labs ?? 2 },
       resurfaceAfter: memory.resurfaceAfter ?? undefined,
