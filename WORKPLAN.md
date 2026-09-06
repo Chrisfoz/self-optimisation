@@ -127,6 +127,73 @@ confirm.
 
 ---
 
+## Tier 0.6 — what a model can see
+
+From [`docs/Tool-Use-Design.md`](docs/Tool-Use-Design.md), which answers
+"should the models get tools, MCP, a way to make their own" and finds that
+three separable things were bundled in the question. Phase 1 — the one that
+needed no tool-use machinery at all — is done (2026-09-06); phases 2–5 are
+design only and **2 onward depends on the sandbox that does not exist yet**
+(`Review-10x-2026-09.md` P1.2).
+
+The argument in one line: the binding constraint here is what a model can
+NOTICE, not what it can write — the readiness scorecard found a
+thirteen-second first-paint stall on its first run that 239 green checks had
+never seen, because it was the first thing that actually looked at the
+running product.
+
+- [x] **T1.1 — Evaluator plugins may return artifacts.** `{metrics,
+  artifacts}` alongside the old bare-array return, which stays valid
+  forever; `artifactsDir` is the one path a plugin may write to; images and
+  observations normalised, capped (8 per plugin, 4 MB per image, 3 images
+  per prompt) and recorded in `metrics.json`.
+  *Done when:* a plugin can return an image and an observation and both
+  survive a round trip through `metrics.json`. **Done** — including through
+  the real CLI against a plugin that writes a real PNG.
+- [x] **T1.2 — The suggestion prompt's `screenshots` socket is fed.**
+  `loadVisualEvidence()` reads the most recent generation that actually has
+  images (not merely the newest folder — a failed generation creates a
+  folder with no renders in it, which is how the reference implementation
+  silently served a stale baseline while telling every model it was
+  current), and the prompt now states which generation they came from.
+  *Done when:* a project whose plugin renders has that render in the next
+  suggestion call, and a project with none gets a byte-identical prompt.
+  **Done.**
+- [x] **T1.3 — The review call's `captureVisual` hook is fed.**
+  `evaluation.visual_capture` names a plugin of the same interface, run
+  inside the generation against the tree the edits produced. Fails safe: a
+  renderer that throws, hangs or draws nothing leaves the reviewer on the
+  diff alone.
+  *Done when:* the reviewer receives a render of the change under review,
+  and a project configuring none gets `review.mjs`'s existing "not
+  available" line unchanged. **Done.**
+- [ ] **T2.1 — The tool contract and registry.** `registerToolSource()`,
+  the adapter's `tools:` block, per-seat allowlists (§5 — the review seat's
+  tools must not be the implementer's), `fenceUntrusted()` on every result,
+  `toolCalls` in `attempts.json`. Ships with zero built-in tools.
+  *Depends on:* `Review-10x-2026-09.md` P1.2's sandbox.
+- [ ] **T2.2 — The instrument rule, as a guard check.** A generation may not
+  modify a tool and then be judged by that tool — the paper's own "product
+  code, constitution and evaluator must not all be modifiable within the
+  same campaign", and the whole safety case for T2.1.
+  *Done when:* `check-guarded-paths.mjs` refuses it, with a test that fails
+  without the check.
+- [ ] **T2.3 — A tool budget** (`max_calls_per_attempt`,
+  `max_wall_clock_seconds`), projected and enforced like the token cap. An
+  engine build is bounded by neither tokens nor `maxAttempts`.
+- [ ] **T4.1 — MCP as one source behind the contract.** Read-only by
+  default, pinned by exact version, network off unless a named server is
+  opted in, credentials in their own step. **Write-MCP stays out** while
+  `rollback.mjs` can only revert git.
+- [ ] **T5.1 — `tools/**` as a create-only path.** A model may propose a new
+  probe; it is reviewed, tested, guarded and merged like any other change,
+  and becomes callable the generation *after* the one that wrote it.
+- [ ] **T5.2 — Bench the claim.** Whether a tool-equipped suggest seat
+  actually notices more is empirical, not architectural. Same bench repos,
+  tools on and off (`Review-10x-2026-09.md` P5.1).
+
+---
+
 ## Tier 1 — close the gaps inside what's already built
 
 Everything here is a gap in shipped, tested code. None of it is new

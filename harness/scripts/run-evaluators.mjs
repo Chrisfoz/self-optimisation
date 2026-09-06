@@ -20,16 +20,15 @@
  *   GEN_NUMBER   which generation's record to read and write beside.
  *                Defaults to the newest on record.
  *
- * Outputs (GITHUB_OUTPUT): `ran`, `metrics`, `errors`, `path`.
+ * Outputs (GITHUB_OUTPUT): `ran`, `metrics`, `artifacts`, `errors`, `path`.
  */
 
 import fs from 'fs';
 import path from 'path';
-import { pathToFileURL } from 'url';
 import { setOutput } from '../lib/gh-output.mjs';
 import { loadAdapter, contextConfig, evaluatorConfig } from '../lib/adapter.mjs';
 import { generationNumbers } from '../lib/context-pack.mjs';
-import { runEvaluators, buildMetricsRecord, DEFAULT_TIMEOUT_MS } from '../lib/evaluators.mjs';
+import { runEvaluators, buildMetricsRecord, loadEvaluatorPlugin, artifactsDirFor, DEFAULT_TIMEOUT_MS } from '../lib/evaluators.mjs';
 
 function parseArgs(argv) {
   const out = {};
@@ -82,33 +81,37 @@ try {
 }
 
 // --- load the plugins ---------------------------------------------------
-// Loading is here rather than in lib/ so runEvaluators() stays testable with
-// plain objects and no dynamic import. A module that fails to load is
-// recorded exactly like a plugin that throws — same rule, one step earlier.
+// runEvaluators() itself still takes already-loaded plugins, so it stays
+// testable with plain objects and no dynamic import; loadEvaluatorPlugin()
+// is shared with run-generation.mjs, which loads the same interface for the
+// visual-capture hook. A module that fails to load is recorded exactly like
+// a plugin that throws — same rule, one step earlier.
 const plugins = [];
 const loadErrors = [];
 for (const entry of configured) {
-  const modulePath = path.resolve(repoRoot, entry.module);
   try {
-    const mod = await import(pathToFileURL(modulePath).href);
-    const plugin = mod.default ?? mod;
-    plugins.push({
-      name: entry.name || plugin?.name || entry.module,
-      evaluate: plugin?.evaluate,
-      config: entry.config || {},
-    });
+    plugins.push(await loadEvaluatorPlugin({ repoRoot, ...entry }));
   } catch (err) {
     loadErrors.push({ plugin: entry.name || entry.module, error: `could not be loaded: ${err.message}` });
     console.error(`   ⚠️  ${entry.module} could not be loaded: ${err.message} (not gating)`);
   }
 }
 
+// The one directory a plugin may write to (docs/Tool-Use-Design.md §4.1).
+// Inside the generation's own record folder, so a render travels with the
+// generation it describes and the workflow's existing `git add` of the
+// generations directory picks it up with everything else.
+const artifactsRelative = artifactsDirFor({ generationsDir, genNumber });
+const artifactsAbsolute = path.join(repoRoot, generationsDir, `gen-${genNumber}`, 'artifacts');
+fs.mkdirSync(artifactsAbsolute, { recursive: true });
+
 console.error(`📏 Running ${plugins.length} evaluator(s) against generation ${genNumber}...`);
 
-const { metrics, errors } = await runEvaluators({
+const { metrics, artifacts, errors } = await runEvaluators({
   plugins,
   repoRoot,
   generation,
+  artifactsDir: artifactsAbsolute,
   timeoutMs: Number(process.env.EVALUATOR_TIMEOUT_MS || DEFAULT_TIMEOUT_MS),
   log: (msg) => console.error(msg),
 });
@@ -116,8 +119,15 @@ const { metrics, errors } = await runEvaluators({
 const record = buildMetricsRecord({
   throughGeneration: genNumber,
   metrics,
+  artifacts,
   errors: [...loadErrors, ...errors],
 });
+
+// An empty artifacts directory is noise in a diff a human reads. Removed
+// only when nothing wrote to it, never when a plugin did.
+try {
+  if (fs.readdirSync(artifactsAbsolute).length === 0) fs.rmdirSync(artifactsAbsolute);
+} catch { /* a directory that will not go quietly is not worth a failed run */ }
 
 // Forward slashes, not path.join(), for the RECORDED path — the same
 // convention orchestrator.mjs's writeAttemptRecord() and
@@ -130,14 +140,18 @@ const relative = `${generationsDir}/gen-${genNumber}/metrics.json`;
 fs.mkdirSync(path.join(repoRoot, generationsDir, `gen-${genNumber}`), { recursive: true });
 fs.writeFileSync(path.join(repoRoot, relative), JSON.stringify(record, null, 2) + '\n', 'utf8');
 
-console.error(`\nWrote ${relative}: ${record.metrics.length} metric(s), ${record.errors.length} error(s).`);
+console.error(`\nWrote ${relative}: ${record.metrics.length} metric(s), ${record.artifacts.length} artifact(s), ${record.errors.length} error(s).`);
 for (const m of record.metrics) {
   console.error(`   ${m.name}: ${m.value}${m.unit ? ` ${m.unit}` : ''}`);
+}
+for (const a of record.artifacts) {
+  console.error(`   ${a.kind}: ${a.label}${a.file ? ` (${artifactsRelative}/${a.file})` : ''}`);
 }
 
 setOutput('ran', 'true');
 setOutput('path', relative);
 setOutput('metrics', String(record.metrics.length));
+setOutput('artifacts', String(record.artifacts.length));
 setOutput('errors', String(record.errors.length));
 
 // Always 0. These are measurements, and a measurement that can fail a

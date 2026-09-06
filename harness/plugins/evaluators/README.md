@@ -21,7 +21,7 @@ A plugin is an ES module with a default export:
 ```js
 export default {
   name: 'source-weight',
-  async evaluate({ repoRoot, generation, config }) {
+  async evaluate({ repoRoot, generation, config, artifactsDir }) {
     return [{ name: 'editable source', value: 1234, unit: 'lines', direction: 'lower' }];
   },
 };
@@ -34,6 +34,7 @@ export default {
 | `repoRoot` | Absolute path to the working tree **as the generation left it** — after the edits, before any merge. |
 | `generation` | That generation's parsed `attempts.json`, or `null` if there isn't one. `filesChanged`, `outcome`, `proposalSummary` are the fields most plugins want. |
 | `config` | Whatever the adapter passed under this plugin's `config:` key. Plain data, never validated by the harness — validate your own. |
+| `artifactsDir` | Absolute path to the **one directory this plugin may write to** — see "Artifacts" below. Ignore it if you only measure. |
 
 **Output** — one metric, or an array of them, or nothing:
 
@@ -47,6 +48,89 @@ export default {
 
 Return `[]` or `null` when there is nothing to measure this run. That is a
 normal outcome, not a failure.
+
+---
+
+## Artifacts — for a plugin that renders, simulates, or probes
+
+A number is the wrong shape for what a renderer or a physics probe has to
+say. A plugin may return artifacts alongside its metrics:
+
+```js
+export default {
+  name: 'level-render',
+  async evaluate({ repoRoot, config, artifactsDir }) {
+    // Blender, Playwright, a physics harness, a build step — whatever this
+    // project already has. The harness has no opinion and ships none of it.
+    execFileSync('blender', ['-b', 'level.blend', '-o', `${artifactsDir}/frame#`, '-f', '1']);
+
+    return {
+      metrics: [{ name: 'draw calls', value: 812, direction: 'lower' }],
+      artifacts: [
+        { kind: 'image', file: 'frame1.png', label: 'level 3, player spawn' },
+        { kind: 'observation', label: 'reachability', text: 'apex 1.9m; the gap at x=44 needs 2.1m — unreachable' },
+      ],
+    };
+  },
+};
+```
+
+The old return shape — a metric, or an array of them — stays valid forever.
+The runner detects which one you used; a plugin never declares a version.
+
+| Kind | Fields | Where it goes |
+|---|---|---|
+| `image` | `file` (relative to `artifactsDir`, no `..`), `label`, optional `mime` (derived from the extension otherwise) | **Attached to the next generation's suggestion call**, so a model looks at it rather than inferring it from source |
+| `observation` | `text`, `label` | **Read into the next generation's prompt** as prose, beside the measured dimensions |
+
+Why the two are separate: an observation is what a probe *saw* ("apex 1.9m")
+and cannot be optimised the way a single number can. That distinction is the
+whole lesson of [`learning/01-principles.md`](../../../learning/01-principles.md)
+principle 22b — a score gets gamed by a well-behaved optimiser; a raw
+observation has no single quantity to move.
+
+**Rule 2, sharpened rather than loosened.** A plugin still may not write to
+the working tree — that corrupts the diff a human is about to review.
+`artifactsDir` is the one exception and the only path you may write to. An
+image you name but never actually wrote there is a recorded error, not a
+silently broken record; `..` or an absolute path is refused outright.
+
+Caps, enforced by the runner: **8 artifacts per plugin**, **4 MB per image**,
+observations clamped to **1,000 characters**, and at most **3 images** reach
+any one prompt. A plugin that returns a frame dump is refused rather than
+becoming the largest thing a model reads.
+
+---
+
+## Rendering for the REVIEWER instead: `visual_capture`
+
+The same interface, run at a different moment. An evaluator runs *after* a
+generation and its images reach the **next** suggestion prompt. A visual-capture
+plugin runs *inside* the generation, against the tree the edits produced,
+and its images are attached to the **review** call:
+
+```yaml
+# project-adapter.yml
+evaluation:
+  visual_capture:
+    module: tools/render-for-review.mjs
+    config: { viewport: '390x844' }
+```
+
+This is what [`learning/03-failure-modes.md`](../../../learning/03-failure-modes.md)'s
+"a review gate that had never been shown a picture" is about: a warning ring
+stroked across a character's own face was correct code, passed review, and
+was unreadable to a child. A diff cannot show that.
+
+It fails safe, always. A capture plugin that throws, hangs, or renders
+nothing leaves the reviewer working from the diff and full source alone —
+exactly what every project without one already gets. It can never fail a
+generation, for the stronger reason that this one runs inside the gate.
+
+See [`docs/Tool-Use-Design.md`](../../../docs/Tool-Use-Design.md) §5 for why
+the review seat's tools are deliberately a different, smaller, read-only set
+than the implementer's, and §6.2 for the rule that a generation may not
+change a probe and be judged by it in the same run.
 
 ---
 
