@@ -24,12 +24,17 @@ HTML games) that has run this loop for 18+ real generations, including real
 incidents; this repository is the work of extracting that into something
 project-agnostic.
 
-**The one thing not yet true:** no generation with a real model call has run
-through `harness/` itself — the reference implementation runs its own
-scripts, and this repository's tests fake the three model calls at the
-narrowest boundary. Closing that is the next item in
-[`WORKPLAN.md`](WORKPLAN.md) and it needs a lab API key rather than more
-code. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the two diagrams, and
+**Real generations have now run through `harness/` itself** — on
+2026-09-11, bounded campaigns with real model calls to eight labs (seven answered), on two
+deliberately different projects (a children's browser game and a Python
+CLI), locally via `rehearse.mjs`. They are written up, failures included, in
+[`docs/campaigns/`](docs/campaigns/), and they found real defects in the
+harness that the fake-model test suite never could; those are fixed.
+**What is still not true:** the generated workflow has not yet run a
+generation on GitHub Actions against a real repository — its steps are
+tested by executing them under GitHub's own bash flags, but not in a real
+run. That is the next item in [`WORKPLAN.md`](WORKPLAN.md). See
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for the two diagrams, and
 [Status in detail](#status-in-detail) for the per-component table.
 
 ---
@@ -393,7 +398,11 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Staging & promotion — merge + tag (`harness/lib/promote.mjs`), deploy verification (`harness/lib/verify-deployment.mjs`) | ✅ Built, tested — all four `verify_strategy` values: `url` (poll + compare), `registry` (npm/PyPI/NuGet/Maven Central), `artifact` (build/path/smoke-run), `none`. Chained automatically by the generated workflow (`harness/templates/workflow.yml.tmpl`). |
 | Notifier — plain-language digest with a reliable fallback (`harness/lib/notify.mjs`, `harness/scripts/send-digest.mjs`, `send-escalation-notice.mjs`) | ✅ Built, tested — sender is pluggable (`registerSender()`; SendGrid ships built in, Slack/webhook/another email API are added by registering one under its own name), calibration examples are optional project config, not hardcoded. Chained automatically by the generated workflow. |
 | `init` CLI scaffolder (`harness/cli/init.mjs`) | ✅ Built — asks the Portable-Harness-Design.md §6 questions and writes `project-adapter.yml`, the generated workflow, brief-template copies, and an install README for a new project |
-| Cost accounting + budget cap (`harness/lib/spend.mjs`, `budget.max_generation_tokens`) | ✅ Built, tested — every `attempts.json` carries `spend`; a generation projected over the cap is refused before the fan-out, and the refine loop stops when the running total passes it. Tokens, not money |
+| Cost accounting + budget cap (`harness/lib/spend.mjs`, `budget.max_generation_tokens`) | ✅ Built, tested — every underlying request is metered (headroom and text-only retries each count) and reserves its estimated input plus its whole output allowance *before* it is sent, so a parallel fan-out or a retry cannot overshoot the cap; a refused call ends the attempt loop as `budget-exhausted`, never a crash. Every `attempts.json` carries `spend`, with failed and refused requests counted separately. Tokens, not money |
+| Tests inside the repair loop (`harness/lib/test-runner.mjs`, `evaluation.test_in_loop`) | ✅ Built, tested, **proven on real runs** — a baseline on the untouched tree, then the project's own `test_commands` against each attempt before it is reviewed; a failure goes back to the implementer as its failing lines. The child process never sees a credential. In both real campaigns so far a suggester's own edits failed the tests and the loop repaired them ([`docs/campaigns/`](docs/campaigns/)) |
+| Before/after measurement (`harness/lib/measure.mjs`, `run-evaluators.mjs --baseline`) | ✅ Built, tested — the same evaluators, fingerprinted, on the untouched tree and the changed one; `comparison.json` names benefits and regressions by each metric's declared direction, beside cost; `REPORT.md` adds what a person did with each change |
+| Generation identity and records (`harness/lib/generation-id.mjs`, `persist-records.mjs`) | ✅ Built, tested against a real remote — the next number is one past any tag, agent branch or record; the branch is claimed with a lease; every record carries a run id and is committed to the default branch on every outcome, failures included. The agent branch carries code only |
+| Strict review verdict (`review.mjs`'s `parseVerdict()`) | ✅ Built, tested — exactly one `VERDICT:`, exactly APPROVED or REJECTED, an approval must end `END OF REVIEW` and list no required fixes; truncated, contradictory or malformed responses are rejections, and an unreadable review is asked once more before an attempt is spent |
 | Pull-request read-back (`harness/lib/pull-requests.mjs`, `harness/scripts/sync-pull-request-outcomes.mjs`) | ✅ Built, tested — merged / open / closed written into the record at the top of every cycle; a closed pull request breaks the clean streak and reaches the next prompt as CLOSED UNMERGED |
 | Rollback (`harness/lib/rollback.mjs`, `harness/scripts/revert-generation.mjs`) | ✅ Built, tested against a real remote on both merge paths — reverts the shipped merge, records `reverted`, the next run reads it as a failure |
 | The ambition dial (`context.ambition`, [`docs/Ambition-Control.md`](docs/Ambition-Control.md)) and scope-aware ranking | ✅ Built, tested — `focused` / `earned` (default) / `ambitious`, read at run time, per-run override from the Actions tab; the ranking rubric follows the scope; a lone ambitious failure no longer resets the streak |
@@ -425,6 +434,7 @@ what comes next and why.
 | An outside review of the concept and the code, a SWOT, and the workplan additions it proposes to run this as a product | [`docs/Review-SWOT-2026-09.md`](docs/Review-SWOT-2026-09.md) |
 | Whether the models should get tools — MCP, a renderer, a physics engine — which of the three kinds is worth building, and the per-seat rules that keep a gate a gate | [`docs/Tool-Use-Design.md`](docs/Tool-Use-Design.md) |
 | A second review, two days later, and a proposed six-phase plan for a tenfold improvement against the portable-harness objective — reach, yield, magnitude, trust, each with a number to move | [`docs/Review-10x-2026-09.md`](docs/Review-10x-2026-09.md) |
+| What happened when the model calls were real — four generations on two projects, the records as written, and the seven harness defects they found | [`docs/campaigns/`](docs/campaigns/) |
 
 ## How the three pieces fit together
 
@@ -541,9 +551,10 @@ self_optimisation/
 ├── Model-Release-Driven-Software-Improvement-Paper-Outline.md
 ├── package.json                     # one dependency (js-yaml, for adapter.mjs/
 │                                     # scaffold.mjs only); `npm test` runs harness/'s own suite
-├── docs/                            # research corpus, the design documents, and
-│                                     # curiosity/ — a second longitudinal pass, 4 of
-│                                     # its 10 components built, the rest gated on A'
+├── docs/                            # research corpus, the design documents,
+│                                     # campaigns/ — real-model runs written up with their
+│                                     # records, and curiosity/ — a second longitudinal
+│                                     # pass, 4 of its 10 components built, the rest gated on A'
 ├── console/                         # a proposed browser-based install flow — the UI
 │                                     # (about/mockup/privacy.html, DESIGN.md) is design
 │                                     # and wireframe only, not built; its Supabase schema

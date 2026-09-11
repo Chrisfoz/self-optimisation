@@ -18,6 +18,13 @@ call.
 
 ## Start here
 
+**→ Tier 6's one open item: run the generated workflow for real on GitHub
+Actions** — a scratch repository, `init`, secrets, one campaign dispatch, a
+real pull request. Real generations have now run through `harness/` (Tier 6,
+2026-09-11, [`docs/campaigns/`](docs/campaigns/)); what has never happened is
+the workflow itself running them. Then 2.1a.
+
+*Superseded 2026-09-11 — kept for the record:*
 **→ Tier 0.5's one open item: a real generation through `harness/`, then
 Tier 2.1a.** [`docs/Review-10x-2026-09.md`](docs/Review-10x-2026-09.md)
 (2026-09-04) found the finding everything else waits on: no generation
@@ -85,7 +92,14 @@ format is validated only against the fixtures it was written against
   reimplementing it; `tests/e2e/full-loop.test.mjs` still drives the chain
   by calling each library directly rather than through this command, which
   is the one piece of the original *done when* not yet true.
-- [ ] **P0.1 — A real generation through `harness/`.** A scratch
+- [ ] **P0.1 — A real generation through `harness/`.** *Mostly done
+  2026-09-11 — see Tier 6.* Four real generations ran through
+  `rehearse.mjs` on two projects, every record with `spend.estimatedCalls`
+  of 0 except the two requests whose connection dropped before any
+  response; written up in [`docs/campaigns/`](docs/campaigns/). What the
+  *done when* below still asks for and has not happened: a record committed
+  to a **public example repository** and a **workflow run** linked from the
+  README — both wait on Tier 6's GitHub Actions item. A scratch
   repository, a filled adapter and briefs, two lab keys, one campaign
   generation (`node harness/scripts/rehearse.mjs --models <id>`) on a
   current model. Fix whatever breaks. **Blocked on the owner's own API
@@ -314,6 +328,12 @@ gaps are solved by better documentation — they are missing code.
   *Done when:* `init` has been run against that repo and one generation has
   been rehearsed end to end, with the result written up honestly — including
   whatever broke.
+  *Partly done 2026-09-11:* two generations rehearsed on a Python CLI with no
+  visual surface (the ICD mapper), written up with what broke — the test-name
+  extractor knew no pytest, and the prompt lost its whole test section. Not
+  yet true: the adapter was written by hand rather than by `init`, and the
+  project is ~300 lines, so the `context.strategy: scoped` question was not
+  forced. A larger repository is still needed for that half.
 
 - [ ] **2.1a — Three design-partner installs, not one.** One Python CLI
   (no visual surface, `verify_strategy: none`), one TypeScript service with
@@ -603,6 +623,11 @@ decision.
   on the first design-partner repo that has protection on.
   *Done when:* a rehearsal on a repo with branch protection completes
   without a failed push.
+  *Narrowed 2026-09-11:* generation records now reach the default branch
+  through one script, `harness/scripts/persist-records.mjs --base <branch>`,
+  in its own worktree (Tier 6, R4). A `harness/state` branch is now that
+  flag plus the readers learning the branch name — not a redesign. The
+  snapshot and pull-request read-back steps still push directly.
 - [x] **5.11 — A rollback script.** `harness/lib/rollback.mjs` +
   `revert-generation.mjs NNN`: reverts the tag's merge or the pull
   request's merge commit, records `reverted`, and the next run reads it as
@@ -611,6 +636,63 @@ decision.
   `gen-NNN/proposals/<model>.md`; the prompt and the index are unchanged.
 
 ---
+
+## Tier 6 — the September reliability review (2026-09-11)
+
+An outside review found six defects that each let the loop lose, misread or
+overspend on exactly the runs it most needs to learn from, and proposed
+three capability steps. Each defect below was reproduced before it was
+fixed, and has a test that fails against the old code. Written up, with
+the real campaigns that tested the fixes, in
+[`docs/campaigns/2026-09-11-first-real-campaigns.md`](docs/campaigns/2026-09-11-first-real-campaigns.md).
+
+- [x] **R1 — CI actually runs the tests.** Node 20 read `npm test`'s glob
+  as a literal path, so every run on `main` failed before a test executed.
+  `engines` is `>=22.11.0`; CI runs that exact minimum and current LTS;
+  `tests/lib/ci-config.test.mjs` fails if the four places a version is
+  stated disagree. *Done when:* CI is green on the declared minimum —
+  **true**, 631/631 on 22.11.0 and 24, none skipped.
+- [x] **R2 — The generated workflow's blockers.** The probe step had no
+  keys; the gate-summary helper exited 1 under `bash -e` on the unrendered
+  merge path (both modes) and wrote multi-line JSON to `GITHUB_OUTPUT`; the
+  digest had no key for its model. `tests/helpers/gha-shell.mjs` runs
+  rendered steps under GitHub's own bash flags. *Done when:* the steps pass
+  under those flags — **true**; 8 of the 11 tests fail on the old template.
+- [x] **R3 — The reviewer rejects incomplete or contradictory verdicts.**
+  `parseVerdict()`: exactly one verdict, an approval must be complete
+  (`END OF REVIEW`) and list no fixes; truncated, contradictory, malformed
+  all fail closed; an unreadable review is asked once more.
+- [x] **R4 — Durable identity and history.** Numbering from any trace
+  (tag, branch, record), branch claimed with a lease and a unique claim
+  commit, a concurrency group, a run id in every record, and every
+  outcome's record committed to the default branch
+  (`persist-records.mjs`). The agent branch carries code only.
+- [x] **R5 — The working tree is restored after a crash**, and on
+  SIGINT/SIGTERM. Not done: a worktree per attempt (would also survive
+  SIGKILL).
+- [x] **R6 — Every model request metered and reserved.** Retries recorded
+  as their own calls; each request reserves input plus its whole output
+  allowance before it is sent; a refused call is `budget-exhausted`, not a
+  crash.
+- [x] **C1 — Tests inside the repair loop.** Baseline, then the project's
+  tests against each attempt before review, failing lines handed to the
+  implementer, credentials scrubbed from the child. *Proven on real runs:*
+  2 of the 4 campaign generations were repaired this way.
+- [x] **C2 — Measure against a reproducible baseline.** The same
+  (fingerprinted) evaluators before and after; `comparison.json`; benefits,
+  regressions, cost and fate in `REPORT.md`.
+- [ ] **C3 — Prove the harness with real campaigns.** *Partly done:* four
+  real generations, two different projects, eight labs, seven findings
+  fixed the same day. **Still open:** a real run of the generated workflow
+  on GitHub Actions against a real repository (secrets, `GITHUB_TOKEN`, a
+  real pull request, a person's merge or close read back). *Done when:* one
+  campaign dispatch has produced a pull request and its record on the
+  default branch, linked from the README.
+- [ ] **C4 — Scoped context retrieval and tool use, guided by the
+  campaigns.** Not started, deliberately: the campaigns did not force
+  `context.strategy: scoped` (both projects fit `full-dump`), so the
+  evidence to choose between 2.2's two shapes still has to come from a
+  larger repository (2.1a).
 
 ## Housekeeping, whenever a nearby file is open
 

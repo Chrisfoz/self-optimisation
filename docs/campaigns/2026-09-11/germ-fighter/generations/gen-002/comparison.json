@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "generation": "002",
+  "date": "2026-09-11",
+  "outcome": "approved",
+  "cost": {
+    "totalTokens": 193554,
+    "calls": 5
+  },
+  "comparable": true,
+  "reason": null,
+  "fingerprint": "b7a125f72eddcb3c",
+  "rows": [
+    {
+      "name": "autoplayer clears of easy level 1",
+      "unit": "of 5 seeds",
+      "direction": "higher",
+      "before": 5,
+      "after": 5,
+      "delta": 0,
+      "relative": 0,
+      "tolerance": 0,
+      "verdict": "unchanged"
+    },
+    {
+      "name": "autoplayer lives lost per run",
+      "unit": null,
+      "direction": "lower",
+      "before": 0,
+      "after": 0,
+      "delta": 0,
+      "relative": null,
+      "tolerance": 0,
+      "verdict": "unchanged"
+    },
+    {
+      "name": "autoplayer seconds to clear",
+      "unit": "s",
+      "direction": null,
+      "before": 112.3,
+      "after": 112.3,
+      "delta": 0,
+      "relative": 0,
+      "tolerance": 0,
+      "verdict": "unchanged"
+    },
+    {
+      "name": "frame time p95 (4× CPU throttle)",
+      "unit": "ms",
+      "direction": "lower",
+      "before": 16.8,
+      "after": 16.8,
+      "delta": 0,
+      "relative": 0,
+      "tolerance": 4,
+      "verdict": "unchanged"
+    },
+    {
+      "name": "frames slower than 30fps (4× CPU throttle)",
+      "unit": "%",
+      "direction": "lower",
+      "before": 0,
+      "after": 0,
+      "delta": 0,
+      "relative": null,
+      "tolerance": 3,
+      "verdict": "unchanged"
+    },
+    {
+      "name": "lives lost when three germs land at once",
+      "unit": null,
+      "direction": "lower",
+      "before": 1,
+      "after": 1,
+      "delta": 0,
+      "relative": 0,
+      "tolerance": 0,
+      "verdict": "unchanged"
+    },
+    {
+      "name": "overlapping tap targets (mid-game, phone)",
+      "unit": null,
+      "direction": "lower",
+      "before": 0,
+      "after": 0,
+      "delta": 0,
+      "relative": null,
+      "tolerance": 0,
+      "verdict": "unchanged"
+    },
+    {
+      "name": "smallest tap target (mid-game, phone)",
+      "unit": "px",
+      "direction": "higher",
+      "before": 44,
+      "after": 44,
+      "delta": 0,
+      "relative": 0,
+      "tolerance": 0,
+      "verdict": "unchanged"
+    },
+    {
+      "name": "tap targets under 44px (mid-game, phone)",
+      "unit": null,
+      "direction": "lower",
+      "before": 0,
+      "after": 0,
+      "delta": 0,
+      "relative": null,
+      "tolerance": 0,
+      "verdict": "unchanged"
+    }
+  ],
+  "benefits": [],
+  "regressions": [],
+  "changed": [],
+  "unchanged": [
+    "autoplayer clears of easy level 1",
+    "autoplayer lives lost per run",
+    "autoplayer seconds to clear",
+    "frame time p95 (4× CPU throttle)",
+    "frames slower than 30fps (4× CPU throttle)",
+    "lives lost when three germs land at once",
+    "overlapping tap targets (mid-game, phone)",
+    "smallest tap target (mid-game, phone)",
+    "tap targets under 44px (mid-game, phone)"
+  ],
+  "appeared": [],
+  "disappeared": []
+}

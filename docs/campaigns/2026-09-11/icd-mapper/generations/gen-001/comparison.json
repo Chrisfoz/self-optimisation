@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "generation": "001",
+  "date": "2026-09-11",
+  "outcome": "approved",
+  "cost": {
+    "totalTokens": 48401,
+    "calls": 6
+  },
+  "comparable": true,
+  "reason": null,
+  "fingerprint": "9562e456a05f675c",
+  "rows": [
+    {
+      "name": "edge-case files that crash the reader",
+      "unit": null,
+      "direction": "lower",
+      "before": 1,
+      "after": 0,
+      "delta": -1,
+      "relative": -1,
+      "tolerance": 0,
+      "verdict": "benefit"
+    },
+    {
+      "name": "edge-case files whose row is recovered",
+      "unit": "of 8",
+      "direction": "higher",
+      "before": 6,
+      "after": 7,
+      "delta": 1,
+      "relative": 0.16666666666666666,
+      "tolerance": 0,
+      "verdict": "benefit"
+    },
+    {
+      "name": "files over 500 lines",
+      "unit": null,
+      "direction": "lower",
+      "before": 0,
+      "after": 0,
+      "delta": 0,
+      "relative": null,
+      "tolerance": 0,
+      "verdict": "unchanged"
+    },
+    {
+      "name": "largest file",
+      "unit": "lines",
+      "direction": "lower",
+      "before": 114,
+      "after": 129,
+      "delta": 15,
+      "relative": 0.13157894736842105,
+      "tolerance": 0,
+      "verdict": "regression"
+    },
+    {
+      "name": "source lines",
+      "unit": "lines",
+      "direction": "lower",
+      "before": 298,
+      "after": 313,
+      "delta": 15,
+      "relative": 0.050335570469798654,
+      "tolerance": 0,
+      "verdict": "regression"
+    }
+  ],
+  "benefits": [
+    "edge-case files that crash the reader",
+    "edge-case files whose row is recovered"
+  ],
+  "regressions": [
+    "largest file",
+    "source lines"
+  ],
+  "changed": [],
+  "unchanged": [
+    "files over 500 lines"
+  ],
+  "appeared": [],
+  "disappeared": []
+}

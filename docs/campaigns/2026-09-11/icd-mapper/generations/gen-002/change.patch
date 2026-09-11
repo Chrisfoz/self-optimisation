@@ -1,0 +1,27 @@
+diff --git a/icd_mapper.py b/icd_mapper.py
+index e9f263c..94621c7 100644
+--- a/icd_mapper.py
++++ b/icd_mapper.py
+@@ -26,9 +26,19 @@ class ICDMapper:
+                 continue  # blank line
+             
+             if len(row) < 8:
+-                print(f"Warning: {os.path.basename(file_path)} data row {reader.line_num}: "
+-                      f"expected 8 fields, found {len(row)} - row skipped")
+-                continue
++                # Exports often drop trailing empty columns. Only the ICD-10-AM
++                # target columns can legitimately trail off (an ICD-10 code with
++                # no mapped target), so pad those rows back out and keep the
++                # mapping; anything else has lost a mandatory field.
++                target_code = row[4].strip(' "') if len(row) > 4 else ''
++                if len(row) >= 4 and not target_code:
++                    print(f"Warning: {os.path.basename(file_path)} data row {reader.line_num}: "
++                          f"expected 8 fields, found {len(row)} - padded omitted trailing columns")
++                    row = row + [''] * (8 - len(row))
++                else:
++                    print(f"Warning: {os.path.basename(file_path)} data row {reader.line_num}: "
++                          f"expected 8 fields, found {len(row)} - row skipped")
++                    continue
+             
+             counter = row[0].strip()
+             icd10_code = row[1].strip(' "')

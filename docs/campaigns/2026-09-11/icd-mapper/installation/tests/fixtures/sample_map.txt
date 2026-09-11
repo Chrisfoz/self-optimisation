@@ -1,0 +1,6 @@
+"Counter","ICD-10 code","WHO update 1=Add 2=Del","ICD-10 code descriptor","ICD-10-AM Map","Aust update 1=Add 2=Del","Additive Map (+)","ICD-10-AM code descriptor"
+1,"A00.0",,"Example condition, first variant","A00.0",,,"Example condition, first variant"
+2,"A00.1",,"Example condition, second variant","A00.1",,,"Example condition, second variant"
+3,"B20",1,"Example infection","B20.0",,"B20.1","Example infection with complication"
+4,"B20",1,"Example infection","B20.9",,,"Example infection, unspecified"
+5,"C10",,"Example neoplasm","",,,""

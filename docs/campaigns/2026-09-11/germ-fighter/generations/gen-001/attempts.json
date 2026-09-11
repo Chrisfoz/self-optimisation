@@ -1,0 +1,179 @@
+{
+  "generation": "001",
+  "date": "2026-09-11",
+  "harnessVersion": "0.1.0",
+  "run": {
+    "id": "local-20260911T044958Z-48572",
+    "url": null,
+    "source": "local"
+  },
+  "outcome": "approved",
+  "scope": "focused",
+  "scopeReason": "context.ambition is \"focused\": every generation is a small, localised change",
+  "campaign": true,
+  "seatPromotion": null,
+  "suggestModel": "grok-4.6 (xai)",
+  "fanOut": {
+    "asked": [
+      "gpt-6-astra (openai)",
+      "gemini-3.8-flash (google)",
+      "grok-4.6 (xai)"
+    ],
+    "proposed": [
+      "gpt-6-astra",
+      "gemini-3.8-flash",
+      "grok-4.6"
+    ],
+    "offeredEdits": [
+      "gpt-6-astra",
+      "gemini-3.8-flash",
+      "grok-4.6"
+    ],
+    "failed": [],
+    "chosen": "grok-4.6 (xai)",
+    "rankedBy": "claude-opus-5",
+    "rankingReason": "It fixes the most genuinely broken thing — a stacked wave draining all three lives in a single collision pass — with a self-contained i-frame window plus visible blink feedback, and unlike Proposal 1 it uses its own timer fields rather than piggybacking on the shield state that the frozen shield tes",
+    "proposalFiles": [
+      "docs/generations/gen-001/proposals/gpt-6-astra.md",
+      "docs/generations/gen-001/proposals/gemini-3.8-flash.md",
+      "docs/generations/gen-001/proposals/grok-4.6.md"
+    ],
+    "briefFeedback": {
+      "gpt-6-astra": "The young-child audience, one-change scope and named test entry points helped prioritize a concrete fairness problem over cosmetic changes. The conflicting required response formats add needless ambiguity; delete the duplicate format requirement. Include the frozen rules suite and presentation source as read-only context so proposals can check compatibility rather than infer it.",
+      "gemini-3.8-flash": "The specific guidance highlighting mobile/tablet play for young children (4-8 years old), touch target constraints, and headless test invariant names was very helpful and prevented breaking changes. The explicit reminder that pipeline checks monitor mid-game tap targets on 390×844 gave clear focus.",
+      "grok-4.6": "The audience rules (pre-readers, thumbs, no hard punishment) and the frozen harness names were the useful bits — they pointed at this collision rather than at HUD chrome. Two things got in the way: the tests are cited but not shown, so an unattended ship has to guess what `update()`+overlap asserts; and this prompt asks for PILLAR…ESCALATION and also for SUMMARY/EDIT as the only accepted structure. I would delete the empty gen-001 history, the “never gating” metrics (they still steer agents toward farming the autoplayer), and the duplicate response-format instructions."
+    }
+  },
+  "screenshotsSent": 0,
+  "implementModel": "claude-opus-5",
+  "implementedBy": "claude-opus-5",
+  "selfImplemented": false,
+  "proposalSummary": "Add a 2s post-hit invincible window (`hitInvincibleMs` / `hitInvincibleUntil`) in `germ_fighter.html`. On a germ-player collision in `update()`, lose one life as today, then set `player.invincible = true` and `hitInvincibleUntil` immediately so later germs in that same filter pass (and for 2s after)",
+  "escalations": {
+    "opened": [],
+    "supported": [],
+    "dissented": [],
+    "flagged": [],
+    "judged": {
+      "agreed": [],
+      "disagreed": [],
+      "irrelevant": [],
+      "retired": []
+    }
+  },
+  "contextSize": null,
+  "spend": {
+    "calls": 7,
+    "inputTokens": 214881,
+    "outputTokens": 83315,
+    "totalTokens": 298196,
+    "estimatedCalls": 0,
+    "failedRequests": 0,
+    "refusedRequests": 0,
+    "maxGenerationTokens": 900000,
+    "byModel": {
+      "gpt-6-astra": {
+        "calls": 1,
+        "inputTokens": 29816,
+        "outputTokens": 609
+      },
+      "gemini-3.8-flash": {
+        "calls": 2,
+        "inputTokens": 73956,
+        "outputTokens": 67359
+      },
+      "grok-4.6": {
+        "calls": 1,
+        "inputTokens": 31960,
+        "outputTokens": 2473
+      },
+      "claude-opus-5": {
+        "calls": 2,
+        "inputTokens": 49177,
+        "outputTokens": 12086
+      },
+      "gpt-5.5": {
+        "calls": 1,
+        "inputTokens": 29972,
+        "outputTokens": 788
+      }
+    },
+    "bySite": {
+      "suggest": {
+        "calls": 4,
+        "inputTokens": 135732,
+        "outputTokens": 70441
+      },
+      "rank": {
+        "calls": 1,
+        "inputTokens": 2806,
+        "outputTokens": 629
+      },
+      "implement": {
+        "calls": 1,
+        "inputTokens": 46371,
+        "outputTokens": 11457
+      },
+      "review": {
+        "calls": 1,
+        "inputTokens": 29972,
+        "outputTokens": 788
+      }
+    }
+  },
+  "tests": {
+    "inLoop": true,
+    "baseline": {
+      "passed": true,
+      "durationMs": 75,
+      "commands": [
+        {
+          "command": "node tests/game-logic/germ-rules.test.js",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 75
+        }
+      ]
+    }
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "by": "grok-4.6 (xai)",
+      "outcome": "tests-failed",
+      "detail": "node tests/game-logic/germ-rules.test.js: exit 1 — ASS it stops the game to show the graduation screen == the dash has a cooldown == PASS the first dash goes PASS a second dash straight away is refused PASS the dash ends on schedule PASS and invincibility ends with it PASS once the cooldown is up it dashes again 2 CHECK(S) FAILED",
+      "tests": {
+        "passed": false,
+        "durationMs": 73,
+        "commands": [
+          {
+            "command": "node tests/game-logic/germ-rules.test.js",
+            "exitCode": 1,
+            "timedOut": false,
+            "durationMs": 73
+          }
+        ]
+      }
+    },
+    {
+      "attempt": 2,
+      "by": "claude-opus-5",
+      "outcome": "approved",
+      "detail": "Cap germ damage at one life per contact so a germ stack cannot end a run",
+      "tests": {
+        "passed": true,
+        "durationMs": 77,
+        "commands": [
+          {
+            "command": "node tests/game-logic/germ-rules.test.js",
+            "exitCode": 0,
+            "timedOut": false,
+            "durationMs": 77
+          }
+        ]
+      }
+    }
+  ],
+  "apiIssues": [],
+  "pullRequestUrl": null
+}

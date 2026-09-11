@@ -1,0 +1,177 @@
+{
+  "generation": "001",
+  "date": "2026-09-11",
+  "harnessVersion": "0.1.0",
+  "run": {
+    "id": "local-20260911T045528Z-39484",
+    "url": null,
+    "source": "local"
+  },
+  "outcome": "approved",
+  "scope": "focused",
+  "scopeReason": "context.ambition is \"focused\": every generation is a small, localised change",
+  "campaign": true,
+  "seatPromotion": null,
+  "suggestModel": "glm-5.3 (zai)",
+  "fanOut": {
+    "asked": [
+      "kimi-k3 (moonshot)",
+      "deepseek-v4-pro (deepseek)",
+      "glm-5.3 (zai)"
+    ],
+    "proposed": [
+      "deepseek-v4-pro",
+      "glm-5.3"
+    ],
+    "offeredEdits": [
+      "deepseek-v4-pro",
+      "glm-5.3"
+    ],
+    "failed": [
+      "kimi-k3: read ECONNRESET"
+    ],
+    "chosen": "glm-5.3 (zai)",
+    "rankedBy": "claude-opus-5",
+    "rankingReason": "The BOM/encoding fix addresses the most common and most damaging real failure — Excel-origin exports (which this tool's own `excel_to_txt.py` implies) carry a BOM that corrupts the first code, and a latin-1 file currently loses an entire file — while still surfacing short rows with a file/line warni",
+    "proposalFiles": [
+      "docs/generations/gen-001/proposals/deepseek-v4-pro.md",
+      "docs/generations/gen-001/proposals/glm-5.3.md"
+    ],
+    "briefFeedback": {
+      "deepseek-v4-pro": "The frozen-invariant summary and the explicit editable-file list made it easy to pick a change that cannot weaken the test suite. The hints about messy exports were useful context, not a ceiling.",
+      "glm-5.3": "The frozen-names list and \"one improvement\" rule genuinely helped focus the change. The parser's exact-once SEARCH requirement forced care but is fine. The hint \"the four scripts duplicate reading logic\" tempts toward refactoring into a shared helper, which the one-improvement and frozen-files rules make awkward — the brief slightly pulls in two directions there. Nothing I would delete."
+    }
+  },
+  "screenshotsSent": 0,
+  "implementModel": "claude-opus-5",
+  "implementedBy": "claude-opus-5",
+  "selfImplemented": false,
+  "proposalSummary": "In `icd_mapper.py` only, harden `read_mapping_file`:",
+  "escalations": {
+    "opened": [],
+    "supported": [],
+    "dissented": [],
+    "flagged": [],
+    "judged": {
+      "agreed": [],
+      "disagreed": [],
+      "irrelevant": [],
+      "retired": []
+    }
+  },
+  "contextSize": null,
+  "spend": {
+    "calls": 6,
+    "inputTokens": 28790,
+    "outputTokens": 19611,
+    "totalTokens": 48401,
+    "estimatedCalls": 1,
+    "failedRequests": 1,
+    "refusedRequests": 0,
+    "maxGenerationTokens": 600000,
+    "byModel": {
+      "glm-5.3": {
+        "calls": 1,
+        "inputTokens": 4687,
+        "outputTokens": 1253
+      },
+      "deepseek-v4-pro": {
+        "calls": 1,
+        "inputTokens": 5292,
+        "outputTokens": 13842
+      },
+      "kimi-k3": {
+        "calls": 1,
+        "inputTokens": 5141,
+        "outputTokens": 0
+      },
+      "claude-opus-5": {
+        "calls": 2,
+        "inputTokens": 10758,
+        "outputTokens": 3950
+      },
+      "gpt-5.5": {
+        "calls": 1,
+        "inputTokens": 2912,
+        "outputTokens": 566
+      }
+    },
+    "bySite": {
+      "suggest": {
+        "calls": 3,
+        "inputTokens": 15120,
+        "outputTokens": 15095
+      },
+      "rank": {
+        "calls": 1,
+        "inputTokens": 2174,
+        "outputTokens": 993
+      },
+      "implement": {
+        "calls": 1,
+        "inputTokens": 8584,
+        "outputTokens": 2957
+      },
+      "review": {
+        "calls": 1,
+        "inputTokens": 2912,
+        "outputTokens": 566
+      }
+    }
+  },
+  "tests": {
+    "inLoop": true,
+    "baseline": {
+      "passed": true,
+      "durationMs": 1651,
+      "commands": [
+        {
+          "command": "python -m pytest -q tests",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1651
+        }
+      ]
+    }
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "by": "glm-5.3 (zai)",
+      "outcome": "tests-failed",
+      "detail": "python -m pytest -q tests: exit 1 — s_comma - Ind... FAILED tests/test_icd_mapper.py::test_optional_columns_become_none_when_blank FAILED tests/test_icd_mapper.py::test_report_lists_each_code_its_targets_and_additive_maps FAILED tests/test_icd_mapper.py::test_excel_export_has_one_row_per_mapping - ... 5 failed, 3 passed in 0.57s",
+      "tests": {
+        "passed": false,
+        "durationMs": 1771,
+        "commands": [
+          {
+            "command": "python -m pytest -q tests",
+            "exitCode": 1,
+            "timedOut": false,
+            "durationMs": 1771
+          }
+        ]
+      }
+    },
+    {
+      "attempt": 2,
+      "by": "claude-opus-5",
+      "outcome": "approved",
+      "detail": "Harden ICD mapping file reads against BOM, latin-1 and short rows",
+      "tests": {
+        "passed": true,
+        "durationMs": 1580,
+        "commands": [
+          {
+            "command": "python -m pytest -q tests",
+            "exitCode": 0,
+            "timedOut": false,
+            "durationMs": 1580
+          }
+        ]
+      }
+    }
+  ],
+  "apiIssues": [],
+  "pullRequestUrl": null
+}
