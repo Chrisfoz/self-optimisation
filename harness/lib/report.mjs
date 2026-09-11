@@ -54,6 +54,9 @@ export function fateOf(record) {
   const state = record?.pullRequest?.state;
   if (state === 'closed') return 'closed';
   if (state === 'open') return 'open';
+  // See context-pack.mjs's fateOf(): a local rehearsal's approval was never
+  // put to a person, so it is not a change anyone kept.
+  if (!state && record?.run?.source === 'local') return 'rehearsed';
   return 'merged';
 }
 
@@ -73,7 +76,7 @@ export function computeMetrics(records) {
   for (const r of records) byOutcome[r.outcome ?? 'unknown'] = (byOutcome[r.outcome ?? 'unknown'] ?? 0) + 1;
 
   const approved = records.filter((r) => r.outcome === 'approved');
-  const fates = { merged: 0, open: 0, closed: 0, reverted: 0 };
+  const fates = { merged: 0, open: 0, closed: 0, reverted: 0, rehearsed: 0 };
   for (const r of approved) fates[fateOf(r)] += 1;
 
   // Release yield: cycles that produced a change a person kept.
@@ -190,7 +193,7 @@ export function renderReport(metrics, { generatedAt = new Date(), generationsDir
     `|---|---|`,
     ...Object.entries(m.byOutcome).sort().map(([k, v]) => `| ${k} | ${v} |`),
     ``,
-    `Of the ${m.approved} approved: ${m.fates.merged} merged and kept, ${m.fates.open} still open as pull requests, ${m.fates.closed} closed unmerged, ${m.fates.reverted} reverted.`,
+    `Of the ${m.approved} approved: ${m.fates.merged} merged and kept, ${m.fates.open} still open as pull requests, ${m.fates.closed} closed unmerged, ${m.fates.reverted} reverted${m.fates.rehearsed ? `, ${m.fates.rehearsed} approved only in a local rehearsal and never put to a person` : ''}.`,
     ``,
     `## By scope`,
     ``,

@@ -220,6 +220,14 @@ function fateOf(record) {
   const state = record?.pullRequest?.state;
   if (state === 'closed') return { label: 'CLOSED UNMERGED', clean: false, detail: 'approved by review, but a person closed the pull request without merging it' };
   if (state === 'open') return { label: 'PR OPEN', clean: true, detail: 'approved by review; the pull request is still waiting for a person' };
+  // A local run (rehearse.mjs) opens no pull request and merges nothing, so
+  // "no PR state" does not mean "merged" for it the way it does on the
+  // autonomous-merge path. Records from before `run` existed keep the old
+  // reading. Found when the first real campaigns' report claimed every
+  // rehearsed change had been "kept by a person".
+  if (!state && record?.run?.source === 'local') {
+    return { label: 'REHEARSED', clean: true, detail: 'approved by review in a local rehearsal; never put to a person' };
+  }
   return { label: 'MERGED', clean: true, detail: null };
 }
 
