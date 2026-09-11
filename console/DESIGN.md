@@ -5,7 +5,9 @@ who benefits from a self-improving repository doesn't have to be the person
 who can hand-write `project-adapter.yml`.
 
 **Status: proposal, with phase 0 built.** The console itself — sign-in, the
-form, the pull request, the run view — is not built. Everything underneath it
+form, the pull request, the run view — is not built; the one service that
+will host it is (`console/server.mjs`, serving the three pages below — §11
+records where it runs and what was decided about it). Everything underneath it
 is: `harness/lib/scaffold.mjs` + `harness/cli/init.mjs` generate the files,
 `harness/lib/validate.mjs` checks the answers (§2.1's `validateAnswers()`,
 shipped 2026-09-06), and `harness/scripts/rehearse.mjs` runs the whole chain
@@ -641,6 +643,12 @@ a product needs to know who is asking. That's a Supabase project —
 `self-optimisation-console`, Postgres 17, ap-southeast-2 — holding identity
 and the minimum around it.
 
+**Since decided (§11): Supabase is optional.** Everything below still
+describes our hosted instance, which may keep it as a listing cache, but a
+console someone deploys for themselves needs no database at all. §8.1's
+reason for Supabase — no server to finish the OAuth handshake — stopped
+holding when §8.5 added a server.
+
 ### 8.1 It closes §5's one real gap
 
 §5 said everything in phase 3 works from a static page except the OAuth
@@ -903,7 +911,9 @@ section documents the shape so that step is informed, not blind.
    shows as the App's publisher on every install screen, and what happens to
    every existing installation if that account is ever unavailable. Worth
    deciding once, deliberately, before the first real install exists to be
-   disrupted by changing it.
+   disrupted by changing it. **Decided 2026-09-11: the author's personal
+   GitHub account**, for our hosted instance. A self-hosted console registers
+   its own App under whichever account deploys it (§11).
 
 ---
 
@@ -934,3 +944,75 @@ rather than one that oversells it:
   history and escalations all live in the user's repo as files they can read
   without us. That is what makes deleting an account cost them nothing, and
   it is worth more to this product than any dashboard feature.
+
+---
+
+## 11. Hosting, and deploy-your-own
+
+Decided 2026-09-11. The goal is frictionless in two directions at once: a
+person with a project and a repository connects it and runs the harness,
+and anyone who would rather not trust our instance deploys the same console
+themselves — the repository ships with a working front end, not just a
+harness and a design for one.
+
+**One service, deployable anywhere.** The console is a single Node process,
+`console/server.mjs`, zero-dependency like the harness it fronts, started by
+`npm start`. Our instance runs on Railway, configured by the repository's
+`railway.json` (start command, `/healthz` health check, restart policy); any
+host that runs a Node process runs the same thing. A "Deploy on Railway"
+button and a Dockerfile follow once there is more to deploy than pages.
+
+**It scales because it never runs the loop.** The harness runs in each
+user's own GitHub Actions on their own lab keys (§8.5, "What does not
+change") — the service configures and triggers, it does not execute. That is
+why a thousand users cost about what ten do, and why a self-hoster's bill is
+a few dollars a month: no model call and no test run ever happens on it.
+Running the harness server-side against uploaded folders was considered and
+rejected on the same page: it needs a git repository the harness can branch
+and record into, it would put lab keys and source on our server (§2.2,
+§8.3), and `evaluation.test_commands` would make us a host for strangers'
+code.
+
+**Supabase is optional.** §8.1 brought it in because the OAuth code exchange
+needs a server and there wasn't one. §8.5 added one. A GitHub App can sign a
+user in itself (user-to-server tokens), and §8.4 already puts config, run
+history and escalations in the user's repository — so a self-hosted console
+is one service plus one GitHub App, with no database. Our own instance may
+keep the Supabase project as §8.4's listing cache; nothing may require it.
+Every extra account a self-hoster has to create is friction.
+
+**The App registers itself.** §8.5's "register the App by hand" becomes
+GitHub's App manifest flow: a fresh deployment's first page offers "Create
+your GitHub App," the deployer confirms on GitHub, and the App's id,
+private key and webhook secret come back to the service. Our instance's App
+belongs to the author's personal account (§9, question 5).
+
+**Connect means repository and branch.** Repositories come from the App's
+installation — only what the user granted in GitHub's own dialog. The
+branch fills `project.default_branch`, which `scaffold.mjs` already bakes
+into the generated workflow as `BASE_BRANCH`. One GitHub rule shapes the
+picker: a scheduled run, or a `workflow_dispatch` "Run" button, only fires
+from a workflow file on the repository's *default* branch. So the picker
+defaults to it, and choosing another branch means "pull requests target
+this branch" — the workflow file itself still lands on the default branch.
+
+**§3's reusable workflow moves ahead of the form.** Without it, "connect and
+run" means the console committing roughly forty harness files into every
+repository, frozen at install date. With it, three or four. That makes it a
+prerequisite for the frictionless path rather than phase 2's later
+convenience.
+
+The order, each step usable on its own:
+
+| Step | Deliverable | State |
+|---|---|---|
+| 1 | The service, serving the three pages, on Railway | ✅ built (`console/server.mjs`, `tests/console/server.test.mjs`); not yet deployed |
+| 2 | GitHub App via the manifest flow; sign-in; repository and branch picker | — |
+| 3 | The reusable workflow (§3) | — |
+| 4 | The nine steps, sealed-box secrets (§2.2), the setup PR, Run, the run view (§8.4) | — |
+| 5 | "Deploy on Railway" button and Dockerfile | — |
+
+The service already refuses the easy mistake a console folder invites: it
+serves an explicit route table, never a directory, so `DESIGN.md`, the
+migrations and the rest of the repository are unreachable by construction,
+and a path it does not name is a 404.
