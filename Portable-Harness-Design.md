@@ -8,7 +8,7 @@ a user, before any file crosses over.
 **Scope note, added once other work landed alongside this one:** everything
 below tracks the harness port specifically — the ten-component kernel and
 its build order. It predates, and still says nothing about, `console/` (a
-proposed browser-based install flow — [`console/DESIGN.md`](console/DESIGN.md))
+browser-based install flow, now implemented — [`console/IMPLEMENTATION.md`](console/IMPLEMENTATION.md))
 or `docs/curiosity/` (a proposed second longitudinal pass —
 [`docs/Curiosity-Engine-Design.md`](docs/Curiosity-Engine-Design.md)). Both
 are real, separate streams of design work that build on top of what this
@@ -783,3 +783,17 @@ FEEDBACK` reliably surfaces real blind spots rather than noise — worth
 folding into that document as a dated example when the curiosity ledger
 (Stage B) is actually built, since it is exactly the kind of corroborated,
 cross-generation signal that ledger is designed to accumulate.
+
+
+
+## Console implementation revision — 11 September 2026
+
+The browser installer now calls the existing generator through `console/configuration.mjs`
+and the HTTP service. All ten steps have working inputs or deliberate fixed-stage
+explanations. Setup includes the vendored harness, initially dispatch-only and PR-only.
+GitHub App sign-in, installation-scoped repository access, repository secret-name
+checks, setup PRs, focused rehearsal dispatch and activation PRs are implemented.
+Keys are entered directly on GitHub; the console never accepts them. Live authenticated
+acceptance and deployment App configuration remain outstanding; automated GitHub
+integration tests use injected responses. See `console/IMPLEMENTATION.md` and
+`console/DEPLOYMENT.md` for the exact scope, evidence and remaining limitations.

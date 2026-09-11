@@ -4,32 +4,19 @@ A front end for installing and configuring the harness, so that the person
 who benefits from a self-improving repository doesn't have to be the person
 who can hand-write `project-adapter.yml`.
 
-**Status: proposal, with phase 0 built.** The console itself — sign-in, the
-form, the pull request, the run view — is not built; the one service that
-will host it is (`console/server.mjs`, serving the three pages below — §11
-records where it runs and what was decided about it). Everything underneath it
-is: `harness/lib/scaffold.mjs` + `harness/cli/init.mjs` generate the files,
-`harness/lib/validate.mjs` checks the answers (§2.1's `validateAnswers()`,
-shipped 2026-09-06), and `harness/scripts/rehearse.mjs` runs the whole chain
-locally — which is most of what §Step 9's "rehearse before the schedule is
-turned on" asks a user to do. `tests/lib/scaffold.test.mjs` and
-`tests/lib/validate.test.mjs` cover them. This document is written to the
-same standard as `Portable-Harness-Design.md` — every claim about what the
-harness does today is checked against the code, and every field the console
-would expose is marked LIVE (something reads it) or RESERVED (nothing does,
-yet). Read §2 before §5: the console's remaining prerequisite is answer
-validation on the generator that exists, plus the phase-1 backend §8.5
-made necessary.
+**Implementation update — 11 September 2026.** The ten-step browser installer
+and backend are implemented. Read [IMPLEMENTATION.md](IMPLEMENTATION.md) for
+what is tested and [DEPLOYMENT.md](DEPLOYMENT.md) for required GitHub App setup.
+The design below remains the historical proposal; this update supersedes its
+statements that the frontend does not exist. Key values are entered on GitHub
+rather than encrypted in the browser; only secret names are read. GitHub App
+user-token sign-in replaces the proposed Supabase/installation-token bridge.
+The full harness is included in setup; reusable workflows and App manifest
+registration remain future work. Live authenticated acceptance is outstanding.
 
-Three pages sit beside this file, each a self-contained artifact body:
-
-| File | What it is |
-|---|---|
-| [`about.html`](about.html) | The public face: the objective, one run drawn end to end, and the nine setup steps. Links to the other two. |
-| [`mockup.html`](mockup.html) | A clickable wireframe of §4's nine steps, with the generated `project-adapter.yml` updating live beside the form — the design's central claim rather than a garnish. |
-| [`privacy.html`](privacy.html) | A draft privacy policy, written now so §2.2's no-custody rule is a commitment rather than an intention. |
-
----
+The pages are `about.html`, `mockup.html` (the retained filename now serves the
+working installer) and `privacy.html`, with shared styling in `console.css` and
+browser behaviour in `app.mjs`.
 
 ## 1. The idea, restated
 
@@ -1016,3 +1003,4 @@ The service already refuses the easy mistake a console folder invites: it
 serves an explicit route table, never a directory, so `DESIGN.md`, the
 migrations and the rest of the repository are unreachable by construction,
 and a path it does not name is a 404.
+
