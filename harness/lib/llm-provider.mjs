@@ -161,6 +161,24 @@ function looksLikeVisionRejection(raw) {
   return VISION_REJECTION.test(raw);
 }
 
+/**
+ * Failures worth one more try: the connection dropped, or a gateway said
+ * it was overloaded or unavailable. Not our own request timeout (a model
+ * that took ten minutes will take ten more), not 429 (often a quota, which
+ * waiting a few seconds does not fix), not a 4xx (the request is wrong).
+ *
+ * Added after the first real campaigns: one lab's model lost its proposal
+ * to `read ECONNRESET` in both runs, while the same model answered a
+ * 50,000-token request cleanly minutes later. A single blip was costing a
+ * lab its whole seat in the generation.
+ */
+const TRANSIENT_NETWORK = /\b(ECONNRESET|ETIMEDOUT|EPIPE|ECONNABORTED|EAI_AGAIN|ENETUNREACH|socket hang up)\b/;
+const TRANSIENT_STATUS = new Set([502, 503, 504, 529]);
+
+export function isTransientNetworkError(err) {
+  return TRANSIENT_NETWORK.test(`${err?.code ?? ''} ${err?.message ?? ''}`);
+}
+
 // ---------------------------------------------------------------------------
 // Transport
 // ---------------------------------------------------------------------------
@@ -191,6 +209,10 @@ function postJson({ hostname, path, headers, body, timeoutMs }) {
     req.setTimeout(timeoutMs, () => {
       req.destroy(new Error(`Request to ${hostname} timed out after ${timeoutMs}ms`));
     });
+    // A non-streaming call to a reasoning model can sit silent for minutes.
+    // Keepalive probes stop an idle NAT or proxy on the path from dropping
+    // the connection underneath it.
+    req.on('socket', (socket) => socket.setKeepAlive(true, 30000));
     req.on('error', reject);
     req.write(payload);
     req.end();
@@ -248,6 +270,8 @@ export async function callModel({
   meter = null,
   meterTicket = null,
   transport = postJson,
+  networkRetries = 1,
+  retryDelayMs = 3000,
 }) {
   let resolved;
   try {
@@ -310,7 +334,28 @@ export async function callModel({
     return response;
   };
 
-  let { statusCode, raw } = await send();
+  // send(), once more on a transient failure (see TRANSIENT_NETWORK). The
+  // retry is its own request: admitted against the budget before it goes,
+  // and recorded whatever happens, like every other.
+  const sendWithRetry = async () => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const response = await send();
+        if (TRANSIENT_STATUS.has(response.statusCode) && attempt < networkRetries) {
+          console.error(`   ⚠️  ${resolved}/${model} answered ${response.statusCode}; retrying once in ${retryDelayMs / 1000}s.`);
+          await new Promise((r) => setTimeout(r, retryDelayMs));
+          continue;
+        }
+        return response;
+      } catch (err) {
+        if (attempt >= networkRetries || !isTransientNetworkError(err)) throw err;
+        console.error(`   ⚠️  ${resolved}/${model}: ${err.message}; retrying once in ${retryDelayMs / 1000}s.`);
+        await new Promise((r) => setTimeout(r, retryDelayMs));
+      }
+    }
+  };
+
+  let { statusCode, raw } = await sendWithRetry();
 
   // The suggesting seat has to run on models that did not exist when this
   // was written, so it cannot know in advance whether a given model accepts

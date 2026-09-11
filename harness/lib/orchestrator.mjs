@@ -1323,7 +1323,10 @@ export async function runGeneration(config, deps = {}) {
           implemented = await implement(
             { ...promptConfig, implementModel, implementationNotes },
             proposal,
-            { applyErrors, reviewFeedback, testFailure, testFailureBy, rejectedRender, attempt, author: `${winner.id} (${winner.provider})` },
+            // The implementer's OWN attempt number, for its "n of maxAttempts"
+            // log line — the plan's index also counts the suggester's direct
+            // edits, which is how a run printed "attempt 4/3".
+            { applyErrors, reviewFeedback, testFailure, testFailureBy, rejectedRender, attempt: plan.slice(0, index + 1).filter((p) => !p.direct).length, author: `${winner.id} (${winner.provider})` },
             { call: callFor('implement'), log, maxAttempts }
           );
         } catch (err) {
