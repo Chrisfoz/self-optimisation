@@ -43,11 +43,12 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import '../providers/index.mjs';
 import {
-  loadAdapter, constitutionAllowlist, guardConfig, contextConfig, memoryConfig,
+  loadAdapter, constitutionAllowlist, guardConfig, contextConfig,
   evaluationConfig, approvalClass, snapshotPath as adapterSnapshotPath,
 } from '../lib/adapter.mjs';
 import { validateAdapter } from '../lib/validate.mjs';
 import { nextGenerationNumber } from '../lib/rehearse.mjs';
+import { reserveGeneration } from '../lib/generation-id.mjs';
 
 const harnessDir = path.dirname(fileURLToPath(import.meta.url));
 const script = (name) => path.join(harnessDir, name);
@@ -198,10 +199,17 @@ if (!releaseCheck.selectedModels.length) {
 console.log(`   ${releaseCheck.selectedModels.length} reachable: ${releaseCheck.selectedModels.map((m) => m.id).join(', ')}\n`);
 
 // --- the agent branch --------------------------------------------------------
-const genNumber = nextGenerationNumber(git);
-const branch = `agent/gen-${genNumber}`;
+// Numbered and claimed exactly as the workflow does (generation-id.mjs):
+// one past the highest tag, agent branch or record on the base branch, and
+// never a branch that already exists. It used to read tags alone, so every
+// rehearsal on the pull-request path was generation 001.
+const generationsDir = contextConfig(adapter).generationsDir || 'docs/generations';
+const { number: genNumber, branch } = reserveGeneration(git, {
+  start: nextGenerationNumber(git, { generationsDir, baseRef: baseBranch }),
+  remote: null,
+});
 console.log(`Step 5/6 — Generation ${genNumber} on branch ${branch}`);
-git('checkout', '-q', '-b', branch);
+git('checkout', '-q', branch);
 
 const improveResult = run([script('run-generation.mjs')], {
   stdio: 'inherit',
@@ -213,21 +221,30 @@ const improveResult = run([script('run-generation.mjs')], {
   }),
 });
 
-const generationsDir = contextConfig(adapter).generationsDir || 'docs/generations';
 const genDirRel = `${generationsDir}/gen-${genNumber}`;
+
+// The record goes to the base branch on EVERY outcome, as persist-records.mjs
+// does in the workflow — locally here, never pushed. A failed rehearsal is
+// the one whose record is most worth keeping.
+function persistLocally() {
+  const result = spawnSync(process.execPath, [script('persist-records.mjs'), '--base', baseBranch, '--no-push'], {
+    cwd: repoRoot, env: spawnEnv({ GEN_NUMBER: genNumber }), stdio: ['ignore', 'inherit', 'inherit'],
+  });
+  if (result.status !== 0) console.log(`   ⚠️  Could not commit the record to ${baseBranch}; it is still in ${genDirRel}.`);
+  else console.log(`   Record committed to ${baseBranch} (not pushed).`);
+}
 
 if (improveResult.status !== 0) {
   console.log(`\nNo change shipped this cycle — see ${genDirRel}/attempts.json for what was tried.`);
-  console.log(`You are still on ${branch}, with nothing committed.`);
+  persistLocally();
+  console.log(`You are still on ${branch}, with no code change committed.`);
   console.log(`   Back to ${baseBranch}:  git checkout ${baseBranch} && git branch -D ${branch}`);
   process.exit(1);
 }
 
 // --- commit, guard, test, the same order and gates the workflow uses -------
 console.log('\nStep 6/6 — Committing, guarding, and testing the change');
-const { allowedPaths } = constitutionAllowlist(adapter);
-const themesDir = memoryConfig(adapter).themesDir || 'docs/themes';
-const recordDirs = [...new Set([generationsDir, themesDir])].filter((d) => fs.existsSync(path.join(repoRoot, d)));
+const { allowedPaths, createOnlyPaths } = constitutionAllowlist(adapter);
 
 let summary = `Generation ${genNumber}`;
 try {
@@ -235,8 +252,13 @@ try {
   if (record.proposalSummary) summary = `Generation ${genNumber}: ${record.proposalSummary}`;
 } catch { /* the generic message is fine */ }
 
-git('add', '-A', '--', ...allowedPaths, ...recordDirs);
+// The code change only — edited and newly created files — one pathspec at a
+// time, since `git add` on a glob that matches nothing is an error.
+for (const p of [...new Set([...allowedPaths, ...createOnlyPaths])]) {
+  if (git('status', '--porcelain', '--', p)) git('add', '-A', '--', p);
+}
 git('commit', '-q', '-m', summary);
+persistLocally();
 
 const guardResult = run([script('check-guarded-paths.mjs'), baseBranch], { stdio: 'inherit' });
 console.log(guardResult.status === 0 ? '   Guard: PASS' : '   Guard: FAIL');

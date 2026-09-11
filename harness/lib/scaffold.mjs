@@ -385,20 +385,17 @@ function mergeSteps(answers) {
       # run-generation.mjs has long exited. Its own step, not part of the
       # one above, so a failure to record is visibly a failure to record
       # rather than a pull request that looks like it was never opened.
+      # Written into the working tree only: the persist step commits the
+      # whole record to ${defaultBranch}, URL included, after this.
       - name: Record the pull request URL in this generation's attempt record
         if: steps.pr.outputs.url
         shell: bash
         continue-on-error: true
         env:
-          BRANCH: \${{ steps.gen.outputs.branch }}
           GEN_NUMBER: \${{ steps.gen.outputs.number }}
           PR_URL: \${{ steps.pr.outputs.url }}
           GENERATIONS_DIR: ${generationsDir}
-        run: |
-          node harness/scripts/record-pull-request.mjs "$GEN_NUMBER" "$PR_URL" --generations-dir "$GENERATIONS_DIR"
-          git add -A -- "$GENERATIONS_DIR"
-          git commit -m "Generation $GEN_NUMBER: record pull request URL" || echo "Nothing to record"
-          git push origin "$BRANCH"`;
+        run: node harness/scripts/record-pull-request.mjs "$GEN_NUMBER" "$PR_URL" --generations-dir "$GENERATIONS_DIR"`;
 }
 
 /**
@@ -416,15 +413,11 @@ export function renderWorkflowTemplate(template, answers) {
     10
   );
   const testCommandLines = indentBlock((answers.testCommands || []).join('\n'), 10);
-  const allowedPathsGitAdd = (answers.allowedPaths || []).map(shellQuote).join(' ');
-  // The harness's own records, committed alongside whatever the agent
-  // changed. Deduped because a project is free to point both at the same
-  // place, and `git add` twice over one directory is harmless but reads
-  // like a mistake.
-  const recordDirsGitAdd = [...new Set([
-    answers.generationsDir || 'docs/generations',
-    answers.themesDir || 'docs/themes',
-  ])].map(shellQuote).join(' ');
+  // Everything the agent may change — edited in place or newly created. The
+  // harness's own records are not in this list on purpose: they go to the
+  // default branch via persist-records.mjs, on every outcome.
+  const editablePathsGitAdd = [...new Set([...(answers.allowedPaths || []), ...(answers.createOnlyPaths || [])])]
+    .map(shellQuote).join(' ');
 
   // The template places {{NOTIFY_STEPS}} after a literal 6-space prefix on
   // its own line, so this block's FIRST line must have no leading spaces
@@ -514,8 +507,7 @@ export function renderWorkflowTemplate(template, answers) {
   out = sub(out, '{{PROVIDERS_CSV}}', answers.providers.map((p) => p.name).join(','));
   out = sub(out, '{{SNAPSHOT_PATH}}', answers.snapshotPath || '.agent/model-snapshot.json');
   out = sub(out, '{{TEST_COMMAND_LINES}}', testCommandLines);
-  out = sub(out, '{{ALLOWED_PATHS_GIT_ADD}}', allowedPathsGitAdd);
-  out = sub(out, '{{RECORD_DIRS_GIT_ADD}}', recordDirsGitAdd);
+  out = sub(out, '{{EDITABLE_PATHS_GIT_ADD}}', editablePathsGitAdd);
   out = sub(out, '{{THEMES_CADENCE}}', String(Number.isFinite(answers.themesCadence) ? answers.themesCadence : 10));
   out = sub(out, '{{JS_YAML_VERSION}}', JS_YAML_VERSION);
   out = sub(out, '{{GENERATIONS_DIR}}', shellQuote(answers.generationsDir || 'docs/generations'));

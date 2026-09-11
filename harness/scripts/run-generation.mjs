@@ -16,7 +16,11 @@
  *   SUGGEST_MODEL / SUGGEST_PROVIDER   a single fallback pair — matches
  *     check-model-releases.mjs's own output shape, so this script's input
  *     is that script's output, unchanged.
- *   GEN_NUMBER       e.g. "001". Defaults to "001" for a manual/local run.
+ *   GEN_NUMBER       e.g. "007", as claimed by next-generation.mjs. Unset,
+ *     a manual run takes the next free number. An existing record for the
+ *     number is never overwritten (ALLOW_RECORD_OVERWRITE=true to force).
+ *   RUN_ID / RUN_URL  Which run this is, recorded in attempts.json. Derived
+ *     from GITHUB_RUN_ID/GITHUB_RUN_ATTEMPT when unset (generation-id.mjs).
  *
  * Everything else is read from project-adapter.yml, with environment
  * overrides available for the same fields the workflow already sets
@@ -28,6 +32,8 @@
 import fs from 'fs';
 import os from 'node:os';
 import path from 'path';
+import { execFileSync } from 'node:child_process';
+import { nextGenerationNumber, runIdentity } from '../lib/generation-id.mjs';
 import '../providers/index.mjs';
 import { setOutput, oneLine } from '../lib/gh-output.mjs';
 import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig, goalConfig, visualCaptureConfig, snapshotPath as adapterSnapshotPath } from '../lib/adapter.mjs';
@@ -64,8 +70,33 @@ if (!adapter) {
 }
 console.error(`Using ${adapterPath}`);
 
-const genNumber = process.env.GEN_NUMBER || '001';
+// The number comes from the workflow's numbering step (or rehearse.mjs),
+// which has already claimed it. A manual run with none set takes the next
+// free one rather than defaulting to "001", which is how a hand-run used to
+// overwrite the first generation's record.
+const genNumber = process.env.GEN_NUMBER || (() => {
+  try {
+    return nextGenerationNumber((...a) => execFileSync('git', a, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(), {
+      generationsDir: contextConfig(adapter).generationsDir || 'docs/generations',
+    });
+  } catch {
+    return '001';
+  }
+})();
 const genLabel = `Generation #${genNumber}`;
+const run = runIdentity();
+
+// A generation's record is written once. Finding one already there means
+// two runs were handed the same number, and the second would silently
+// replace the first's history — so stop, before anything is spent.
+{
+  const existing = path.join(repoRoot, contextConfig(adapter).generationsDir || 'docs/generations', `gen-${genNumber}`, 'attempts.json');
+  if (fs.existsSync(existing) && process.env.ALLOW_RECORD_OVERWRITE !== 'true') {
+    console.error(`Generation ${genNumber} already has a record at ${path.relative(repoRoot, existing)}. Refusing to overwrite it — take the next number (unset GEN_NUMBER), or set ALLOW_RECORD_OVERWRITE=true if you really mean to replace it.`);
+    setOutput('has-changes', 'false');
+    process.exit(1);
+  }
+}
 
 // --- suggestModels: same shape check-model-releases.mjs emits ---
 const suggestModels = (() => {
@@ -317,6 +348,7 @@ try {
       campaign,
       seatPromotion,
       goal,
+      run,
     },
     {
       log: (msg) => console.error(msg),

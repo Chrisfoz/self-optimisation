@@ -621,7 +621,7 @@ Implement the proposal above using the required edit format.`,
  * since the next generation reads this back and can see which ideas
  * already died and why.
  */
-export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize, apiIssues = [], pullRequestUrl = null, spend = null, campaign = false, seatPromotion = null }) {
+export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize, apiIssues = [], pullRequestUrl = null, spend = null, campaign = false, seatPromotion = null, run = null }) {
   const dir = path.join(repoRoot, generationsDir, `gen-${genNumber}`);
   fs.mkdirSync(dir, { recursive: true });
   const relative = `${generationsDir}/gen-${genNumber}/attempts.json`;
@@ -640,6 +640,11 @@ export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generation
         // Which harness wrote this record — provenance for a vendored copy
         // that has no package manifest of its own. See harness/lib/version.mjs.
         harnessVersion: harnessVersion(),
+        // Which run wrote this — the workflow run id plus attempt, or a
+        // local rehearsal id (harness/lib/generation-id.mjs). The number
+        // says where this sits in the sequence; this says which execution
+        // it was, so a re-run is never mistaken for the original.
+        run: run ?? null,
         outcome,
         scope: scope?.scope ?? null,
         scopeReason: scope?.reason ?? null,
@@ -1036,6 +1041,7 @@ export async function runGeneration(config, deps = {}) {
     campaign = false,
     seatPromotion = null,
     goal = null,
+    run = null,
   } = config;
 
   const rawCall = deps.call ?? callModelWithHeadroom;
@@ -1110,7 +1116,7 @@ export async function runGeneration(config, deps = {}) {
       const detail = `projected ${projected.estimatedTokens.toLocaleString()} input tokens across ${asking.length} model(s) exceeds budget.max_generation_tokens (${maxGenerationTokens.toLocaleString()}); nothing was called`;
       log(`💸 Over budget before the fan-out — ${detail}`);
       const recordPath = writeAttemptRecord({
-        repoRoot, generationsDir, genNumber, campaign, seatPromotion,
+        repoRoot, generationsDir, genNumber, campaign, seatPromotion, run,
         outcome: 'over-budget',
         suggestResult: null,
         proposal: null,
@@ -1138,7 +1144,7 @@ export async function runGeneration(config, deps = {}) {
 
   if (proposals.length === 0) {
     const recordPath = writeAttemptRecord({
-      repoRoot, generationsDir, genNumber, campaign, seatPromotion,
+      repoRoot, generationsDir, genNumber, campaign, seatPromotion, run,
       outcome: 'no-proposal',
       suggestResult: null,
       proposal: null,
@@ -1355,7 +1361,7 @@ export async function runGeneration(config, deps = {}) {
       });
 
       const attemptRecordPath = writeAttemptRecord({
-        repoRoot, generationsDir, genNumber, campaign, seatPromotion,
+        repoRoot, generationsDir, genNumber, campaign, seatPromotion, run,
         outcome: 'approved', suggestResult, proposal, attempts: attemptLog,
         fanOut, implementedBy, implementModel, scope, escalations: escalationRound,
         apiIssues: summarizeApiIssues(failures),
@@ -1397,7 +1403,7 @@ export async function runGeneration(config, deps = {}) {
     // failed run.
     restoreTree();
     const attemptRecordPath = writeAttemptRecord({
-      repoRoot, generationsDir, genNumber, campaign, seatPromotion,
+      repoRoot, generationsDir, genNumber, campaign, seatPromotion, run,
       outcome: 'abandoned', suggestResult, proposal, attempts: attemptLog,
       fanOut, implementedBy: null, implementModel, scope, escalations: escalationRound,
       apiIssues: summarizeApiIssues(failures),
@@ -1432,7 +1438,7 @@ export async function runGeneration(config, deps = {}) {
     let restoreError = null;
     try { restoreTree(); } catch (e) { restoreError = e; }
     const attemptRecordPath = writeAttemptRecord({
-      repoRoot, generationsDir, genNumber, campaign, seatPromotion,
+      repoRoot, generationsDir, genNumber, campaign, seatPromotion, run,
       outcome: 'crashed',
       suggestResult: crashState.suggestResult,
       proposal: crashState.proposal,
