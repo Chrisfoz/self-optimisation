@@ -578,12 +578,15 @@ self_optimisation/
 │                                     # pass, 4 of its 10 components built, the rest gated on A'
 ├── console/                         # a proposed browser-based install flow — the UI
 │                                     # (about/mockup/privacy.html, DESIGN.md) is design
-│                                     # and wireframe only, not built; its Supabase schema
-│                                     # (console/supabase/migrations/) is BUILT and live
-│                                     # against a real project, ahead of the UI it backs
+│                                     # and wireframe only, not built; server.mjs, the one
+│                                     # service that hosts it (`npm start`, railway.json),
+│                                     # is BUILT and serves those pages; its Supabase schema
+│                                     # (console/supabase/migrations/) is BUILT and live,
+│                                     # but optional — DESIGN.md §11
 ├── tests/                           # tests for the harness's OWN code (see above)
 │   ├── lib/                         # one file per harness/lib/ module
 │   ├── scripts/                     # the CLIs, driven as real child processes
+│   ├── console/                     # the console's server, over real HTTP
 │   └── e2e/                         # the whole chain, real git, real test runs
 ├── learning/                        # principles, blueprint, failure modes,
 │                                     # starter kit, diagrams — ported from the
