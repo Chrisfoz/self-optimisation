@@ -135,6 +135,44 @@ test('extractStandardTestNames: matches test/it/describe, replaces template inte
   assert.deepEqual(names, ['a suite', 'does the thing', 'handles N items']);
 });
 
+test('extractStandardTestNames: reads the conventions the first real campaigns used — a check() helper, and pytest', () => {
+  // Germ Fighter's suite (a check() helper) and the ICD mapper's (pytest):
+  // with the old test/it/describe-only extractor, both prompts silently lost
+  // their whole "frozen test invariants" section.
+  const game = `
+    function check(name, ok, detail) {}
+    check('three lives', s.lives === 3, \`lives=\${s.lives}\`);
+    check('a bullet kills one germ', germs.length === 0);
+  `;
+  assert.deepEqual(extractStandardTestNames(game), ['three lives', 'a bullet kills one germ']);
+  const py = `
+def test_every_code_is_read(mapper):
+    assert True
+
+async def test_async_path():
+    pass
+
+def helper_not_a_test():
+    pass
+`;
+  assert.deepEqual(extractStandardTestNames(py), ['test_every_code_is_read', 'test_async_path']);
+});
+
+test('extractStandardTestNames: Go, Rust, JUnit, xUnit and RSpec, in file order', () => {
+  const source = `
+func TestParsesHeader(t *testing.T) {}
+#[test]
+fn rejects_empty_input() {}
+@Test
+public void keepsOrder() {}
+[Fact]
+public void RoundTrips() {}
+it "survives a blank line" do
+end
+`;
+  assert.deepEqual(extractStandardTestNames(source), ['TestParsesHeader', 'rejects_empty_input', 'keepsOrder', 'RoundTrips', 'survives a blank line']);
+});
+
 test('extractCheckCallNames: matches check(name, ...) and check(game, name, ...)', () => {
   const source = `
     check('maze', 'solvable', () => {});

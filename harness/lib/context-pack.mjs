@@ -511,19 +511,45 @@ export function buildGenerationHistory({ repoRoot = process.cwd(), generationsDi
 // ---------------------------------------------------------------------------
 
 /**
- * Default name extractor: matches `test('name', ...)`, `it('name', ...)`
- * and `describe('name', ...)` — the shape Node's own built-in test runner,
- * Jest, Mocha and Jasmine all share. Deliberately a regex rather than a
- * real parse: this is an index for a prompt, and a missed line costs
- * nothing.
+ * Default name extractor. Deliberately a set of regexes rather than a real
+ * parse: this is an index for a prompt, and a missed line costs nothing —
+ * but a whole convention missed costs the entire section, silently.
+ *
+ * It used to match only `test('…')` / `it('…')` / `describe('…')`, the
+ * shape Node's runner, Jest, Mocha and Jasmine share. The first two real
+ * campaigns this harness ran were a game whose suite calls a `check('…')`
+ * helper and a Python tool tested with pytest — and for both, the "frozen
+ * test invariants" section was dropped from every prompt, so no model was
+ * told what the tests protect. It now also reads, in file order:
+ *   - a `check('name', …)` / `check('game', 'name', …)` helper (the
+ *     reference implementation's convention; extractCheckCallNames())
+ *   - RSpec/Mocha-style `it "…" do` without parentheses
+ *   - Python `def test_…(` (pytest, unittest)
+ *   - Go `func TestX(`
+ *   - Rust `#[test] fn x(`
+ *   - JUnit/Kotlin `@Test … void|fun x(`, and xUnit/NUnit/MSTest
+ *     `[Fact]`/`[Test]`/`[TestMethod]` … `void X(`
  */
 export function extractStandardTestNames(source) {
-  const CALL = /\b(?:test|it|describe)\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g;
-  const names = [];
-  for (const match of source.matchAll(CALL)) {
-    names.push(match[2].replace(/\$\{[^}]*\}/g, 'N'));
+  const PATTERNS = [
+    { re: /\b(?:test|it|describe)(?:\.(?:only|skip|todo))?\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g, group: 2 },
+    { re: /^[ \t]*(?:it|describe|context|specify)[ \t]+(['"])((?:\\.|(?!\1)[^\\])*)\1[ \t]+do\b/gm, group: 2 },
+    { re: /\bcheck\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1\s*,\s*(?:(['"`])((?:\\.|(?!\3)[^\\])*)\3\s*,)?/g, group: (m) => m[4] ?? m[2] },
+    { re: /^[ \t]*(?:async[ \t]+)?def[ \t]+(test_\w+)[ \t]*\(/gm, group: 1 },
+    { re: /^[ \t]*func[ \t]+(Test\w+)[ \t]*\(/gm, group: 1 },
+    { re: /#\[(?:tokio::)?test\][\s\S]{0,200}?\bfn[ \t]+(\w+)[ \t]*\(/g, group: 1 },
+    { re: /@Test\b[\s\S]{0,200}?\b(?:void|fun)[ \t]+(\w+)[ \t]*\(/g, group: 1 },
+    { re: /\[(?:Fact|Theory|Test|TestMethod)\][\s\S]{0,200}?\bvoid[ \t]+(\w+)[ \t]*\(/g, group: 1 },
+  ];
+  const found = [];
+  for (const { re, group } of PATTERNS) {
+    for (const match of source.matchAll(re)) {
+      const name = typeof group === 'function' ? group(match) : match[group];
+      if (name) found.push({ at: match.index, name: name.replace(/\$\{[^}]*\}/g, 'N') });
+    }
   }
-  return names;
+  found.sort((a, b) => a.at - b.at);
+  return found.map((f) => f.name);
 }
 
 /**
