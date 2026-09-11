@@ -663,19 +663,54 @@ test('runGeneration: the running cap stops the refine loop with a budget-exhaust
   let implementCalls = 0;
   const call = async ({ model }) => {
     if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', model, sentImages: 0, usage: { input_tokens: 1000, output_tokens: 500 } };
-    if (model === 'implement-model') { implementCalls += 1; return { text: VALID_IMPLEMENTATION, truncated: false, model, usage: { input_tokens: 100, output_tokens: 100 } }; }
-    if (model === 'review-model') return { text: 'VERDICT: REJECTED\n\nREASON: no.\n\nREQUIRED FIXES:\n- x', model, usage: { input_tokens: 50, output_tokens: 10 } };
+    if (model === 'implement-model') { implementCalls += 1; return { text: VALID_IMPLEMENTATION, truncated: false, model, usage: { input_tokens: 20000, output_tokens: 5000 } }; }
+    if (model === 'review-model') return { text: 'VERDICT: REJECTED\n\nREASON: no.\n\nREQUIRED FIXES:\n- x', model, usage: { input_tokens: 2500, output_tokens: 500 } };
     throw new Error('unexpected call: ' + model);
   };
 
-  // 1500 after suggest, 1760 after the first implement+review: the second
-  // attempt must not start.
-  const result = await runGeneration(baseConfig(repoRoot, { budget: { maxGenerationTokens: 1600 } }), { call });
+  // Every request reserves its estimated input plus its WHOLE output
+  // allowance before it is sent (32,000 for a suggestion, 16,000 for an
+  // implementation or a review). Under a 45,000 cap: the suggestion fits,
+  // then 1,500 is spent; the first implementation fits, then 26,500; the
+  // review fits (26,500 + 16,000 + a small prompt), then 29,500. The second
+  // implementation would need 29,500 + 16,000 + its prompt — over the cap,
+  // so it is refused before it is sent.
+  const result = await runGeneration(baseConfig(repoRoot, { budget: { maxGenerationTokens: 45000 } }), { call });
   assert.equal(result.outcome, 'abandoned');
   assert.equal(implementCalls, 1);
   const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
   assert.deepEqual(record.attempts.map((a) => a.outcome), ['rejected-by-review', 'budget-exhausted']);
+  assert.match(record.attempts[1].detail, /in flight|reserved/);
+  assert.equal(record.spend.refusedRequests, 1);
+  assert.ok(record.spend.totalTokens <= 45000, 'never over the cap');
   assert.equal(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), 'original content', 'tree restored');
+});
+
+test('runGeneration: a fan-out reserves per model as it starts — the model the cap cannot hold is refused, the rest run', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  const asked = [];
+  const call = async ({ model }) => {
+    if (model.startsWith('suggest')) { asked.push(model); return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', model, sentImages: 0, usage: { input_tokens: 1000, output_tokens: 500 } }; }
+    if (model === 'rank-model') return { text: 'CHOICE: 1\nREASON: fine', model, usage: { input_tokens: 100, output_tokens: 10 } };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false, model, usage: { input_tokens: 500, output_tokens: 100 } };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.\n\nEND OF REVIEW', model, usage: { input_tokens: 500, output_tokens: 50 } };
+    throw new Error('unexpected call: ' + model);
+  };
+
+  // Each suggestion reserves ~32,000 of output allowance plus its prompt:
+  // two fit under 70,000, a third does not — even though nothing has been
+  // SPENT when all three start.
+  const result = await runGeneration(baseConfig(repoRoot, {
+    suggestModels: ['suggest-a', 'suggest-b', 'suggest-c'].map((id) => ({ id, provider: 'anthropic' })),
+    budget: { maxGenerationTokens: 70000 },
+  }), { call });
+  assert.deepEqual(asked, ['suggest-a', 'suggest-b']);
+  assert.equal(result.outcome, 'approved');
+  assert.match(result.fanOut.failed.join(' '), /suggest-c: .*max_generation_tokens/);
+  assert.equal(result.spend.refusedRequests, 1);
 });
 
 test('runGeneration: with no budget configured, nothing is refused and spend is still recorded', async (t) => {

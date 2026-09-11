@@ -26,6 +26,7 @@
 
 import https from 'https';
 import { ApiError, classifyStatusCode } from './api-errors.mjs';
+import { estimateRequestTokens } from './spend.mjs';
 
 // ---------------------------------------------------------------------------
 // Provider registry
@@ -222,6 +223,18 @@ function postJson({ hostname, path, headers, body, timeoutMs }) {
  * @param {Array}  [opts.images]    Inline images as `{mime, data}` where data
  *                                  is base64. Dropped automatically if the
  *                                  model turns out to have no vision support.
+ * @param {{admit: Function, settle: Function}} [opts.meter]  Spend meter
+ *                                  (harness/lib/spend.mjs's ledger.meterFor()).
+ *                                  Every HTTP request this makes is admitted
+ *                                  before it is sent and settled after — the
+ *                                  text-only and quirk retries included, each
+ *                                  of which is a separate billable request.
+ *                                  Absent: nothing is metered.
+ * @param {object} [opts.meterTicket] A ticket the caller already admitted;
+ *                                  used for the first request instead of
+ *                                  admitting a second one for it.
+ * @param {Function} [opts.transport] Defaults to the real HTTPS POST. Tests
+ *                                  substitute a fake.
  * @returns {Promise<{text, stopReason, truncated, provider, model, usage, blockTypes, sentImages}>}
  */
 export async function callModel({
@@ -232,10 +245,20 @@ export async function callModel({
   provider = null,
   timeoutMs = 600000,
   images = [],
+  meter = null,
+  meterTicket = null,
+  transport = postJson,
 }) {
-  const resolved = provider || resolveProvider(model);
+  let resolved;
+  try {
+    resolved = provider || resolveProvider(model);
+  } catch (err) {
+    meter?.release?.(meterTicket);
+    throw err;
+  }
   const config = PROVIDERS[resolved];
   if (!config) {
+    meter?.release?.(meterTicket);
     throw new Error(
       `Unknown provider "${resolved}". Import the provider file that registers it before calling callModel().`
     );
@@ -243,6 +266,9 @@ export async function callModel({
 
   const key = process.env[config.envKey];
   if (!key) {
+    // Nothing was sent, so nothing was spent: give the reservation back
+    // rather than letting a caller's fallback record an estimate for it.
+    meter?.release?.(meterTicket);
     throw new ApiError(
       `${config.envKey} is not set, but model "${model}" is served by ${resolved}. ` +
       `Add that secret wherever this runs so the agent can run on this lab's model.`,
@@ -259,7 +285,32 @@ export async function callModel({
   };
 
   let sentImages = images.length;
-  let { statusCode, raw } = await postJson(request);
+
+  // One billable request: admitted before it goes (the caller's ticket for
+  // the first, a fresh reservation for any retry), settled after. A
+  // non-200 is settled here as a failure; a 200 stays open until its usage
+  // has been parsed below.
+  let pendingTicket = null;
+  const send = async () => {
+    const ticket = meterTicket ?? meter?.admit({
+      model, provider: resolved,
+      inputTokens: estimateRequestTokens({ system, user, images: sentImages ? images : [] }),
+      outputTokens: maxTokens,
+    }) ?? null;
+    meterTicket = null;
+    let response;
+    try {
+      response = await transport(request);
+    } catch (err) {
+      meter?.settle(ticket, { failed: true });
+      throw err;
+    }
+    if (response.statusCode !== 200) meter?.settle(ticket, { failed: true, statusCode: response.statusCode });
+    else pendingTicket = ticket;
+    return response;
+  };
+
+  let { statusCode, raw } = await send();
 
   // The suggesting seat has to run on models that did not exist when this
   // was written, so it cannot know in advance whether a given model accepts
@@ -271,7 +322,7 @@ export async function callModel({
     );
     sentImages = 0;
     request.body = config.body({ model, system, user, maxTokens, images: [] });
-    ({ statusCode, raw } = await postJson(request));
+    ({ statusCode, raw } = await send());
   }
 
   // A provider-declared quirk retry — e.g. an older model in a family that
@@ -282,7 +333,7 @@ export async function callModel({
     const adjusted = config.retryWithAdjustedBody({ statusCode, raw, body: request.body });
     if (adjusted) {
       request.body = adjusted;
-      ({ statusCode, raw } = await postJson(request));
+      ({ statusCode, raw } = await send());
     }
   }
 
@@ -297,11 +348,15 @@ export async function callModel({
   try {
     data = JSON.parse(raw);
   } catch (err) {
+    meter?.settle(pendingTicket, { failed: true, statusCode });
     throw new Error(`${resolved} returned unparseable JSON: ${err.message}`);
   }
 
   const parsed = config.parse(data);
   const truncated = config.truncationReasons.has(parsed.stopReason);
+  // Settled before any throw below: a response that spent its whole budget
+  // on hidden reasoning and returned no text was still billed for it.
+  meter?.settle(pendingTicket, { usage: parsed.usage, text: parsed.text ?? '', model, provider: resolved });
 
   if (!parsed.text) {
     const error = new Error(
@@ -355,17 +410,34 @@ export async function callModel({
 export async function callModelWithHeadroom(opts, { maxRetries = 1, factor = 2, call = callModel } = {}) {
   let maxTokens = opts.maxTokens ?? 16000;
   let retries = 0;
+  const meter = opts.meter ?? null;
+  let firstTicket = opts.meterTicket ?? null;
 
   /* Two shapes of "ran out of room" reach us, and both get the same
      treatment: a short result flagged `truncated`, and a thrown error
      tagged `truncatedWithoutText` for a response that spent its whole
      budget on hidden reasoning. Anything else propagates immediately — a
      404, a bad key or an unparseable response is not fixed by trying again
-     with a bigger number. */
+     with a bigger number.
+
+     Every attempt is its own billable call, and is metered as one: the
+     first uses the ticket the caller admitted, and each retry reserves its
+     own, larger allowance BEFORE it is sent. The settle after each attempt
+     is a no-op when the call below already settled with real usage, and is
+     the record when it did not — which is how a retry stopped being
+     invisible to the ledger (two 200-token calls used to record as 200). */
   const attempt = async () => {
+    const ticket = firstTicket ?? meter?.admit({
+      model: opts.model, provider: opts.provider ?? null,
+      inputTokens: estimateRequestTokens(opts), outputTokens: maxTokens,
+    }) ?? null;
+    firstTicket = null;
     try {
-      return await call({ ...opts, maxTokens });
+      const result = await call({ ...opts, maxTokens, meterTicket: ticket });
+      meter?.settle(ticket, { usage: result?.usage, text: result?.text, model: result?.model ?? opts.model, provider: result?.provider ?? opts.provider ?? null });
+      return result;
     } catch (err) {
+      meter?.settle(ticket, { failed: true });
       if (!err?.truncatedWithoutText) throw err;
       if (retries >= maxRetries) {
         err.message +=
@@ -386,8 +458,19 @@ export async function callModelWithHeadroom(opts, { maxRetries = 1, factor = 2, 
       `   ⚠️  ${opts.model} ${result.fromError ? 'produced no text' : 'truncated'} at ${maxTokens} tokens ` +
       `(${result.stopReason}); retrying with ${next} tokens of headroom (attempt ${retries}/${maxRetries}).`
     );
+    const previous = result;
     maxTokens = next;
-    result = await attempt();
+    try {
+      result = await attempt();
+    } catch (err) {
+      // The cap cannot hold the retry's larger allowance. A truncated answer
+      // with text is handed back for the caller to salvage or reject, as it
+      // would be after a retry that also truncated; one with no text at all
+      // has nothing to hand back, so the refusal is the error.
+      if (err?.kind !== 'budget' || previous.fromError) throw err;
+      console.error(`   💸 ${opts.model}: no headroom retry — ${err.message}`);
+      return { ...previous, budgetStopped: true };
+    }
   }
 
   return result;

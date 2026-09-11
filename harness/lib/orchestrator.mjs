@@ -475,12 +475,22 @@ REASON: <one or two sentences on why it beats the others>`;
 
   log(`⚖️  Stage 1b — ranking ${proposals.length} proposals with ${rankModel}`);
 
-  const result = await call({
-    model: rankModel,
-    system,
-    user: `# Repository map\n${manifest}\n${section('Frozen test invariants', testIndex)}\n# The proposals\n\n${blocks}\n\nWhich single proposal should be implemented?`,
-    maxTokens: 2000,
-  });
+  let result;
+  try {
+    result = await call({
+      model: rankModel,
+      system,
+      user: `# Repository map\n${manifest}\n${section('Frozen test invariants', testIndex)}\n# The proposals\n\n${blocks}\n\nWhich single proposal should be implemented?`,
+      maxTokens: 2000,
+    });
+  } catch (err) {
+    // Ranking fails safe, and a ranking the budget refused is no different
+    // from one that came back unparseable. Any other error keeps its old
+    // behaviour and propagates.
+    if (err?.kind !== 'budget') throw err;
+    log(`   💸 Ranking refused by the budget cap; falling back to the first model.\n`);
+    return { index: 0, reason: 'ranking refused by the budget cap — fell back to the first model' };
+  }
 
   const choice = Number(result.text.match(/^CHOICE:\s*(\d+)/im)?.[1]);
   const reason = oneLine(result.text.match(/^REASON:\s*(.+)$/im)?.[1] ?? '', 300);
@@ -1034,9 +1044,13 @@ export async function runGeneration(config, deps = {}) {
   // Every model call this generation makes goes through the ledger, tagged
   // with the stage that made it, so the attempt record can say what the
   // run cost and the cap below has something real to compare against.
-  const spend = createSpendLedger();
-  const callFor = (site) => withSpend(rawCall, spend, site);
+  // The ledger holds the cap itself: every request is admitted against it
+  // BEFORE it is sent, reserving its full output allowance, so parallel
+  // suggestions and headroom retries are bounded too — not only the gaps
+  // between attempts.
   const maxGenerationTokens = Number.isFinite(budget?.maxGenerationTokens) && budget.maxGenerationTokens > 0 ? budget.maxGenerationTokens : null;
+  const spend = createSpendLedger({ maxTokens: maxGenerationTokens });
+  const callFor = (site) => withSpend(rawCall, spend, site);
   const budgetExhausted = () => maxGenerationTokens !== null && spend.total() > maxGenerationTokens;
 
   if (!agentBrief || !agentBrief.trim()) throw new Error('runGeneration requires a non-empty agentBrief.');
@@ -1209,6 +1223,16 @@ export async function runGeneration(config, deps = {}) {
     let rejectedRender = null;
     const attemptLog = crashState.attempts;
 
+    // A call the cap refused (spend.mjs's admit()) ends the attempt loop the
+    // same way the between-attempts check does: recorded, and the run
+    // abandoned — not a crash, because nothing went wrong except the money
+    // running out. Anything else is re-thrown to the crash handler.
+    const stopForBudget = (err, attempt, by) => {
+      if (err?.kind !== 'budget') throw err;
+      log(`💸 Attempt ${attempt} (${by}) stopped: ${err.message}`);
+      attemptLog.push({ attempt, by, outcome: 'budget-exhausted', detail: oneLine(err.message, 400) });
+    };
+
     // Who implements, in order. When the suggesting model wrote its own
     // edits they are tried first and do not consume one of the pinned
     // implementer's attempts.
@@ -1239,12 +1263,18 @@ export async function runGeneration(config, deps = {}) {
         log(`✍️  Stage 2 — edits written by ${step.by} itself`);
         parsed = winner.directEdits;
       } else {
-        const implemented = await implement(
-          { ...promptConfig, implementModel, implementationNotes },
-          proposal,
-          { applyErrors, reviewFeedback, rejectedRender, attempt, author: `${winner.id} (${winner.provider})` },
-          { call: callFor('implement'), log, maxAttempts }
-        );
+        let implemented;
+        try {
+          implemented = await implement(
+            { ...promptConfig, implementModel, implementationNotes },
+            proposal,
+            { applyErrors, reviewFeedback, rejectedRender, attempt, author: `${winner.id} (${winner.provider})` },
+            { call: callFor('implement'), log, maxAttempts }
+          );
+        } catch (err) {
+          stopForBudget(err, attempt, step.by);
+          break;
+        }
         parsed = parseResponse(implemented.text, ['PILLAR']);
       }
       crashState.created = parsed.creates.map((c) => c.file);
@@ -1276,16 +1306,25 @@ export async function runGeneration(config, deps = {}) {
         call: callFor('review'),
       });
 
-      let review = await askReviewer();
-      // A review that could not be read as one complete verdict (truncated,
-      // contradictory, malformed) is a rejection — but a rejection of the
-      // REVIEW, not of the change, and handing the implementer "try again"
-      // with nothing to fix wastes an attempt on a formatting slip. So the
-      // same diff is shown to the reviewer once more. Bounded: one re-ask
-      // per attempt, and the reservation in spend.mjs still applies.
-      if (review.problem) {
-        log(`⚠️  Attempt ${attempt} (${step.by}): the review could not be trusted (${review.problem}); asking the reviewer once more`);
+      let review;
+      try {
         review = await askReviewer();
+        // A review that could not be read as one complete verdict
+        // (truncated, contradictory, malformed) is a rejection — but a
+        // rejection of the REVIEW, not of the change, and handing the
+        // implementer "try again" with nothing to fix wastes an attempt on a
+        // formatting slip. So the same diff is shown to the reviewer once
+        // more. Bounded: one re-ask per attempt, and the reservation in
+        // spend.mjs still applies.
+        if (review.problem) {
+          log(`⚠️  Attempt ${attempt} (${step.by}): the review could not be trusted (${review.problem}); asking the reviewer once more`);
+          review = await askReviewer();
+        }
+      } catch (err) {
+        // Refused by the cap with edits already applied: they are not
+        // reviewed, so they do not ship — the abandoned path restores them.
+        stopForBudget(err, attempt, step.by);
+        break;
       }
 
       if (!review.approved) {
