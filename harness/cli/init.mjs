@@ -292,6 +292,13 @@ async function main() {
       const fromEmail = await ask(rl, '  From email');
       const fromName = await ask(rl, '  From name', { default: `${projectId}'s Self-Improvement` });
       notify = { provider: 'sendgrid', envKey: 'SENDGRID_API_KEY', recipient, recipientName, fromEmail, fromName };
+      // The digest is written by a model (notify.digest_model, default
+      // claude-opus-5). Without its lab's key wired into the two notify
+      // steps, every email quietly fell back to the terse template.
+      try {
+        const name = resolveProvider('claude-opus-5');
+        roleProviders.push({ name, envKey: getProvider(name).envKey });
+      } catch { /* the terse fallback still sends */ }
     }
 
     const agentBriefPath = await ask(rl, 'Agent brief path', { default: '.claude/agents/improve.md' });

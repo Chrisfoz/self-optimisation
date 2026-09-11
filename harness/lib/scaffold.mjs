@@ -434,7 +434,13 @@ export function renderWorkflowTemplate(template, answers) {
   // to be exact rather than uniformly shiftable.
   let notifySteps = '';
   if (answers.notify) {
-    const notifyEnvLine = `${answers.notify.envKey}: \${{ secrets.${answers.notify.envKey} }}`;
+    // The notify key, then every lab key: both notify scripts ask a model
+    // (notify.digest_model) to write the email, and with no key for it every
+    // digest silently fell back to the terse template.
+    const notifyEnvLine = [
+      `${answers.notify.envKey}: \${{ secrets.${answers.notify.envKey} }}`,
+      ...requiredProviders(answers).map((p) => `          ${p.envKey}: \${{ secrets.${p.envKey} }}`),
+    ].join('\n');
     // Deliberately NOT gated on a generation number existing. The cycles
     // with no generation are exactly the ones whose silence is hardest to
     // read: a crashed release check, a lab shipping something nothing could

@@ -198,10 +198,16 @@ jobs:
           git commit -m "Record pull request outcomes and regenerate the report" || echo "Nothing to record"
           git push
 
+      # The probe makes a real, one-word call to every candidate, so it needs
+      # the same keys the release check does. Without them every candidate
+      # reads as unreachable and the cycle is skipped before it starts —
+      # which is exactly what this step did until it was given them.
       - name: Probe reachability, then read the survivors
         id: probe
         if: steps.check.outputs.has-new == 'true' || steps.campaign.outputs.has-new == 'true'
         shell: bash
+        env:
+{{PROVIDER_ENV_LINES}}
         run: |
           node harness/scripts/probe-models.mjs "$RUNNER_TEMP/release-check.json"
           echo "has-new=$(jq -r '.hasNewReleases' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
@@ -400,9 +406,18 @@ jobs:
           PULL_REQUEST: ${{ steps.pr.outcome }}
           PROMOTE: ${{ steps.promote.outcome }}
           VERIFY: ${{ steps.verify.outcome }}
+        # `add` returns 0 explicitly when it skips. GitHub runs this under
+        # `bash -eo pipefail`; the old one-liner `[ -n "$2" ] && ...` returned
+        # 1 for the absent path, and -e killed the step on it — on EVERY run,
+        # in both merge models, since one of the two paths is always absent.
+        # tests/scripts/workflow-shell.test.mjs runs this block under those
+        # exact flags.
         run: |
           gates='[]'
-          add() { [ -n "$2" ] && gates=$(echo "$gates" | jq --arg n "$1" --arg r "$2" '. + [{name:$n, result:$r}]'); }
+          add() {
+            if [ -z "$2" ]; then return 0; fi
+            gates=$(printf '%s' "$gates" | jq -c --arg n "$1" --arg r "$2" '. + [{name:$n, result:$r}]')
+          }
           add preflight "$PREFLIGHT"
           add review "$REVIEW"
           add guard "$GUARD"
@@ -412,6 +427,6 @@ jobs:
           add verify "$VERIFY"
           echo "json=$gates" >> "$GITHUB_OUTPUT"
           merged=false
-          [ "$PROMOTE" = "success" ] && merged=true
+          if [ "$PROMOTE" = "success" ]; then merged=true; fi
           echo "merged=$merged" >> "$GITHUB_OUTPUT"
       {{NOTIFY_STEPS}}
