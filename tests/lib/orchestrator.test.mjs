@@ -816,3 +816,74 @@ test('runGeneration: a review unreadable twice is a rejection, recorded as revie
   assert.equal(record.attempts[0].outcome, 'review-unparseable');
   assert.match(record.attempts[0].detail, /more than one verdict/);
 });
+
+// --- a crash mid-attempt puts the tree back --------------------------------------
+
+test('runGeneration: a reviewer API failure after edits were applied restores the tree before the crash is recorded', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  const withCreate = `${VALID_IMPLEMENTATION}
+
+<<<CREATE>>>
+FILE: tests/pause.test.js
+<<<CONTENT>>>
+test('pauses', () => {});
+<<<END>>>`;
+
+  let editedOnDiskAtReview = null;
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') return { text: withCreate, truncated: false };
+    if (model === 'review-model') {
+      editedOnDiskAtReview = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
+      const err = new Error('anthropic API error 529: overloaded');
+      err.kind = 'overloaded';
+      throw err;
+    }
+    throw new Error('unexpected call: ' + model);
+  };
+
+  let cleanupRegistered = false;
+  let cleanupReleased = false;
+  const config = baseConfig(repoRoot, {
+    allowlist: compileAllowlist({ allowedPaths: ['index.html'], createOnlyPaths: ['tests/**'] }),
+    createOnlyDescription: 'tests/**',
+  });
+  const err = await runGeneration(config, {
+    call,
+    onCleanup: () => { cleanupRegistered = true; return () => { cleanupReleased = true; }; },
+  }).then(() => null, (e) => e);
+
+  assert.ok(err, 'the crash is re-thrown');
+  assert.equal(editedOnDiskAtReview, 'original content with a pause button', 'the edits really were applied before the reviewer failed');
+  assert.equal(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), 'original content', 'edited file restored');
+  assert.equal(fs.existsSync(path.join(repoRoot, 'tests/pause.test.js')), false, 'created file removed');
+  assert.equal(err.treeRestored, true);
+  assert.ok(cleanupRegistered && cleanupReleased, 'the signal hook was offered and taken back');
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, err.attemptRecordPath), 'utf8'));
+  assert.equal(record.outcome, 'crashed');
+  assert.match(record.attempts.at(-1).detail, /overloaded/);
+});
+
+test('runGeneration: the cleanup handed to onCleanup restores mid-review, as a signal handler would', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  let restore = null;
+  let seenAfterRestore = null;
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
+    if (model === 'review-model') {
+      restore(); // what SIGTERM would do while the reviewer is thinking
+      seenAfterRestore = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
+      return { text: 'VERDICT: REJECTED\n\nREASON: no.' };
+    }
+    throw new Error('unexpected call: ' + model);
+  };
+  await runGeneration(baseConfig(repoRoot, { maxAttempts: 1 }), { call, onCleanup: (fn) => { restore = fn; return () => {}; } });
+  assert.equal(seenAfterRestore, 'original content');
+});

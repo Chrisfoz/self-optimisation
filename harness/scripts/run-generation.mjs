@@ -318,10 +318,32 @@ try {
       seatPromotion,
       goal,
     },
-    { log: (msg) => console.error(msg) }
+    {
+      log: (msg) => console.error(msg),
+      // A cancelled workflow run (GitHub sends SIGINT, then SIGTERM) or a
+      // Ctrl+C during a local rehearsal would otherwise leave half-reviewed
+      // edits in the tree. runGeneration hands over its restore function and
+      // takes the handlers back off when it finishes.
+      onCleanup: (restore) => {
+        const handler = (signal) => {
+          try {
+            restore();
+            console.error(`\n⚠️  ${signal} received — the working tree was restored to how this run found it.`);
+          } catch (e) {
+            console.error(`\n⚠️  ${signal} received — and the working tree could NOT be restored: ${e.message}`);
+          }
+          process.exit(130);
+        };
+        process.once('SIGINT', handler);
+        process.once('SIGTERM', handler);
+        return () => { process.off('SIGINT', handler); process.off('SIGTERM', handler); };
+      },
+    }
   );
 } catch (err) {
   console.error(`\n❌ ${err.message}`);
+  if (err.treeRestored === false) console.error('   ⚠️  The working tree could NOT be restored — inspect it before committing anything.');
+  else if (err.treeRestored) console.error('   The working tree was restored to how this run found it.');
   setOutput('has-changes', 'false');
   if (err.attemptRecordPath) setOutput('attempt-record', err.attemptRecordPath);
   process.exit(1);

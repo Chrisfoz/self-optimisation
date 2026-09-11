@@ -1165,7 +1165,23 @@ export async function runGeneration(config, deps = {}) {
   // below can throw or discard.
   const proposalFiles = writeFanOutProposals({ repoRoot, generationsDir, genNumber, proposals });
 
-  const crashState = { suggestResult: null, proposal: null, fanOut: null, attempts: [], by: null };
+  // `created` lives out here rather than in the attempt loop so the catch
+  // below can see it: a crash after edits were applied (a reviewer API
+  // error, a bug in writeProposal) used to leave those edits in the tree.
+  const crashState = { suggestResult: null, proposal: null, fanOut: null, attempts: [], by: null, created: [] };
+
+  // The one way back to the tree this run started from, whatever happens.
+  // Idempotent, so the catch, the normal paths and a signal handler can all
+  // call it without coordinating. Handed to deps.onCleanup so a CLI can run
+  // it on SIGINT/SIGTERM — a cancelled CI job or a Ctrl+C mid-review is a
+  // crash the catch never sees.
+  let restored = false;
+  const restoreTree = () => {
+    if (restored) return;
+    restored = true;
+    restoreSnapshot(repoRoot, pristine, crashState.created);
+  };
+  const releaseCleanup = deps.onCleanup?.(restoreTree) ?? (() => {});
 
   try {
     const ranking = await rankProposals({ projectDescription, manifest: context.manifest, testIndex: context.testIndex, proposals, rankModel, scope: scope.scope }, { call: callFor('rank'), log });
@@ -1191,7 +1207,6 @@ export async function runGeneration(config, deps = {}) {
     let applyErrors = null;
     let reviewFeedback = null;
     let rejectedRender = null;
-    let createdLastAttempt = [];
     const attemptLog = crashState.attempts;
 
     // Who implements, in order. When the suggesting model wrote its own
@@ -1216,7 +1231,8 @@ export async function runGeneration(config, deps = {}) {
         break;
       }
 
-      restoreSnapshot(repoRoot, pristine, createdLastAttempt);
+      restoreSnapshot(repoRoot, pristine, crashState.created);
+      crashState.created = [];
 
       let parsed;
       if (step.direct) {
@@ -1231,7 +1247,7 @@ export async function runGeneration(config, deps = {}) {
         );
         parsed = parseResponse(implemented.text, ['PILLAR']);
       }
-      createdLastAttempt = parsed.creates.map((c) => c.file);
+      crashState.created = parsed.creates.map((c) => c.file);
 
       const outcome = applyEdits(parsed.edits, { repoRoot, allowlist, creates: parsed.creates, createDescription: createOnlyDescription });
 
@@ -1340,7 +1356,7 @@ export async function runGeneration(config, deps = {}) {
     // Never approved. Leave the tree exactly as we found it, except for
     // the record of what was tried — that file is the whole value of a
     // failed run.
-    restoreSnapshot(repoRoot, pristine, createdLastAttempt);
+    restoreTree();
     const attemptRecordPath = writeAttemptRecord({
       repoRoot, generationsDir, genNumber, campaign, seatPromotion,
       outcome: 'abandoned', suggestResult, proposal, attempts: attemptLog,
@@ -1367,11 +1383,15 @@ export async function runGeneration(config, deps = {}) {
       spend: spend.summary(),
     };
   } catch (err) {
-    // A genuinely unexpected failure. Write down whatever state had
-    // accumulated before re-throwing, so the generation this run was
-    // supposed to be leaves a record instead of silently not existing —
-    // see this function's own doc comment for the incident this guards
-    // against.
+    // A genuinely unexpected failure. Put the tree back first — edits from
+    // an attempt that was mid-review are not a change anyone approved — and
+    // then write down whatever state had accumulated before re-throwing, so
+    // the generation this run was supposed to be leaves a record instead of
+    // silently not existing. See this function's own doc comment for the
+    // incident this guards against. A restore that itself fails must not
+    // hide the original error, so it is recorded beside it instead.
+    let restoreError = null;
+    try { restoreTree(); } catch (e) { restoreError = e; }
     const attemptRecordPath = writeAttemptRecord({
       repoRoot, generationsDir, genNumber, campaign, seatPromotion,
       outcome: 'crashed',
@@ -1381,7 +1401,7 @@ export async function runGeneration(config, deps = {}) {
         attempt: crashState.attempts.length + 1,
         by: crashState.by,
         outcome: 'crashed',
-        detail: oneLine(err?.message ?? String(err), 400),
+        detail: oneLine(`${err?.message ?? String(err)}${restoreError ? ` (and the working tree could NOT be restored: ${restoreError.message})` : ''}`, 400),
       }],
       fanOut: crashState.fanOut,
       implementedBy: null,
@@ -1404,6 +1424,9 @@ export async function runGeneration(config, deps = {}) {
     // without ever recording why.
     finishWorkOrder({ repoRoot, ledgerPath, genNumber, outcome: 'crashed' });
     err.attemptRecordPath = attemptRecordPath;
+    err.treeRestored = !restoreError;
     throw err;
+  } finally {
+    releaseCleanup();
   }
 }
