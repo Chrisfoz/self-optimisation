@@ -1247,7 +1247,7 @@ export async function runGeneration(config, deps = {}) {
       log(`   applied ${outcome.applied.length} edit(s) to ${outcome.filesChanged.join(', ')}`);
       log(`🔎 Stage 3 — review`);
 
-      const review = await reviewChanges({
+      const askReviewer = () => reviewChanges({
         reviewerBrief,
         genLabel,
         diff: renderForReview(parsed),
@@ -1260,10 +1260,29 @@ export async function runGeneration(config, deps = {}) {
         call: callFor('review'),
       });
 
+      let review = await askReviewer();
+      // A review that could not be read as one complete verdict (truncated,
+      // contradictory, malformed) is a rejection — but a rejection of the
+      // REVIEW, not of the change, and handing the implementer "try again"
+      // with nothing to fix wastes an attempt on a formatting slip. So the
+      // same diff is shown to the reviewer once more. Bounded: one re-ask
+      // per attempt, and the reservation in spend.mjs still applies.
+      if (review.problem) {
+        log(`⚠️  Attempt ${attempt} (${step.by}): the review could not be trusted (${review.problem}); asking the reviewer once more`);
+        review = await askReviewer();
+      }
+
       if (!review.approved) {
-        log(`❌ Attempt ${attempt} (${step.by}): rejected — ${review.reason}\n`);
-        attemptLog.push({ attempt, by: step.by, outcome: 'rejected-by-review', detail: oneLine(review.reason || 'no reason given', 400) });
-        reviewFeedback = review.feedback;
+        const unreadable = Boolean(review.problem);
+        log(`❌ Attempt ${attempt} (${step.by}): ${unreadable ? 'review unreadable' : 'rejected'} — ${review.reason}\n`);
+        attemptLog.push({
+          attempt, by: step.by,
+          outcome: unreadable ? 'review-unparseable' : 'rejected-by-review',
+          detail: oneLine(review.reason || 'no reason given', 400),
+        });
+        reviewFeedback = unreadable
+          ? `The reviewer's response could not be read as one complete verdict (${review.problem}), twice. No required fix was reliably stated; what it did say follows. Re-check the change against the proposal and the source.\n\n${review.feedback}`
+          : review.feedback;
         rejectedRender = review.visual;
         applyErrors = null;
         continue;

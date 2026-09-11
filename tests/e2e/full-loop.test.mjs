@@ -96,7 +96,7 @@ test('the built loop, end to end: suggest -> implement -> review -> guard -> tes
       return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', model, sentImages: 0 };
     }
     if (model === 'review-model') {
-      return { text: 'VERDICT: APPROVED\n\nREASON: clean, minimal, matches the proposal.', model };
+      return { text: 'VERDICT: APPROVED\n\nREASON: clean, minimal, matches the proposal.\n\nEND OF REVIEW', model };
     }
     throw new Error('unexpected call: ' + model);
   };

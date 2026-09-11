@@ -68,6 +68,10 @@ Respond in exactly this shape:
 
 ```
 VERDICT: APPROVED
+
+REASON: <one sentence>
+
+END OF REVIEW
 ```
 
 or
@@ -87,8 +91,13 @@ DETAILS:
 REQUIRED FIXES:
 - <specific, actionable fix>
 - <...>
+
+END OF REVIEW
 ```
 
-An absent or unparseable verdict counts as a rejection — see
+Write the word VERDICT exactly once, and end with the END OF REVIEW line —
+the harness checks both. An approval that is cut off, that lists required
+fixes, or that also rejects counts as a rejection, and so does an absent or
+unparseable verdict — see
 `learning/01-principles.md` principle 14, "the safety gate fails closed,
 helpers fail safe."

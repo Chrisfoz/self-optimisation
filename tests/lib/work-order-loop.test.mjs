@@ -97,7 +97,7 @@ function recordingCall(prompts, { verdict = 'APPROVED' } = {}) {
   return async ({ model, user, system }) => {
     prompts.push({ model, user, system });
     if (model === 'suggest-model') return { text: SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
-    if (model === 'review-model') return { text: `VERDICT: ${verdict}\nREASON: fine`, truncated: false };
+    if (model === 'review-model') return { text: `VERDICT: ${verdict}\nREASON: fine\n\nEND OF REVIEW`, truncated: false };
     if (model === 'implement-model') {
       return { text: `SUMMARY: a pause button\nRATIONALE: as decided\n\n<<<EDIT>>>\nFILE: index.html\n<<<SEARCH>>>\noriginal content\n<<<REPLACE>>>\noriginal content with a pause button\n<<<END>>>`, truncated: false };
     }
@@ -208,7 +208,7 @@ test('an escalation nobody has engaged with is put to the fan-out, and an AGREE 
         truncated: false, provider: 'anthropic', sentImages: 0,
       };
     }
-    if (model === 'review-model') return { text: 'VERDICT: APPROVED\nREASON: fine', truncated: false };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\nREASON: fine\n\nEND OF REVIEW', truncated: false };
     throw new Error(`unexpected call: ${model}`);
   };
 
