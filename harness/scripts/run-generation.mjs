@@ -16,7 +16,11 @@
  *   SUGGEST_MODEL / SUGGEST_PROVIDER   a single fallback pair — matches
  *     check-model-releases.mjs's own output shape, so this script's input
  *     is that script's output, unchanged.
- *   GEN_NUMBER       e.g. "001". Defaults to "001" for a manual/local run.
+ *   GEN_NUMBER       e.g. "007", as claimed by next-generation.mjs. Unset,
+ *     a manual run takes the next free number. An existing record for the
+ *     number is never overwritten (ALLOW_RECORD_OVERWRITE=true to force).
+ *   RUN_ID / RUN_URL  Which run this is, recorded in attempts.json. Derived
+ *     from GITHUB_RUN_ID/GITHUB_RUN_ATTEMPT when unset (generation-id.mjs).
  *
  * Everything else is read from project-adapter.yml, with environment
  * overrides available for the same fields the workflow already sets
@@ -28,10 +32,13 @@
 import fs from 'fs';
 import os from 'node:os';
 import path from 'path';
+import { execFileSync } from 'node:child_process';
+import { nextGenerationNumber, runIdentity } from '../lib/generation-id.mjs';
 import '../providers/index.mjs';
 import { setOutput, oneLine } from '../lib/gh-output.mjs';
-import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig, goalConfig, visualCaptureConfig, snapshotPath as adapterSnapshotPath } from '../lib/adapter.mjs';
-import { getProvider } from '../lib/llm-provider.mjs';
+import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig, goalConfig, visualCaptureConfig, evaluationConfig, snapshotPath as adapterSnapshotPath } from '../lib/adapter.mjs';
+import { getProvider, registeredProviders } from '../lib/llm-provider.mjs';
+import { runProjectTests, scrubEnv } from '../lib/test-runner.mjs';
 import { pickCrossFamilyRanker, describeSeats, promotionCandidate } from '../lib/seats.mjs';
 import { loadRecords } from '../lib/report.mjs';
 import { compileAllowlist } from '../lib/edit-format.mjs';
@@ -64,8 +71,33 @@ if (!adapter) {
 }
 console.error(`Using ${adapterPath}`);
 
-const genNumber = process.env.GEN_NUMBER || '001';
+// The number comes from the workflow's numbering step (or rehearse.mjs),
+// which has already claimed it. A manual run with none set takes the next
+// free one rather than defaulting to "001", which is how a hand-run used to
+// overwrite the first generation's record.
+const genNumber = process.env.GEN_NUMBER || (() => {
+  try {
+    return nextGenerationNumber((...a) => execFileSync('git', a, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(), {
+      generationsDir: contextConfig(adapter).generationsDir || 'docs/generations',
+    });
+  } catch {
+    return '001';
+  }
+})();
 const genLabel = `Generation #${genNumber}`;
+const run = runIdentity();
+
+// A generation's record is written once. Finding one already there means
+// two runs were handed the same number, and the second would silently
+// replace the first's history — so stop, before anything is spent.
+{
+  const existing = path.join(repoRoot, contextConfig(adapter).generationsDir || 'docs/generations', `gen-${genNumber}`, 'attempts.json');
+  if (fs.existsSync(existing) && process.env.ALLOW_RECORD_OVERWRITE !== 'true') {
+    console.error(`Generation ${genNumber} already has a record at ${path.relative(repoRoot, existing)}. Refusing to overwrite it — take the next number (unset GEN_NUMBER), or set ALLOW_RECORD_OVERWRITE=true if you really mean to replace it.`);
+    setOutput('has-changes', 'false');
+    process.exit(1);
+  }
+}
 
 // --- suggestModels: same shape check-model-releases.mjs emits ---
 const suggestModels = (() => {
@@ -276,6 +308,38 @@ if (visualCapture) {
   }
 }
 
+// --- the project's own tests, inside the loop ------------------------------
+// After each attempt's edits apply and before the review (orchestrator.mjs,
+// Stage 2b). TEST_COMMANDS (a JSON array) overrides the adapter's list, so
+// rehearse.mjs --test-command reaches here too; TEST_IN_LOOP=false turns it
+// off for one run. The child never sees a credential: scrubEnv() removes
+// every secret-shaped variable and every lab key the registry knows.
+const evaluation = evaluationConfig(adapter);
+const loopTestCommands = (() => {
+  if (process.env.TEST_COMMANDS) {
+    try {
+      const parsed = JSON.parse(process.env.TEST_COMMANDS);
+      if (Array.isArray(parsed)) return parsed.filter((c) => typeof c === 'string' && c.trim());
+    } catch { console.error('⚠️  TEST_COMMANDS is not a JSON array; using evaluation.test_commands.'); }
+  }
+  return evaluation.testCommands;
+})();
+const testsInLoop = evaluation.testInLoop && process.env.TEST_IN_LOOP !== 'false' && loopTestCommands.length > 0;
+const runTests = testsInLoop
+  ? () => runProjectTests({
+      repoRoot,
+      commands: loopTestCommands,
+      timeoutMs: evaluation.testTimeoutSeconds * 1000,
+      env: scrubEnv(process.env, {
+        keep: evaluation.testEnvPassthrough,
+        extraSecretNames: registeredProviders().map((name) => getProvider(name)?.envKey).filter(Boolean),
+      }),
+    })
+  : null;
+console.error(testsInLoop
+  ? `🧪 In-loop tests: ${loopTestCommands.join(' && ')} (credentials scrubbed; ${evaluation.testTimeoutSeconds}s per command)`
+  : `🧪 In-loop tests: off (${loopTestCommands.length ? 'evaluation.test_in_loop is false' : 'no evaluation.test_commands configured'})`);
+
 // --- run ---
 let result;
 try {
@@ -317,11 +381,35 @@ try {
       campaign,
       seatPromotion,
       goal,
+      run,
+      runTests,
     },
-    { log: (msg) => console.error(msg) }
+    {
+      log: (msg) => console.error(msg),
+      // A cancelled workflow run (GitHub sends SIGINT, then SIGTERM) or a
+      // Ctrl+C during a local rehearsal would otherwise leave half-reviewed
+      // edits in the tree. runGeneration hands over its restore function and
+      // takes the handlers back off when it finishes.
+      onCleanup: (restore) => {
+        const handler = (signal) => {
+          try {
+            restore();
+            console.error(`\n⚠️  ${signal} received — the working tree was restored to how this run found it.`);
+          } catch (e) {
+            console.error(`\n⚠️  ${signal} received — and the working tree could NOT be restored: ${e.message}`);
+          }
+          process.exit(130);
+        };
+        process.once('SIGINT', handler);
+        process.once('SIGTERM', handler);
+        return () => { process.off('SIGINT', handler); process.off('SIGTERM', handler); };
+      },
+    }
   );
 } catch (err) {
   console.error(`\n❌ ${err.message}`);
+  if (err.treeRestored === false) console.error('   ⚠️  The working tree could NOT be restored — inspect it before committing anything.');
+  else if (err.treeRestored) console.error('   The working tree was restored to how this run found it.');
   setOutput('has-changes', 'false');
   if (err.attemptRecordPath) setOutput('attempt-record', err.attemptRecordPath);
   process.exit(1);

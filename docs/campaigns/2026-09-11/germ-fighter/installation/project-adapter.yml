@@ -1,0 +1,68 @@
+# Campaign rehearsal of the portable harness on Germ Fighter (lifted from
+# carrotgame) — a bounded, real-model run, recorded failures and all.
+project:
+  id: germ-fighter
+  description: "Germ Fighter, a browser shooting game for young children (ages 4-8) about the immune system, played mostly on phones and tablets"
+  default_branch: main
+harness:
+  version: campaign
+providers:
+  watched: [openai, google, xai]
+  snapshot_path: .agent/model-snapshot.json
+  max_fanout: 3
+constitution:
+  allowed_paths:
+    - germ_fighter.html
+  create_only_paths: []
+  frozen_paths:
+    - ".github/**"
+    - "tests/**"
+    - "evaluators/**"
+    - "harness/**"
+    - "project-adapter.yml"
+    - ".claude/**"
+  append_only_paths: []
+  frozen_fields: {}
+  churn_ceiling:
+    max_files: 3
+    max_lines: 800
+  approval_class: human-approval-required
+roles:
+  agent_brief_path: .claude/agents/improve.md
+  reviewer_brief_path: .claude/agents/review.md
+  suggest:
+    max_output_tokens: 32000
+  implement:
+    model: claude-opus-5
+  review:
+    model: gpt-5.5
+  rank:
+    model: null
+  refine:
+    max_attempts: 3
+memory:
+  escalation_ledger: docs/escalations/ledger.json
+  themes_review:
+    dir: docs/themes
+    cadence_generations: 10
+context:
+  generations_dir: docs/generations
+  runtime_evidence_dir: docs/runtime
+  strategy: full-dump
+  test_files:
+    - tests/game-logic/germ-rules.test.js
+  history_limit: 3
+  ambition: focused
+deployment:
+  verify_strategy: none
+budget:
+  max_generation_tokens: 900000
+evaluation:
+  test_commands:
+    - node tests/game-logic/germ-rules.test.js
+  test_in_loop: true
+  test_timeout_seconds: 120
+  evaluators:
+    - module: evaluators/level-completion.mjs
+    - module: evaluators/mobile-controls.mjs
+    - module: evaluators/frame-time.mjs

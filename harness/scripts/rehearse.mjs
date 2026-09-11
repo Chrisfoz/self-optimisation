@@ -48,6 +48,7 @@ import {
 } from '../lib/adapter.mjs';
 import { validateAdapter } from '../lib/validate.mjs';
 import { nextGenerationNumber } from '../lib/rehearse.mjs';
+import { reserveGeneration } from '../lib/generation-id.mjs';
 
 const harnessDir = path.dirname(fileURLToPath(import.meta.url));
 const script = (name) => path.join(harnessDir, name);
@@ -198,10 +199,26 @@ if (!releaseCheck.selectedModels.length) {
 console.log(`   ${releaseCheck.selectedModels.length} reachable: ${releaseCheck.selectedModels.map((m) => m.id).join(', ')}\n`);
 
 // --- the agent branch --------------------------------------------------------
-const genNumber = nextGenerationNumber(git);
-const branch = `agent/gen-${genNumber}`;
+// Numbered and claimed exactly as the workflow does (generation-id.mjs):
+// one past the highest tag, agent branch or record on the base branch, and
+// never a branch that already exists. It used to read tags alone, so every
+// rehearsal on the pull-request path was generation 001.
+const generationsDir = contextConfig(adapter).generationsDir || 'docs/generations';
+const { number: genNumber, branch } = reserveGeneration(git, {
+  start: nextGenerationNumber(git, { generationsDir, baseRef: baseBranch }),
+  remote: null,
+});
 console.log(`Step 5/6 — Generation ${genNumber} on branch ${branch}`);
-git('checkout', '-q', '-b', branch);
+git('checkout', '-q', branch);
+
+// The project's evaluators on the untouched tree — the "before" that the
+// measurement after a change is compared with (harness/lib/measure.mjs).
+// Never gating, and silent for a project that configured none.
+const measure = (extraArgs = []) => run([script('run-evaluators.mjs'), ...extraArgs], {
+  stdio: ['ignore', 'ignore', 'inherit'],
+  env: spawnEnv({ GEN_NUMBER: genNumber, GITHUB_OUTPUT: '' }),
+});
+measure(['--baseline']);
 
 const improveResult = run([script('run-generation.mjs')], {
   stdio: 'inherit',
@@ -210,33 +227,76 @@ const improveResult = run([script('run-generation.mjs')], {
     GEN_NUMBER: genNumber,
     SCOPE: args.scope || '',
     CAMPAIGN: campaign ? 'true' : '',
+    // The same commands preflight used, run inside the loop against each
+    // attempt; --skip-preflight means no tests at all, here as elsewhere.
+    TEST_COMMANDS: JSON.stringify(testCommands),
+    TEST_IN_LOOP: args.skipPreflight ? 'false' : '',
   }),
 });
 
-const generationsDir = contextConfig(adapter).generationsDir || 'docs/generations';
 const genDirRel = `${generationsDir}/gen-${genNumber}`;
+
+// The record goes to the base branch on EVERY outcome, as persist-records.mjs
+// does in the workflow — locally here, never pushed. A failed rehearsal is
+// the one whose record is most worth keeping.
+function persistLocally() {
+  const result = spawnSync(process.execPath, [script('persist-records.mjs'), '--base', baseBranch, '--no-push'], {
+    cwd: repoRoot, env: spawnEnv({ GEN_NUMBER: genNumber }), stdio: ['ignore', 'inherit', 'inherit'],
+  });
+  if (result.status !== 0) {
+    console.log(`   ⚠️  Could not commit the record to ${baseBranch}; it is still in ${genDirRel}.`);
+    return;
+  }
+  console.log(`   Record committed to ${baseBranch} (not pushed).`);
+  // The copies left in this branch's working tree are now redundant, and
+  // worse: the base branch tracks the same paths, so the `git checkout
+  // <base>` this script tells you to run would refuse ("untracked working
+  // tree files would be overwritten"). The first real campaign hit exactly
+  // that. Clear them — they are safe on the base branch.
+  const memory = memoryConfig(adapter);
+  const ctx = contextConfig(adapter);
+  const roots = [...new Set([genDirRel, memory.ledgerPath || 'docs/escalations/ledger.json', memory.themesDir || 'docs/themes', ctx.runtimeEvidenceDir || 'docs/runtime'])];
+  try { git('clean', '-fdq', '--', ...roots); } catch { /* nothing untracked */ }
+  for (const root of roots) {
+    try { git('checkout', '-q', '--', root); } catch { /* not tracked on this branch */ }
+  }
+}
 
 if (improveResult.status !== 0) {
   console.log(`\nNo change shipped this cycle — see ${genDirRel}/attempts.json for what was tried.`);
-  console.log(`You are still on ${branch}, with nothing committed.`);
+  persistLocally();
+  console.log(`You are still on ${branch}, with no code change committed.`);
   console.log(`   Back to ${baseBranch}:  git checkout ${baseBranch} && git branch -D ${branch}`);
   process.exit(1);
 }
 
 // --- commit, guard, test, the same order and gates the workflow uses -------
 console.log('\nStep 6/6 — Committing, guarding, and testing the change');
-const { allowedPaths } = constitutionAllowlist(adapter);
-const themesDir = memoryConfig(adapter).themesDir || 'docs/themes';
-const recordDirs = [...new Set([generationsDir, themesDir])].filter((d) => fs.existsSync(path.join(repoRoot, d)));
+const { allowedPaths, createOnlyPaths } = constitutionAllowlist(adapter);
 
+// What was IMPLEMENTED — the approved attempt's summary, the same value the
+// workflow's commit and pull-request title use — not the suggester's CHANGE
+// line. The first real campaign showed why: the implementer repaired a
+// proposal whose own edits failed the tests by a different mechanism, and a
+// commit titled from the proposal described code that was never written.
 let summary = `Generation ${genNumber}`;
 try {
   const record = JSON.parse(fs.readFileSync(path.join(repoRoot, genDirRel, 'attempts.json'), 'utf8'));
-  if (record.proposalSummary) summary = `Generation ${genNumber}: ${record.proposalSummary}`;
+  const approved = [...(record.attempts ?? [])].reverse().find((a) => a.outcome === 'approved');
+  const what = approved?.detail || record.proposalSummary;
+  if (what) summary = `Generation ${genNumber}: ${what}`;
 } catch { /* the generic message is fine */ }
 
-git('add', '-A', '--', ...allowedPaths, ...recordDirs);
+// The code change only — edited and newly created files — one pathspec at a
+// time, since `git add` on a glob that matches nothing is an error.
+for (const p of [...new Set([...allowedPaths, ...createOnlyPaths])]) {
+  if (git('status', '--porcelain', '--', p)) git('add', '-A', '--', p);
+}
 git('commit', '-q', '-m', summary);
+// The same evaluators on the changed tree: metrics.json, and comparison.json
+// against the baseline taken before the loop ran.
+measure();
+persistLocally();
 
 const guardResult = run([script('check-guarded-paths.mjs'), baseBranch], { stdio: 'inherit' });
 console.log(guardResult.status === 0 ? '   Guard: PASS' : '   Guard: FAIL');

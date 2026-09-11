@@ -228,9 +228,11 @@ test('renderReadme: says which secrets are needed because of a pinned model rath
   assert.match(out, /ANTHROPIC_API_KEY`? — anthropic \(needed by a pinned/);
 });
 
-test('renderWorkflowTemplate: quotes allowed_paths for the git add step', () => {
-  const out = renderWorkflowTemplate(template, baseAnswers({ allowedPaths: ["it's-a-file.html", 'styles.css'] }));
-  assert.match(out, /git add -A -- 'it'\\''s-a-file\.html' 'styles\.css'/);
+test('renderWorkflowTemplate: quotes the editable paths for the git add step, create_only_paths included', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers({ allowedPaths: ["it's-a-file.html", 'styles.css'], createOnlyPaths: ['tests/**'] }));
+  // create_only_paths used to be left out: a generation that created a new
+  // file (a new test) committed everything except that file.
+  assert.match(out, /for p in 'it'\\''s-a-file\.html' 'styles\.css' 'tests\/\*\*'; do/);
 });
 
 test('renderWorkflowTemplate: uses the configured default branch for guard and promote', () => {
@@ -390,17 +392,32 @@ test('renderWorkflowTemplate: the themes step runs before the commit, so the rev
   const commit = steps.findIndex((s) => /^Commit and push the agent branch/.test(s.name || ''));
   assert.ok(themes >= 0 && commit >= 0);
   assert.ok(themes < commit, 'a review written after the commit would never be committed');
+  const persist = steps.findIndex((s) => s.id === 'persist');
+  assert.ok(themes < persist, 'the persist step commits the review to the default branch');
 });
 
-test('renderWorkflowTemplate: commits the harness\'s own record dirs, not only the agent\'s editable paths', () => {
-  // The bug this closes: docs/generations is not the agent's editable
-  // surface, so a project that (rightly) keeps it out of allowed_paths never
-  // committed its own history — and every future run read an empty one.
-  const out = renderWorkflowTemplate(template, baseAnswers());
-  assert.match(out, /for d in 'docs\/generations' 'docs\/themes'; do/);
+test('renderWorkflowTemplate: every outcome persists its record to the default branch; the agent branch carries code only', () => {
+  // Records used to ride the agent branch, so on the pull-request path they
+  // reached the default branch only if a person merged — and a generation
+  // that was abandoned, crashed or found no proposal committed nothing.
+  for (const approvalClass of ['human-approval-required', 'autonomous-merge']) {
+    const steps = loadYaml(renderWorkflowTemplate(template, baseAnswers({ approvalClass, defaultBranch: 'trunk' }))).jobs['self-improve'].steps;
+    const at = (id) => steps.findIndex((s) => s.id === id);
+    const persist = steps[at('persist')];
+    assert.ok(persist, approvalClass);
+    assert.match(persist.if, /always\(\) && steps\.gen\.outputs\.number/);
+    assert.match(persist.run, /persist-records\.mjs --base trunk --remote origin/);
+    assert.equal(persist['continue-on-error'], true);
+    assert.ok(at('persist') > at('evidence'), 'after the evidence it commits');
+    assert.ok(at('persist') > at('tests'), 'after every gate');
+    assert.ok(at('persist') < at('gates'), 'before the gate summary reports it');
 
-  const custom = renderWorkflowTemplate(template, baseAnswers({ generationsDir: 'history', themesDir: 'history' }));
-  assert.match(custom, /for d in 'history'; do/, 'one directory named twice should be added once');
+    const commit = steps.find((s) => /^Commit and push the agent branch/.test(s.name || ''));
+    assert.doesNotMatch(commit.run, /generations|themes/, 'no records on the agent branch');
+    for (const s of steps) {
+      if (s.run && /record-pull-request\.mjs/.test(s.run)) assert.doesNotMatch(s.run, /git (commit|push)/, 'the PR URL is committed by the persist step');
+    }
+  }
 });
 
 test('renderWorkflowTemplate: records runtime evidence last, on both merge paths, and never fails the job for it', () => {
@@ -417,9 +434,9 @@ test('renderWorkflowTemplate: records runtime evidence last, on both merge paths
 
     // and it lands on the default branch, not the agent branch: the next run
     // has to be able to read it whether or not this generation ever merged.
-    const commit = steps.find((s) => /^Commit the runtime evidence/.test(s.name || ''));
-    assert.match(commit.run, /git checkout main/);
-    assert.match(commit.run, /git push origin main/);
+    // The persist step commits it there, in its own worktree, after this.
+    assert.ok(steps.findIndex((s) => s.id === 'persist') > steps.indexOf(evidence));
+    assert.ok(!steps.some((s) => /git checkout main/.test(s.run || '')), 'the job never switches its own checkout');
   }
 });
 
@@ -526,7 +543,7 @@ test('buildAdapterObject: a per-generation token budget is written by default, a
 test('renderWorkflowTemplate: reads pull-request outcomes back at the top of every cycle, before the agent branch exists', () => {
   const out = renderWorkflowTemplate(template, baseAnswers({ generationsDir: 'history/gens' }));
   const syncAt = out.indexOf('sync-pull-request-outcomes.mjs');
-  const branchAt = out.indexOf('Create the agent branch');
+  const branchAt = out.indexOf('Claim the next generation number');
   assert.ok(syncAt > 0 && syncAt < branchAt);
   assert.match(out, /sync-pull-request-outcomes\.mjs --generations-dir 'history\/gens'/);
   assert.match(out, /id: prs\n\s+if: steps\.pause\.outputs\.paused != 'true'/);

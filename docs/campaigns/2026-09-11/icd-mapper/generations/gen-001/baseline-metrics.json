@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "throughGeneration": "001",
+  "date": "2026-09-11",
+  "metrics": [
+    {
+      "name": "edge-case files whose row is recovered",
+      "value": 6,
+      "unit": "of 8",
+      "direction": "higher",
+      "detail": "plain utf-8: ok; utf-8 with BOM: ok; windows line endings: ok; latin-1 descriptor: crashed (UnicodeDecodeError); unquoted code with padding: ok; row missing trailing empty columns: row silently dropped; blank line between rows: ok; extra trailing column: ok",
+      "plugin": "robustness"
+    },
+    {
+      "name": "edge-case files that crash the reader",
+      "value": 1,
+      "unit": null,
+      "direction": "lower",
+      "detail": null,
+      "plugin": "robustness"
+    },
+    {
+      "name": "source lines",
+      "value": 298,
+      "unit": "lines",
+      "direction": "lower",
+      "detail": "across 4 measured file(s)",
+      "plugin": "source-weight"
+    },
+    {
+      "name": "largest file",
+      "value": 114,
+      "unit": "lines",
+      "direction": "lower",
+      "detail": "icd_mapper.py",
+      "plugin": "source-weight"
+    },
+    {
+      "name": "files over 500 lines",
+      "value": 0,
+      "unit": null,
+      "direction": "lower",
+      "detail": "none — nothing has grown past the threshold yet",
+      "plugin": "source-weight"
+    }
+  ],
+  "artifacts": [],
+  "errors": [],
+  "fingerprint": "9562e456a05f675c",
+  "phase": "baseline"
+}

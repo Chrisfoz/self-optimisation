@@ -1,0 +1,79 @@
+diff --git a/icd_mapper.py b/icd_mapper.py
+index e9f263c..bcc80dc 100644
+--- a/icd_mapper.py
++++ b/icd_mapper.py
+@@ -26,7 +26,7 @@ class ICDMapper:
+                 continue  # blank line
+             
+             if len(row) < 8:
+-                print(f"Warning: {os.path.basename(file_path)} data row {reader.line_num}: "
++                print(f"Warning: {os.path.basename(file_path)} data row {reader.line_num + 1}: "
+                       f"expected 8 fields, found {len(row)} - row skipped")
+                 continue
+             
+diff --git a/icd_mapper_list.py b/icd_mapper_list.py
+index 6c98e61..d188f78 100644
+--- a/icd_mapper_list.py
++++ b/icd_mapper_list.py
+@@ -19,15 +19,20 @@ class ICDMapper:
+                     reader = csv.reader(file, quoting=csv.QUOTE_MINIMAL)
+                     
+                     for row in reader:
+-                        if len(row) >= 8:
+-                            icd10am_code = row[4].strip(' "')
+-                            icd10am_descriptor = row[7].strip(' "')
+-                            
+-                            if icd10am_code:  # Only process if there's a valid code
+-                                self.icd10am_codes.append({
+-                                    'ICD-10-AM Code': icd10am_code,
+-                                    'ICD-10-AM Descriptor': icd10am_descriptor
+-                                })
++                        if not row or not any(field.strip() for field in row):
++                            continue  # blank line
++                        if len(row) < 8:
++                            print(f"Warning: {os.path.basename(file_path)} data row "
++                                  f"{reader.line_num + 1}: expected 8 fields, found {len(row)} - row skipped")
++                            continue
++                        icd10am_code = row[4].strip(' "')
++                        icd10am_descriptor = row[7].strip(' "')
++                        
++                        if icd10am_code:  # Only process if there's a valid code
++                            self.icd10am_codes.append({
++                                'ICD-10-AM Code': icd10am_code,
++                                'ICD-10-AM Descriptor': icd10am_descriptor
++                            })
+                 # If we successfully read the file, break the loop
+                 break
+             except UnicodeDecodeError:
+diff --git a/icd_mapper_unique.py b/icd_mapper_unique.py
+index 4c6fa99..7535670 100644
+--- a/icd_mapper_unique.py
++++ b/icd_mapper_unique.py
+@@ -15,14 +15,19 @@ class ICDMapper:
+             reader = csv.reader(file, quoting=csv.QUOTE_MINIMAL)
+             
+             for row in reader:
+-                if len(row) >= 8:
+-                    icd10am_code = row[4].strip(' "')
+-                    icd10am_descriptor = row[7].strip(' "')
+-                    
+-                    if icd10am_code:  # Only process if there's a valid code
+-                        self.unique_icd10am_codes.add(icd10am_code)
+-                        # Store the descriptor (will overwrite if duplicate, which is fine)
+-                        self.code_descriptors[icd10am_code] = icd10am_descriptor
++                if not row or not any(field.strip() for field in row):
++                    continue  # blank line
++                if len(row) < 8:
++                    print(f"Warning: {os.path.basename(file_path)} data row "
++                          f"{reader.line_num + 1}: expected 8 fields, found {len(row)} - row skipped")
++                    continue
++                icd10am_code = row[4].strip(' "')
++                icd10am_descriptor = row[7].strip(' "')
++                
++                if icd10am_code:  # Only process if there's a valid code
++                    self.unique_icd10am_codes.add(icd10am_code)
++                    # Store the descriptor (will overwrite if duplicate, which is fine)
++                    self.code_descriptors[icd10am_code] = icd10am_descriptor
+     
+     def process_directory(self, directory_path: str) -> None:
+         """Process all mapping files in a directory."""

@@ -1,0 +1,160 @@
+{
+  "generation": "002",
+  "date": "2026-09-11",
+  "harnessVersion": "0.1.0",
+  "run": {
+    "id": "local-20260911T050255Z-34336",
+    "url": null,
+    "source": "local"
+  },
+  "outcome": "approved",
+  "scope": "focused",
+  "scopeReason": "context.ambition is \"focused\": every generation is a small, localised change",
+  "campaign": true,
+  "seatPromotion": null,
+  "suggestModel": "claude-fable-5-1 (anthropic)",
+  "fanOut": {
+    "asked": [
+      "claude-fable-5-1 (anthropic)",
+      "gemini-3.1-pro-preview (google)",
+      "kimi-k3 (moonshot)"
+    ],
+    "proposed": [
+      "claude-fable-5-1",
+      "gemini-3.1-pro-preview"
+    ],
+    "offeredEdits": [
+      "claude-fable-5-1",
+      "gemini-3.1-pro-preview"
+    ],
+    "failed": [
+      "kimi-k3: read ECONNRESET"
+    ],
+    "chosen": "claude-fable-5-1 (anthropic)",
+    "rankedBy": "claude-opus-5",
+    "rankingReason": "Both fix the same real problem (a control that silently ignores taps), but Proposal 1 answers \"when will it work again?\" with a rising fill rather than only \"not now,\" which is the more useful wordless cue for a pre-reader, and its plan is more carefully specified — change-gated style writes, `typeo",
+    "proposalFiles": [
+      "docs/generations/gen-002/proposals/claude-fable-5-1.md",
+      "docs/generations/gen-002/proposals/gemini-3.1-pro-preview.md"
+    ],
+    "briefFeedback": {
+      "claude-fable-5-1": "The frozen-invariant list was the most useful thing here — knowing \"three hits kill it\" fires with no gap instantly killed the invulnerability-window idea and saved a wasted attempt. The audience/pre-reader framing pushed me toward the right pillar. Two things constrained me for no good reason: (1) the response is asked for in two conflicting formats (SUMMARY/RATIONALE at the top, PILLAR/PROBLEM/... at the bottom) — pick one; (2) the measured \"seconds to clear\" dimension with \"no direction\" is noise for a suggester; either say what a good range is for a 5-year-old or drop it. I would delete the \"Repository map\" section when it is empty.",
+      "gemini-3.1-pro-preview": "The constraint about pre-readers is fantastic because it forces us to find non-textual UX improvements, which almost always result in better UI for players of any age. The frozen test invariants are helpful to avoid breaking the core game, but the rigid testing of damage without simulating advancing time limits our ability to add standard game-feel mechanics (like post-hit i-frames)."
+    }
+  },
+  "screenshotsSent": 1,
+  "implementModel": "claude-opus-5",
+  "implementedBy": "claude-fable-5-1 (anthropic)",
+  "selfImplemented": true,
+  "proposalSummary": "1. CSS: give `#dashButton` `position: relative; isolation: isolate; overflow: hidden`. Add `#dashButton.recharging` (glow off, darker border) and `#dashButton.recharging::before` — an absolutely positioned pale wash (`rgba(200,245,250,0.72)`) anchored to the top whose height is `calc(100% - var(--da",
+  "escalations": {
+    "opened": [
+      {
+        "id": "esc-001",
+        "title": "Allow i-frames by relaxing the test suite's rapid-hit assertion",
+        "by": "gemini-3.1-pro-preview (google)"
+      }
+    ],
+    "supported": [],
+    "dissented": [],
+    "flagged": [],
+    "judged": {
+      "agreed": [],
+      "disagreed": [],
+      "irrelevant": [],
+      "retired": []
+    }
+  },
+  "contextSize": null,
+  "spend": {
+    "calls": 5,
+    "inputTokens": 159975,
+    "outputTokens": 33579,
+    "totalTokens": 193554,
+    "estimatedCalls": 1,
+    "failedRequests": 1,
+    "refusedRequests": 0,
+    "maxGenerationTokens": 900000,
+    "byModel": {
+      "claude-fable-5-1": {
+        "calls": 1,
+        "inputTokens": 49953,
+        "outputTokens": 11489
+      },
+      "gemini-3.1-pro-preview": {
+        "calls": 1,
+        "inputTokens": 39889,
+        "outputTokens": 20315
+      },
+      "kimi-k3": {
+        "calls": 1,
+        "inputTokens": 35666,
+        "outputTokens": 0
+      },
+      "claude-opus-5": {
+        "calls": 1,
+        "inputTokens": 3587,
+        "outputTokens": 741
+      },
+      "gpt-5.5": {
+        "calls": 1,
+        "inputTokens": 30880,
+        "outputTokens": 1034
+      }
+    },
+    "bySite": {
+      "suggest": {
+        "calls": 3,
+        "inputTokens": 125508,
+        "outputTokens": 31804
+      },
+      "rank": {
+        "calls": 1,
+        "inputTokens": 3587,
+        "outputTokens": 741
+      },
+      "review": {
+        "calls": 1,
+        "inputTokens": 30880,
+        "outputTokens": 1034
+      }
+    }
+  },
+  "tests": {
+    "inLoop": true,
+    "baseline": {
+      "passed": true,
+      "durationMs": 81,
+      "commands": [
+        {
+          "command": "node tests/game-logic/germ-rules.test.js",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 81
+        }
+      ]
+    }
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "by": "claude-fable-5-1 (anthropic)",
+      "outcome": "approved",
+      "detail": "Show dash recharge on the DASH button itself, not only as HUD text",
+      "tests": {
+        "passed": true,
+        "durationMs": 76,
+        "commands": [
+          {
+            "command": "node tests/game-logic/germ-rules.test.js",
+            "exitCode": 0,
+            "timedOut": false,
+            "durationMs": 76
+          }
+        ]
+      }
+    }
+  ],
+  "apiIssues": [],
+  "pullRequestUrl": null
+}

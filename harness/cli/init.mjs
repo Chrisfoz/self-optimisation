@@ -29,6 +29,11 @@
  *                Without it, every write is skip-if-present — re-running
  *                init never clobbers a project's real, already-filled-in
  *                brief or adapter just because --yes was also passed.
+ *   --from-adapter  asks nothing: renders the workflow and install README
+ *                from the project-adapter.yml already there. The way to
+ *                regenerate after editing the adapter or upgrading harness/
+ *                (`--from-adapter --force`); the adapter and briefs are
+ *                never touched.
  *
  * Interactive mode needs a real terminal (a TTY) on stdin — `rl.question()`
  * in a loop over piped/redirected input is unreliable in Node generally
@@ -45,14 +50,14 @@ import { execFileSync } from 'node:child_process';
 import readline from 'node:readline/promises';
 import '../providers/index.mjs';
 import { getProvider, registeredProviders, resolveProvider } from '../lib/llm-provider.mjs';
-import { renderAdapterYaml, renderWorkflowTemplate, renderReadme, buildAdapterObject } from '../lib/scaffold.mjs';
+import { renderAdapterYaml, renderWorkflowTemplate, renderReadme, buildAdapterObject, answersFromAdapter } from '../lib/scaffold.mjs';
 import { harnessVersion, checkUpgrade } from '../lib/version.mjs';
 import { describeSeats } from '../lib/seats.mjs';
-import { normalizeAmbition } from '../lib/adapter.mjs';
+import { normalizeAmbition, loadAdapter } from '../lib/adapter.mjs';
 import { validateAdapter } from '../lib/validate.mjs';
 
-// path.join(..., '../x'), not import.meta.dirname — that global needs Node
-// 20.11+, and package.json's engines field only promises 20.6.0.
+// path.join(..., '../x'), not import.meta.dirname — kept as the one idiom every
+// file here uses, from when package.json promised Node 20.6.
 const harnessDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = process.cwd();
 const AUTO_YES = process.argv.includes('--yes') || process.argv.includes('-y');
@@ -83,7 +88,7 @@ if (process.argv.includes('--check-upgrade')) {
   }
   console.log(
     result.behind
-      ? `Local harness ${result.local} is behind upstream ${result.upstream}. Re-copy harness/ from the repository and re-run init with --force to regenerate the workflow.`
+      ? `Local harness ${result.local} is behind upstream ${result.upstream}. Re-copy harness/ from the repository, then regenerate the workflow with: node harness/cli/init.mjs --from-adapter --force`
       : `Local harness ${result.local} is current (upstream ${result.upstream}).`
   );
   process.exit(result.behind ? 1 : 0);
@@ -292,6 +297,13 @@ async function main() {
       const fromEmail = await ask(rl, '  From email');
       const fromName = await ask(rl, '  From name', { default: `${projectId}'s Self-Improvement` });
       notify = { provider: 'sendgrid', envKey: 'SENDGRID_API_KEY', recipient, recipientName, fromEmail, fromName };
+      // The digest is written by a model (notify.digest_model, default
+      // claude-opus-5). Without its lab's key wired into the two notify
+      // steps, every email quietly fell back to the terse template.
+      try {
+        const name = resolveProvider('claude-opus-5');
+        roleProviders.push({ name, envKey: getProvider(name).envKey });
+      } catch { /* the terse fallback still sends */ }
     }
 
     const agentBriefPath = await ask(rl, 'Agent brief path', { default: '.claude/agents/improve.md' });
@@ -360,4 +372,34 @@ function writeFiles(answers) {
   );
 }
 
-await main();
+/**
+ * `--from-adapter`: regenerate the workflow and the install README from the
+ * project-adapter.yml that already exists — after changing
+ * `approval_class`, the schedule, the test commands, or the watched labs,
+ * or after upgrading harness/. Asks nothing, and never touches the adapter
+ * or the briefs. Combine with --force to replace the existing workflow.
+ */
+async function fromAdapter() {
+  const adapterPath = path.join(repoRoot, 'project-adapter.yml');
+  const adapter = await loadAdapter(adapterPath);
+  if (!adapter) {
+    console.error(`No project-adapter.yml at ${adapterPath}. Run init without --from-adapter to create one.`);
+    process.exit(1);
+  }
+  const answers = answersFromAdapter(adapter, {
+    providerEnvKey: (name) => getProvider(name)?.envKey ?? `${String(name).toUpperCase()}_API_KEY`,
+    modelProvider: (model) => { try { return resolveProvider(model); } catch { return null; } },
+  });
+  console.log('Rendering from project-adapter.yml — the adapter and the briefs are not touched.\n');
+  const template = fs.readFileSync(path.join(harnessDir, '../templates/workflow.yml.tmpl'), 'utf8');
+  writeIfAbsentOrForced('.github/workflows/self-improve.yml', renderWorkflowTemplate(template, answers), 'the generated workflow');
+  writeIfAbsentOrForced('SELF-IMPROVE-README.md', renderReadme(answers), 'the install README');
+
+  const { errors, warnings } = validateAdapter(adapter, { repoRoot, env: process.env });
+  for (const e of errors) console.log(`   ❌ ${e}`);
+  for (const w of warnings) console.log(`   ⚠️  ${w}`);
+  process.exit(errors.length ? 1 : 0);
+}
+
+if (process.argv.includes('--from-adapter')) await fromAdapter();
+else await main();

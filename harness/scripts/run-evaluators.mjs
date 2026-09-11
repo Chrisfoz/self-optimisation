@@ -20,7 +20,16 @@
  *   GEN_NUMBER   which generation's record to read and write beside.
  *                Defaults to the newest on record.
  *
- * Outputs (GITHUB_OUTPUT): `ran`, `metrics`, `artifacts`, `errors`, `path`.
+ * --baseline measures the UNTOUCHED tree, before the generation changes
+ * anything, into baseline-metrics.json. The default run (after the change)
+ * writes metrics.json and, when a baseline for the same generation exists,
+ * comparison.json: every metric before and after, classified as a benefit,
+ * a regression, or no change, with the cost of the generation beside it
+ * (harness/lib/measure.mjs). Both runs record a fingerprint of exactly which
+ * evaluators ran with which config; two that differ are not compared.
+ *
+ * Outputs (GITHUB_OUTPUT): `ran`, `metrics`, `artifacts`, `errors`, `path`,
+ * and after a comparison `benefits`, `regressions`, `comparison`.
  */
 
 import fs from 'fs';
@@ -29,11 +38,13 @@ import { setOutput } from '../lib/gh-output.mjs';
 import { loadAdapter, contextConfig, evaluatorConfig } from '../lib/adapter.mjs';
 import { generationNumbers } from '../lib/context-pack.mjs';
 import { runEvaluators, buildMetricsRecord, loadEvaluatorPlugin, artifactsDirFor, DEFAULT_TIMEOUT_MS } from '../lib/evaluators.mjs';
+import { evaluatorFingerprint, compareMeasurements, buildComparisonRecord, summarizeComparison } from '../lib/measure.mjs';
 
 function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--adapter') out.adapter = argv[++i];
+    else if (argv[i] === '--baseline') out.baseline = true;
   }
   return out;
 }
@@ -101,11 +112,14 @@ for (const entry of configured) {
 // Inside the generation's own record folder, so a render travels with the
 // generation it describes and the workflow's existing `git add` of the
 // generations directory picks it up with everything else.
-const artifactsRelative = artifactsDirFor({ generationsDir, genNumber });
-const artifactsAbsolute = path.join(repoRoot, generationsDir, `gen-${genNumber}`, 'artifacts');
+// A baseline's artifacts go in their own folder: the next generation's
+// prompt attaches images from metrics.json's artifacts, and those must show
+// the state a change produced, never the state it started from.
+const artifactsRelative = args.baseline ? `${generationsDir}/gen-${genNumber}/baseline-artifacts` : artifactsDirFor({ generationsDir, genNumber });
+const artifactsAbsolute = path.join(repoRoot, generationsDir, `gen-${genNumber}`, args.baseline ? 'baseline-artifacts' : 'artifacts');
 fs.mkdirSync(artifactsAbsolute, { recursive: true });
 
-console.error(`📏 Running ${plugins.length} evaluator(s) against generation ${genNumber}...`);
+console.error(`📏 Running ${plugins.length} evaluator(s) against generation ${genNumber}${args.baseline ? ' — the BASELINE, before any change' : ''}...`);
 
 const { metrics, artifacts, errors } = await runEvaluators({
   plugins,
@@ -122,6 +136,10 @@ const record = buildMetricsRecord({
   artifacts,
   errors: [...loadErrors, ...errors],
 });
+// Which evaluators, configured how — what makes a baseline and an after
+// measurement comparable, or not. See harness/lib/measure.mjs.
+record.fingerprint = evaluatorFingerprint(configured);
+record.phase = args.baseline ? 'baseline' : 'after';
 
 // An empty artifacts directory is noise in a diff a human reads. Removed
 // only when nothing wrote to it, never when a plugin did.
@@ -136,7 +154,7 @@ try {
 // because someone ran this on Windows is a different string from the one
 // CI writes for the same file. path.join() is still what touches the
 // filesystem, where the separator genuinely has to be the platform's.
-const relative = `${generationsDir}/gen-${genNumber}/metrics.json`;
+const relative = `${generationsDir}/gen-${genNumber}/${args.baseline ? 'baseline-metrics.json' : 'metrics.json'}`;
 fs.mkdirSync(path.join(repoRoot, generationsDir, `gen-${genNumber}`), { recursive: true });
 fs.writeFileSync(path.join(repoRoot, relative), JSON.stringify(record, null, 2) + '\n', 'utf8');
 
@@ -153,6 +171,27 @@ setOutput('path', relative);
 setOutput('metrics', String(record.metrics.length));
 setOutput('artifacts', String(record.artifacts.length));
 setOutput('errors', String(record.errors.length));
+
+// --- before and after -------------------------------------------------------
+if (!args.baseline) {
+  const baselinePath = path.join(repoRoot, generationsDir, `gen-${genNumber}`, 'baseline-metrics.json');
+  let baseline = null;
+  try { baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8')); } catch { /* no baseline was taken */ }
+  if (baseline) {
+    const comparison = buildComparisonRecord({ genNumber, comparison: compareMeasurements(baseline, record), record: generation });
+    const comparisonRelative = `${generationsDir}/gen-${genNumber}/comparison.json`;
+    fs.writeFileSync(path.join(repoRoot, comparisonRelative), `${JSON.stringify(comparison, null, 2)}\n`, 'utf8');
+    console.error(`\n⚖️  Before → after: ${summarizeComparison(comparison)}`);
+    for (const r of comparison.rows.filter((row) => row.verdict !== 'unchanged')) {
+      console.error(`   ${r.verdict.padEnd(12)} ${r.name}: ${r.before ?? '—'} → ${r.after ?? '—'}${r.unit ? ` ${r.unit}` : ''}`);
+    }
+    setOutput('comparison', comparisonRelative);
+    setOutput('benefits', String(comparison.benefits.length));
+    setOutput('regressions', String(comparison.regressions.length));
+  } else {
+    console.error('(no baseline-metrics.json for this generation — nothing to compare against)');
+  }
+}
 
 // Always 0. These are measurements, and a measurement that can fail a
 // workflow step is a gate — see harness/plugins/evaluators/README.md, rule 1.

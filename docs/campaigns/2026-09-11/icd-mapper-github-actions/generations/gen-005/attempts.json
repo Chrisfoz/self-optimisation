@@ -1,0 +1,182 @@
+{
+  "generation": "005",
+  "date": "2026-09-11",
+  "harnessVersion": "0.1.0",
+  "run": {
+    "id": "34574083921-1",
+    "url": "https://github.com/Chrisfoz/icd-mapper-harness-campaign/actions/runs/34574083921/attempts/1",
+    "source": "github-actions"
+  },
+  "outcome": "approved",
+  "scope": "focused",
+  "scopeReason": "context.ambition is \"focused\": every generation is a small, localised change",
+  "campaign": true,
+  "seatPromotion": null,
+  "suggestModel": "deepseek-v4-pro (deepseek)",
+  "fanOut": {
+    "asked": [
+      "deepseek-v4-pro (deepseek)",
+      "glm-5.3 (zai)"
+    ],
+    "proposed": [
+      "deepseek-v4-pro",
+      "glm-5.3"
+    ],
+    "offeredEdits": [
+      "deepseek-v4-pro",
+      "glm-5.3"
+    ],
+    "failed": [],
+    "chosen": "deepseek-v4-pro (deepseek)",
+    "rankedBy": "claude-opus-5",
+    "rankingReason": "Proposal 1 fixes a real, common-case silent data loss (short rows vanishing without any message) across all three readers and corrects an existing off-by-one in the diagnostic line number, with additive-only edits that cannot disturb the frozen parsing, report, or Excel invariants; Proposal 2's own ",
+    "proposalFiles": [
+      "docs/generations/gen-005/proposals/deepseek-v4-pro.md",
+      "docs/generations/gen-005/proposals/glm-5.3.md"
+    ],
+    "briefFeedback": {
+      "deepseek-v4-pro": "The frozen-test list and non-gating metrics made the silent-loss gap obvious, and the rejection history for gen-002 steered me away from unsafe short-row recovery. The unresolved create-only pattern is the biggest constraint: the obvious deduplication fix stays illegal until that is defined. I would delete or clarify the \"one improvement\" ambiguity when one logical improvement touches three files.",
+      "glm-5.3": "The frozen-tests list and the measured edge-case dimensions genuinely helped me pick a change that is safe and observable. The create-only pattern being undefined (esc-004) is the worst constraint — four scripts duplicate reader logic and every generation must hand-copy the same fix instead of extracting one helper; I back esc-004. I would delete nothing else; the \"one improvement\" rule was useful discipline here."
+    }
+  },
+  "screenshotsSent": 0,
+  "implementModel": "claude-opus-5",
+  "implementedBy": "deepseek-v4-pro (deepseek)",
+  "selfImplemented": true,
+  "proposalSummary": "Make all three mapping readers use the same warn-and-skip rule. In each row loop: skip only blank lines (`if not row or not any(field.strip() for field in row): continue`), then if `len(row) < 8`, print a warning with the source file basename, the actual file line (`reader.line_num + 1`), and the ex",
+  "escalations": {
+    "opened": [
+      {
+        "id": "esc-005",
+        "title": "back esc-004 — pre-approve a named shared reader module so this harmonisation stops being three copy-paste generations.",
+        "by": "glm-5.3 (zai)"
+      }
+    ],
+    "supported": [
+      {
+        "id": "esc-003",
+        "by": "deepseek-v4-pro (deepseek)"
+      },
+      {
+        "id": "esc-004",
+        "by": "glm-5.3 (zai)"
+      },
+      {
+        "id": "esc-003",
+        "by": "glm-5.3 (zai)"
+      }
+    ],
+    "dissented": [
+      {
+        "id": "esc-001",
+        "by": "glm-5.3 (zai)"
+      }
+    ],
+    "flagged": [],
+    "judged": {
+      "agreed": [],
+      "disagreed": [],
+      "irrelevant": [],
+      "retired": []
+    }
+  },
+  "contextSize": null,
+  "spend": {
+    "calls": 5,
+    "inputTokens": 27491,
+    "outputTokens": 18561,
+    "totalTokens": 46052,
+    "estimatedCalls": 1,
+    "failedRequests": 1,
+    "refusedRequests": 0,
+    "maxGenerationTokens": 600000,
+    "byModel": {
+      "glm-5.3": {
+        "calls": 1,
+        "inputTokens": 6676,
+        "outputTokens": 1689
+      },
+      "deepseek-v4-pro": {
+        "calls": 2,
+        "inputTokens": 14085,
+        "outputTokens": 15774
+      },
+      "claude-opus-5": {
+        "calls": 1,
+        "inputTokens": 2694,
+        "outputTokens": 610
+      },
+      "gpt-5.5": {
+        "calls": 1,
+        "inputTokens": 4036,
+        "outputTokens": 488
+      }
+    },
+    "bySite": {
+      "suggest": {
+        "calls": 3,
+        "inputTokens": 20761,
+        "outputTokens": 17463
+      },
+      "rank": {
+        "calls": 1,
+        "inputTokens": 2694,
+        "outputTokens": 610
+      },
+      "review": {
+        "calls": 1,
+        "inputTokens": 4036,
+        "outputTokens": 488
+      }
+    }
+  },
+  "tests": {
+    "inLoop": true,
+    "baseline": {
+      "passed": true,
+      "durationMs": 1453,
+      "commands": [
+        {
+          "command": "python -m pip install -q -r requirements.txt pytest",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 850
+        },
+        {
+          "command": "python -m pytest -q tests",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 603
+        }
+      ]
+    }
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "by": "deepseek-v4-pro (deepseek)",
+      "outcome": "approved",
+      "detail": "Generation 005 improvement",
+      "tests": {
+        "passed": true,
+        "durationMs": 1398,
+        "commands": [
+          {
+            "command": "python -m pip install -q -r requirements.txt pytest",
+            "exitCode": 0,
+            "timedOut": false,
+            "durationMs": 795
+          },
+          {
+            "command": "python -m pytest -q tests",
+            "exitCode": 0,
+            "timedOut": false,
+            "durationMs": 603
+          }
+        ]
+      }
+    }
+  ],
+  "apiIssues": [],
+  "pullRequestUrl": "https://github.com/Chrisfoz/icd-mapper-harness-campaign/pull/3"
+}

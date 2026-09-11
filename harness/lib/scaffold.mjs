@@ -23,6 +23,14 @@ import { normalizeApprovalClass, normalizeAmbition } from './adapter.mjs';
  */
 export const JS_YAML_VERSION = '5.3.0';
 
+/**
+ * The Node major the generated workflow runs the harness on. Must satisfy
+ * package.json's `engines` minimum — tests/lib/ci-config.test.mjs checks
+ * the two agree, because they drifted once already (the template said 20
+ * long after nothing here had been tested on it).
+ */
+export const NODE_VERSION = '22';
+
 /** Single-quote a path/command for safe use in a bash argument list — the same escaping bash itself expects. */
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -239,6 +247,120 @@ export function buildAdapterObject(a) {
 }
 
 /**
+ * The inverse of buildAdapterObject(): the answers object an existing
+ * `project-adapter.yml` implies, so the generated workflow and install
+ * README can be rendered FROM the adapter (`init --from-adapter`) instead of
+ * from a fresh round of questions.
+ *
+ * Why it exists: the install README tells an owner to change
+ * `constitution.approval_class` "and re-run init with --force" — which asked
+ * every question again and overwrote the adapter they had just edited. The
+ * adapter is the source of truth; this makes it one.
+ *
+ * Pure. Provider facts that need the registry come in as functions, so this
+ * file stays free of it (the same reason init.mjs, not this file, resolves
+ * roleProviders).
+ *
+ * @param {object} adapter  A parsed project-adapter.yml.
+ * @param {object} deps
+ * @param {(name: string) => string} deps.providerEnvKey    Lab name → its API-key variable.
+ * @param {(model: string) => string|null} deps.modelProvider  Model id → lab name, or null if unknown.
+ * @returns {object} answers, in the shape init.mjs builds
+ */
+export function answersFromAdapter(adapter, { providerEnvKey, modelProvider }) {
+  const a = adapter ?? {};
+  const project = a.project ?? {};
+  const constitution = a.constitution ?? {};
+  const roles = a.roles ?? {};
+  const memory = a.memory ?? {};
+  const consensus = memory.escalation_consensus ?? {};
+  const context = a.context ?? {};
+  const deployment = a.deployment ?? {};
+  const num = (v) => (Number.isFinite(v) ? v : undefined);
+  const lab = (name) => ({ name, envKey: providerEnvKey(name) });
+
+  const roleModels = [roles.implement?.model, roles.review?.model, roles.rank?.model, ...(a.notify ? [a.notify.digest_model || 'claude-opus-5'] : [])];
+  const roleProviders = [...new Set(roleModels.filter(Boolean).map((m) => modelProvider(m)).filter(Boolean))].map(lab);
+
+  const answers = {
+    harnessVersion: a.harness?.version,
+    projectId: project.id,
+    repository: project.repository,
+    defaultBranch: project.default_branch || 'main',
+    goalStatement: project.goal?.statement,
+    goalHolds: project.goal?.holds,
+    goalAwayFrom: project.goal?.away_from,
+    providers: (a.providers?.watched ?? []).map(lab),
+    roleProviders,
+    snapshotPath: a.providers?.snapshot_path,
+    maxFanout: num(a.providers?.max_fanout),
+    allowedPaths: constitution.allowed_paths ?? [],
+    createOnlyPaths: constitution.create_only_paths ?? [],
+    frozenPaths: constitution.frozen_paths ?? [],
+    appendOnlyPaths: constitution.append_only_paths ?? [],
+    frozenFields: constitution.frozen_fields,
+    churnMaxFiles: num(constitution.churn_ceiling?.max_files),
+    churnMaxLines: num(constitution.churn_ceiling?.max_lines),
+    approvalClass: constitution.approval_class,
+    agentBriefPath: roles.agent_brief_path,
+    reviewerBriefPath: roles.reviewer_brief_path,
+    suggestMaxTokens: num(roles.suggest?.max_output_tokens),
+    implementModel: roles.implement?.model,
+    reviewModel: roles.review?.model,
+    rankModel: roles.rank?.model ?? '',
+    maxAttempts: num(roles.refine?.max_attempts),
+    ledgerPath: memory.escalation_ledger,
+    consensusModels: num(consensus.models),
+    consensusLabs: num(consensus.labs),
+    resurfaceAfter: num(consensus.resurface_after),
+    themesDir: memory.themes_review?.dir,
+    themesCadence: num(memory.themes_review?.cadence_generations),
+    generationsDir: context.generations_dir,
+    runtimeEvidenceDir: context.runtime_evidence_dir,
+    contextStrategy: context.strategy,
+    testFiles: context.test_files,
+    purposes: context.purposes,
+    historyLimit: num(context.history_limit),
+    scopeRequired: num(context.scope_required),
+    ambition: context.ambition,
+    deploymentStrategy: deployment.verify_strategy || 'none',
+    runner: deployment.ci?.runner,
+    maxGenerationTokens: num(a.budget?.max_generation_tokens),
+    cadenceCron: a.cadence?.schedule_cron,
+    // Absent means the adapter predates the flag: keep the schedule, as
+    // buildAdapterObject() would have written it.
+    includeSchedule: a.cadence?.scheduled !== false,
+    testCommands: a.evaluation?.test_commands ?? [],
+  };
+
+  if (deployment.verify_strategy === 'url' && deployment.production_url) {
+    answers.deploymentUrl = { productionUrl: deployment.production_url, watchedFiles: deployment.watched_files ?? [] };
+  }
+  if (deployment.verify_strategy === 'registry' && deployment.registry) {
+    const r = deployment.registry;
+    answers.deploymentRegistry = { ecosystem: r.ecosystem, package: r.package, groupId: r.group_id, artifactId: r.artifact_id, versionFile: r.version_file, registryUrl: r.registry_url };
+  }
+  if (deployment.verify_strategy === 'artifact' && deployment.artifact) {
+    const art = deployment.artifact;
+    answers.deploymentArtifact = { buildCommand: art.build_command, path: art.path, smokeCommand: art.smoke_command };
+  }
+  if (a.notify) {
+    const n = a.notify;
+    answers.notify = {
+      provider: n.provider || 'sendgrid',
+      envKey: `${String(n.provider || 'sendgrid').toUpperCase()}_API_KEY`,
+      recipient: n.recipient,
+      recipientName: n.recipient_name,
+      fromEmail: n.from?.email,
+      fromName: n.from?.name,
+      digestModel: n.digest_model,
+      escalationNotice: n.escalation_notice,
+    };
+  }
+  return answers;
+}
+
+/**
  * Render a full `project-adapter.yml` file: a short header pointing back
  * at the fully-commented example this was generated from (every RESERVED
  * field and the reasoning behind each LIVE one lives there, not
@@ -377,20 +499,17 @@ function mergeSteps(answers) {
       # run-generation.mjs has long exited. Its own step, not part of the
       # one above, so a failure to record is visibly a failure to record
       # rather than a pull request that looks like it was never opened.
+      # Written into the working tree only: the persist step commits the
+      # whole record to ${defaultBranch}, URL included, after this.
       - name: Record the pull request URL in this generation's attempt record
         if: steps.pr.outputs.url
         shell: bash
         continue-on-error: true
         env:
-          BRANCH: \${{ steps.gen.outputs.branch }}
           GEN_NUMBER: \${{ steps.gen.outputs.number }}
           PR_URL: \${{ steps.pr.outputs.url }}
           GENERATIONS_DIR: ${generationsDir}
-        run: |
-          node harness/scripts/record-pull-request.mjs "$GEN_NUMBER" "$PR_URL" --generations-dir "$GENERATIONS_DIR"
-          git add -A -- "$GENERATIONS_DIR"
-          git commit -m "Generation $GEN_NUMBER: record pull request URL" || echo "Nothing to record"
-          git push origin "$BRANCH"`;
+        run: node harness/scripts/record-pull-request.mjs "$GEN_NUMBER" "$PR_URL" --generations-dir "$GENERATIONS_DIR"`;
 }
 
 /**
@@ -408,15 +527,11 @@ export function renderWorkflowTemplate(template, answers) {
     10
   );
   const testCommandLines = indentBlock((answers.testCommands || []).join('\n'), 10);
-  const allowedPathsGitAdd = (answers.allowedPaths || []).map(shellQuote).join(' ');
-  // The harness's own records, committed alongside whatever the agent
-  // changed. Deduped because a project is free to point both at the same
-  // place, and `git add` twice over one directory is harmless but reads
-  // like a mistake.
-  const recordDirsGitAdd = [...new Set([
-    answers.generationsDir || 'docs/generations',
-    answers.themesDir || 'docs/themes',
-  ])].map(shellQuote).join(' ');
+  // Everything the agent may change — edited in place or newly created. The
+  // harness's own records are not in this list on purpose: they go to the
+  // default branch via persist-records.mjs, on every outcome.
+  const editablePathsGitAdd = [...new Set([...(answers.allowedPaths || []), ...(answers.createOnlyPaths || [])])]
+    .map(shellQuote).join(' ');
 
   // The template places {{NOTIFY_STEPS}} after a literal 6-space prefix on
   // its own line, so this block's FIRST line must have no leading spaces
@@ -426,7 +541,13 @@ export function renderWorkflowTemplate(template, answers) {
   // to be exact rather than uniformly shiftable.
   let notifySteps = '';
   if (answers.notify) {
-    const notifyEnvLine = `${answers.notify.envKey}: \${{ secrets.${answers.notify.envKey} }}`;
+    // The notify key, then every lab key: both notify scripts ask a model
+    // (notify.digest_model) to write the email, and with no key for it every
+    // digest silently fell back to the terse template.
+    const notifyEnvLine = [
+      `${answers.notify.envKey}: \${{ secrets.${answers.notify.envKey} }}`,
+      ...requiredProviders(answers).map((p) => `          ${p.envKey}: \${{ secrets.${p.envKey} }}`),
+    ].join('\n');
     // Deliberately NOT gated on a generation number existing. The cycles
     // with no generation are exactly the ones whose silence is hardest to
     // read: a crashed release check, a lab shipping something nothing could
@@ -487,16 +608,20 @@ export function renderWorkflowTemplate(template, answers) {
       ? '  contents: write'
       : ['  contents: write', '  pull-requests: write'].join('\n');
 
-  let out = template;
+  // LF only. A Windows checkout with core.autocrlf hands this a CRLF
+  // template, and every block spliced in below is LF — the result was a
+  // file with mixed line endings that a reader cannot see and a diff tool
+  // reports as a rewrite of every line.
+  let out = template.replace(/\r\n/g, '\n');
   out = sub(out, '{{SCHEDULE_BLOCK}}', scheduleBlock(answers));
+  out = sub(out, '{{NODE_VERSION}}', NODE_VERSION);
   out = sub(out, '{{PERMISSION_LINES}}', permissionLines);
   out = sub(out, '{{RUNNER}}', answers.runner || 'ubuntu-latest');
   out = sub(out, '{{PROVIDER_ENV_LINES}}', providerEnvLines);
   out = sub(out, '{{PROVIDERS_CSV}}', answers.providers.map((p) => p.name).join(','));
   out = sub(out, '{{SNAPSHOT_PATH}}', answers.snapshotPath || '.agent/model-snapshot.json');
   out = sub(out, '{{TEST_COMMAND_LINES}}', testCommandLines);
-  out = sub(out, '{{ALLOWED_PATHS_GIT_ADD}}', allowedPathsGitAdd);
-  out = sub(out, '{{RECORD_DIRS_GIT_ADD}}', recordDirsGitAdd);
+  out = sub(out, '{{EDITABLE_PATHS_GIT_ADD}}', editablePathsGitAdd);
   out = sub(out, '{{THEMES_CADENCE}}', String(Number.isFinite(answers.themesCadence) ? answers.themesCadence : 10));
   out = sub(out, '{{JS_YAML_VERSION}}', JS_YAML_VERSION);
   out = sub(out, '{{GENERATIONS_DIR}}', shellQuote(answers.generationsDir || 'docs/generations'));
@@ -540,9 +665,9 @@ this stays reversible: \`git revert gen-NNN\`, or bisect between two of them.
 
 This is the advanced setting. If you did not mean to choose it, set
 \`constitution.approval_class: human-approval-required\` in
-\`project-adapter.yml\` and re-run init with \`--force\` to regenerate the
-workflow — the merge model is baked into the workflow file, not read from the
-adapter at run time.`
+\`project-adapter.yml\` and regenerate the workflow from it with
+\`node harness/cli/init.mjs --from-adapter --force\` — the merge model is baked
+into the workflow file, not read from the adapter at run time.`
       : `**\`human-approval-required\`** (the default) — when every gate passes
 (preflight, the independent review, the guarded-path check, your own tests),
 the workflow opens a **pull request** and stops. You merge it, or you don't.
@@ -551,10 +676,19 @@ Nothing reaches \`${answers.defaultBranch || 'main'}\` without you.
 The pull request's URL is written back into that generation's
 \`attempts.json\`, so the record of a run says where it ended up.
 
+**One repository setting this needs, which GitHub turns off by default:**
+Settings → Actions → General → Workflow permissions → tick **Allow GitHub
+Actions to create and approve pull requests**. Without it every generation
+passes its gates and then fails to open its pull request. (Or, with the
+\`gh\` CLI: \`gh api -X PUT repos/OWNER/REPO/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true\`
+— read-only is fine as the default: the workflow asks for the write
+permissions it needs itself.)
+
 To switch to autonomous merge later, set
 \`constitution.approval_class: autonomous-merge\` in \`project-adapter.yml\`
-and re-run init with \`--force\` — the merge model is baked into the workflow
-file, not read from the adapter at run time.`;
+and regenerate the workflow from it with
+\`node harness/cli/init.mjs --from-adapter --force\` — the merge model is baked
+into the workflow file, not read from the adapter at run time.`;
 
   const cadenceSection =
     answers.includeSchedule === false

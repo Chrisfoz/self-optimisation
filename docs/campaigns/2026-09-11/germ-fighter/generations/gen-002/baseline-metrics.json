@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "throughGeneration": "002",
+  "date": "2026-09-11",
+  "metrics": [
+    {
+      "name": "autoplayer clears of easy level 1",
+      "value": 5,
+      "unit": "of 5 seeds",
+      "direction": "higher",
+      "detail": "seed 1: cleared in 88.0s; seed 2: cleared in 124.3s; seed 3: cleared in 74.5s; seed 4: cleared in 165.0s; seed 5: cleared in 110.0s",
+      "plugin": "level-completion"
+    },
+    {
+      "name": "autoplayer lives lost per run",
+      "value": 0,
+      "unit": null,
+      "direction": "lower",
+      "detail": null,
+      "plugin": "level-completion"
+    },
+    {
+      "name": "lives lost when three germs land at once",
+      "value": 1,
+      "unit": null,
+      "direction": "lower",
+      "detail": "one frame, three stationary germs placed on the player, shield off",
+      "plugin": "level-completion"
+    },
+    {
+      "name": "autoplayer seconds to clear",
+      "value": 112.3,
+      "unit": "s",
+      "direction": null,
+      "detail": "mean over the seeds that cleared; no direction — faster is not obviously better for a child",
+      "plugin": "level-completion"
+    },
+    {
+      "name": "tap targets under 44px (mid-game, phone)",
+      "value": 0,
+      "unit": null,
+      "direction": "lower",
+      "detail": "all 7 visible targets are at least 44px",
+      "plugin": "mobile-controls"
+    },
+    {
+      "name": "smallest tap target (mid-game, phone)",
+      "value": 44,
+      "unit": "px",
+      "direction": "higher",
+      "detail": null,
+      "plugin": "mobile-controls"
+    },
+    {
+      "name": "overlapping tap targets (mid-game, phone)",
+      "value": 0,
+      "unit": null,
+      "direction": "lower",
+      "detail": null,
+      "plugin": "mobile-controls"
+    },
+    {
+      "name": "frame time p95 (4× CPU throttle)",
+      "value": 16.8,
+      "unit": "ms",
+      "direction": "lower",
+      "detail": "240 frames over 4s",
+      "tolerance": 4,
+      "plugin": "frame-time"
+    },
+    {
+      "name": "frames slower than 30fps (4× CPU throttle)",
+      "value": 0,
+      "unit": "%",
+      "direction": "lower",
+      "detail": null,
+      "tolerance": 3,
+      "plugin": "frame-time"
+    }
+  ],
+  "artifacts": [
+    {
+      "kind": "image",
+      "label": "Germ Fighter mid-game at 390×844 (touch)",
+      "file": "phone-midgame.png",
+      "mime": "image/png",
+      "bytes": 273098,
+      "plugin": "mobile-controls"
+    }
+  ],
+  "errors": [],
+  "fingerprint": "b7a125f72eddcb3c",
+  "phase": "baseline"
+}

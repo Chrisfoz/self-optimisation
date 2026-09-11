@@ -29,6 +29,94 @@ import fs from 'fs';
 import path from 'path';
 import { callModelWithHeadroom } from './llm-provider.mjs';
 
+/**
+ * The last line of every complete review. The harness asks for it in the
+ * review request (REVIEW_CONTRACT below) and an approval without it is not
+ * an approval: it is the one signal of completeness that does not depend on
+ * a provider reporting its own stop reason honestly.
+ */
+export const REVIEW_END_MARKER = 'END OF REVIEW';
+
+/**
+ * The mechanical half of the response format — the harness's, not the
+ * project's, the same split the suggestion stage's SUGGEST_RESPONSE_FORMAT
+ * makes. It goes in the review REQUEST rather than the system prompt, so
+ * the project's reviewer brief stays the whole system prompt, byte for
+ * byte.
+ */
+export const REVIEW_CONTRACT = `## Response contract — enforced by the harness, not a style request
+
+- Exactly one line that begins \`VERDICT:\`, followed by exactly \`APPROVED\` or \`REJECTED\` and nothing else. Do not write the word "verdict" anywhere else in your response.
+- An approval lists no required fixes. If anything must change, the verdict is REJECTED.
+- The last line of your response is exactly: ${REVIEW_END_MARKER}
+
+A response that breaks any of these, or that is cut off before its last line, is treated as a rejection.`;
+
+/** Strip the markdown a model wraps a line in — bold, italics, code, headings, quotes — so `**VERDICT:** APPROVED` reads as what it says. */
+function bareLine(line) {
+  return line.replace(/^[\s>#*_`]+/, '').replace(/[\s*_`]+$/, '').replace(/\*\*|__/g, '');
+}
+
+/**
+ * Read a verdict out of a review, and refuse anything that is not
+ * unambiguously one complete approval.
+ *
+ * The previous parser took the first `VERDICT:` line it found and trusted
+ * it. That accepted a response truncated straight after `VERDICT: APPROVED`
+ * (nothing after it — no reasoning, no details — had been written), and a
+ * response that approved and then rejected, because the first match won.
+ * Both are real shapes: a reasoning model that runs out of room, and one
+ * that changes its mind mid-review. This gate fails closed, so every
+ * uncertain case here is a rejection with the reason named in `problem`.
+ *
+ * Pure: no model call, no filesystem — tested on text alone.
+ *
+ * @param {string} raw
+ * @param {{truncated?: boolean}} [opts]  The provider's own truncation flag.
+ * @returns {{approved: boolean, verdict: 'approved'|'rejected', reason: string, problem: string|null}}
+ *   `problem` is null for a well-formed review (approved or rejected), and
+ *   names what was wrong for one that could not be trusted.
+ */
+export function parseVerdict(raw, { truncated = false } = {}) {
+  const text = String(raw ?? '');
+  const reason = text.match(/^\W*REASON\W*:\s*(.+)$/im)?.[1]?.replace(/[*_`]+$/, '').trim() ?? '';
+  const reject = (problem) => ({ approved: false, verdict: 'rejected', reason: reason || problem, problem });
+
+  if (truncated) return reject('the review was truncated — the provider reported it hit its output limit');
+
+  const lines = text.split(/\r?\n/);
+  const verdictLines = lines
+    .map((line) => bareLine(line).match(/^VERDICT\s*:\s*(.*)$/i))
+    .filter(Boolean)
+    .map((m) => m[1].replace(/[.!\s]+$/, '').trim());
+  const mentions = (text.match(/\bverdict\b\s*:/gi) ?? []).length;
+
+  if (verdictLines.length === 0) return reject('no VERDICT line');
+  if (verdictLines.length > 1 || mentions > 1) {
+    return reject(`more than one verdict in the response (${verdictLines.join(', ') || `${mentions} mentions`}) — contradictory or echoed`);
+  }
+
+  const value = verdictLines[0].toUpperCase();
+  if (value !== 'APPROVED' && value !== 'REJECTED') return reject(`malformed verdict "${verdictLines[0]}" — expected exactly APPROVED or REJECTED`);
+
+  // A well-formed rejection needs nothing more: it cannot be made unsafe by
+  // being incomplete.
+  if (value === 'REJECTED') return { approved: false, verdict: 'rejected', reason, problem: null };
+
+  const last = lines.map(bareLine).filter((l) => l && !/^`{3,}\w*$/.test(l)).at(-1) ?? '';
+  if (last !== REVIEW_END_MARKER) {
+    return reject(`the approval is incomplete — its last line is not "${REVIEW_END_MARKER}", so the rest of the review may never have been written`);
+  }
+
+  // An approval that also lists something that must change is not an
+  // approval. "none", "n/a" and a dash are an empty list.
+  const fixes = text.match(/^\W*REQUIRED FIXES\W*:([\s\S]*?)(?=^\W*[A-Z][A-Z ]{2,}\W*:|^\W*END OF REVIEW|$(?![\s\S]))/im)?.[1] ?? '';
+  const realFixes = fixes.split(/\r?\n/).map((l) => l.replace(/^[\s\-*•\d.)]+/, '').trim()).filter((l) => l && !/^(none|n\/?a|nothing|-)\.?$/i.test(l));
+  if (realFixes.length) return reject(`contradictory — approved, but lists required fixes: ${realFixes.slice(0, 2).join('; ')}`);
+
+  return { approved: true, verdict: 'approved', reason, problem: null };
+}
+
 /** The default "no visual capture configured" result — the honest default this file ships with. */
 async function noVisualCapture() {
   return { available: false, reason: 'no visual capture configured for this project', images: [] };
@@ -58,6 +146,9 @@ function describeVisual(visual) {
  *   still pass, e.g. the project's `evaluation.test_commands` joined into
  *   prose. Optional — omitted from the prompt when not supplied, rather
  *   than inventing suite names.
+ * @param {string} [opts.testResults]  What the project's own test commands
+ *   did when run against this exact tree inside the loop
+ *   (test-runner.mjs's renderTestPass()). Omitted when the loop ran none.
  * @param {() => Promise<{available: boolean, images: Array, reason?: string}>} [opts.captureVisual]
  *   Project-supplied visual-capture hook. Defaults to a no-op that reports
  *   unavailable — see noVisualCapture() above.
@@ -80,6 +171,7 @@ export async function reviewChanges({
   filesChanged = [],
   repoRoot = process.cwd(),
   testDescription = null,
+  testResults = null,
   captureVisual = noVisualCapture,
   reviewModel = 'claude-opus-5',
   maxTokens = 16000,
@@ -112,10 +204,12 @@ ${diff}
 
 ### Full source of every touched file
 ${sources || '(no files reported as changed — treat this as a rejection)'}
-${testDescription ? `\n### What must still pass\n${testDescription}\n` : ''}
+${testDescription ? `\n### What must still pass\n${testDescription}\n` : ''}${testResults ? `\n### The project's own tests, run against this change\n${testResults}\n\nPassing tests are evidence, not a verdict: they show nothing the suite does not check. Judge the change itself.\n` : ''}
 ${describeVisual(visual)}
 
-Review the change and give your verdict.`;
+Review the change and give your verdict.
+
+${REVIEW_CONTRACT}`;
 
   // The committed goal (docs/curiosity/C1): the reviewer is the thing that
   // judges alignment to it — in prose, inside a gate that already fails
@@ -133,15 +227,13 @@ Review the change and give your verdict.`;
     images: visual.images,
   });
 
-  const raw = result.text;
-  const verdictMatch = raw.match(/^VERDICT:\s*(APPROVED|REJECTED)/im);
-  // Absent or unparseable verdict is a rejection: this gate fails closed.
-  const approved = verdictMatch?.[1]?.toUpperCase() === 'APPROVED';
+  const raw = result.text ?? '';
+  // Fails closed: truncated, contradictory, malformed or incomplete is a
+  // rejection, with `problem` naming which. See parseVerdict().
+  const parsed = parseVerdict(raw, { truncated: Boolean(result.truncated) });
 
   return {
-    approved,
-    verdict: approved ? 'approved' : 'rejected',
-    reason: raw.match(/^REASON:\s*(.+)$/im)?.[1]?.trim() ?? '',
+    ...parsed,
     feedback: raw,
     raw,
     // Handed back so a rejected attempt can be shown what it actually

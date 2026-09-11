@@ -169,21 +169,25 @@ flowchart TD
 
   implement --> apply{"✅ edit-format.mjs<br/>allowlist + each SEARCH unique,<br/>every file validated in memory<br/>BEFORE a byte reaches disk"}
   apply -->|"refused · nothing written"| refine
-  apply -->|"applied all-or-nothing"| review["✅ STAGE 3 · REVIEW<br/>review.mjs — fresh context, pinned model,<br/>judged against the goal.<br/>No verdict is a REJECTION."]
+  apply -->|"applied all-or-nothing"| tests{"✅ STAGE 2b · TESTS<br/>test-runner.mjs — the project's own<br/>test_commands against THIS tree,<br/>credentials scrubbed from the child"}
+  tests -->|"red · failing lines handed back,<br/>the reviewer is not paid"| refine
+  tests -->|"green, or none configured"| review["✅ STAGE 3 · REVIEW<br/>review.mjs — fresh context, pinned model,<br/>judged against the goal, shown the test run.<br/>Exactly one complete verdict, or a REJECTION:<br/>truncated, contradictory or malformed all fail closed."]
 
   capture["✅ visual_capture — a render of THIS<br/>change, made for the reviewer"] -.-> review
 
-  review -->|"REJECTED"| refine["✅ STAGE 4 · REFINE<br/>restore the pristine tree, hand back the<br/>real rejection text, try again"]
+  review -->|"REJECTED"| refine["✅ STAGE 4 · REFINE<br/>restore the pristine tree, hand back the<br/>real rejection or test failure, try again"]
   refine --> implement
 
   review -->|"APPROVED"| shipped(["✅ the change on disk,<br/>proposal.md + attempts.json"])
   refine -->|"attempts exhausted"| abandoned(["✅ tree restored to pristine,<br/>attempts.json written — a failed<br/>run is data, not a wasted one"])
 
-  budget["✅ spend.mjs — every call's tokens,<br/>projected before the fan-out and checked<br/>between attempts against budget.max_generation_tokens"]
+  budget["✅ spend.mjs — EVERY underlying request metered,<br/>retries included; each reserves its input + full<br/>output allowance before it is sent, against<br/>budget.max_generation_tokens"]
   budget -.-> suggest
   budget -.-> implement
 
-  shipped --> records[("✅ the record every future run reads")]
+  measure["✅ measure.mjs — the same evaluators on the<br/>untouched tree and the changed one:<br/>benefits, regressions, cost, fate"] -.-> records
+
+  shipped --> records[("✅ the record every future run reads —<br/>committed to the default branch on EVERY<br/>outcome, under a claimed gen-NNN and a run id")]
   abandoned --> records
   records -.->|"read back next generation"| ctx
 

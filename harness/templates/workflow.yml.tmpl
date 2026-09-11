@@ -67,6 +67,15 @@ on:
 permissions:
 {{PERMISSION_LINES}}
 
+# One run at a time, per repository. Two overlapping runs would compute the
+# same next generation number, race for the same branch and both push to
+# the default branch. Queued rather than cancelled: a run that is already
+# spending should finish and record what it spent. (The numbering step also
+# claims its branch atomically, so even without this nothing is overwritten.)
+concurrency:
+  group: self-improvement-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
   self-improve:
     runs-on: {{RUNNER}}
@@ -84,11 +93,21 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '20'
+          node-version: '{{NODE_VERSION}}'
 
       - name: Install harness dependencies
         shell: bash
         run: npm install --no-save --ignore-scripts js-yaml@{{JS_YAML_VERSION}}
+
+      # Once, for every step that commits. It used to be set only by the
+      # snapshot step, which campaign runs skip — so on a campaign run the
+      # pull-request read-back's commit failed on a missing identity, and
+      # its `|| echo` reported that as "Nothing to record".
+      - name: Configure the bot's git identity
+        shell: bash
+        run: |
+          git config user.email "self-improvement-bot@github-actions.local"
+          git config user.name "Self-Improvement Bot"
 
       # The kill switch. A repository VARIABLE (not a secret — it is not
       # sensitive, and a variable can be read back and seen in the UI),
@@ -198,10 +217,16 @@ jobs:
           git commit -m "Record pull request outcomes and regenerate the report" || echo "Nothing to record"
           git push
 
+      # The probe makes a real, one-word call to every candidate, so it needs
+      # the same keys the release check does. Without them every candidate
+      # reads as unreachable and the cycle is skipped before it starts —
+      # which is exactly what this step did until it was given them.
       - name: Probe reachability, then read the survivors
         id: probe
         if: steps.check.outputs.has-new == 'true' || steps.campaign.outputs.has-new == 'true'
         shell: bash
+        env:
+{{PROVIDER_ENV_LINES}}
         run: |
           node harness/scripts/probe-models.mjs "$RUNNER_TEMP/release-check.json"
           echo "has-new=$(jq -r '.hasNewReleases' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
@@ -220,23 +245,36 @@ jobs:
         run: |
 {{TEST_COMMAND_LINES}}
 
-      - name: Determine the next generation number
+      # The next number is one past the highest in any trace a generation
+      # leaves — a gen-NNN tag, an agent/gen-NNN branch, a gen-NNN record
+      # on {{DEFAULT_BRANCH}} — and the branch is claimed on the remote with
+      # a lease that fails if it already exists, before anything is spent.
+      # It used to read tags alone, which only autonomous merge creates, so
+      # on the pull-request path every run was generation 001 and each
+      # overwrote the last one's record. See harness/lib/generation-id.mjs.
+      - name: Claim the next generation number and its branch
         id: gen
         if: steps.preflight.outcome == 'success'
         shell: bash
         run: |
-          last=$(git tag -l 'gen-*' | sed 's/^gen-//' | sort -n | tail -1)
-          next=$(( ${last:-0} + 1 ))
-          padded=$(printf '%03d' "$next")
-          echo "number=$padded" >> "$GITHUB_OUTPUT"
-          echo "branch=agent/gen-$padded" >> "$GITHUB_OUTPUT"
+          git config user.email "self-improvement-bot@github-actions.local"
+          git config user.name "Self-Improvement Bot"
+          node harness/scripts/next-generation.mjs --base {{DEFAULT_BRANCH}} --remote origin --generations-dir {{GENERATIONS_DIR}}
 
-      - name: Create the agent branch
+      # The same evaluators as the step after the loop, on the tree as it is
+      # BEFORE any change — so the numbers measured afterwards have something
+      # to be compared against (harness/lib/measure.mjs writes
+      # comparison.json: benefits, regressions, and what the generation
+      # cost). Never gating, like every evaluator. A project with none
+      # configured runs this and it says so.
+      - name: Measure the baseline, before any change (never gating)
+        id: baseline
         if: steps.gen.outputs.number
         shell: bash
+        continue-on-error: true
         env:
-          BRANCH: ${{ steps.gen.outputs.branch }}
-        run: git checkout -b "$BRANCH"
+          GEN_NUMBER: ${{ steps.gen.outputs.number }}
+        run: node harness/scripts/run-evaluators.mjs --baseline
 
       - name: Run the improvement loop
         id: improve
@@ -246,6 +284,8 @@ jobs:
         env:
 {{PROVIDER_ENV_LINES}}
           GEN_NUMBER: ${{ steps.gen.outputs.number }}
+          RUN_ID: ${{ steps.gen.outputs.run-id }}
+          RUN_URL: ${{ steps.gen.outputs.run-url }}
           SUGGEST_MODELS: ${{ steps.probe.outputs.models }}
           SCOPE: ${{ github.event.inputs.scope }}
           CAMPAIGN: ${{ steps.campaign.outputs.has-new }}
@@ -300,17 +340,21 @@ jobs:
           BRANCH: ${{ steps.gen.outputs.branch }}
           GEN_NUMBER: ${{ steps.gen.outputs.number }}
           SUMMARY: ${{ steps.improve.outputs.summary }}
+        # The code change and nothing else. The harness's own record of this
+        # run (attempts.json, the proposal, the ledger, a themes review) is
+        # committed to {{DEFAULT_BRANCH}} by the persist step below, on every
+        # outcome — not here, where it would reach {{DEFAULT_BRANCH}} only if
+        # the pull request merged, and would conflict with the pull-request
+        # read-back writing into the same file while the PR is open.
+        #
+        # Both editable surfaces: allowed_paths AND create_only_paths. A new
+        # file (a new test, say) used to be left out, so the tests passed
+        # against the runner's untracked copy and the pull request shipped
+        # without it. One pathspec at a time, because `git add` on a glob
+        # that matches nothing is fatal under bash -e.
         run: |
-          git add -A -- {{ALLOWED_PATHS_GIT_ADD}}
-          # The harness's own record of this run: the generation record
-          # run-generation.mjs writes, and the themes review the step above
-          # writes at a cadence boundary. Added explicitly rather than left
-          # to allowed_paths, because they are not the agent's editable
-          # surface — a project that (rightly) refuses to let the agent
-          # rewrite its own history would otherwise never commit that
-          # history at all, and every future run would read an empty one.
-          for d in {{RECORD_DIRS_GIT_ADD}}; do
-            if [ -d "$d" ]; then git add -A -- "$d"; fi
+          for p in {{EDITABLE_PATHS_GIT_ADD}}; do
+            if [ -n "$(git status --porcelain -- "$p")" ]; then git add -A -- "$p"; fi
           done
           git commit -m "Generation $GEN_NUMBER: $SUMMARY"
           git push origin "$BRANCH"
@@ -367,19 +411,23 @@ jobs:
           if [ -f "$RUNNER_TEMP/deploy-evidence.json" ]; then args+=(--fragment "$RUNNER_TEMP/deploy-evidence.json"); fi
           node harness/scripts/record-runtime-evidence.mjs "${args[@]}"
 
-      - name: Commit the runtime evidence
-        if: always() && steps.evidence.outputs.ran == 'true'
+      # Every outcome — approved, abandoned, crashed, no proposal, over
+      # budget — commits its record to {{DEFAULT_BRANCH}}: the generation's
+      # directory, the escalation ledger, a themes review, the runtime
+      # evidence above. Done in a temporary worktree, so this job's own
+      # checkout is never switched; only files this run changed are copied;
+      # and a push that loses a race retries on the new tip. Until this
+      # existed, a failed generation's record was deleted with the runner,
+      # and the failures were exactly what the next run could not see. Its
+      # outcome is reported to the digest as the `records` gate.
+      - name: Persist this generation's record to {{DEFAULT_BRANCH}}
+        id: persist
+        if: always() && steps.gen.outputs.number
         shell: bash
+        continue-on-error: true
         env:
-          EVIDENCE_PATH: ${{ steps.evidence.outputs.path }}
           GEN_NUMBER: ${{ steps.gen.outputs.number }}
-        run: |
-          git config user.email "self-improvement-bot@github-actions.local"
-          git config user.name "Self-Improvement Bot"
-          git checkout {{DEFAULT_BRANCH}}
-          git add -- "$EVIDENCE_PATH"
-          git commit -m "Runtime evidence for generation $GEN_NUMBER" || echo "No evidence to commit"
-          git push origin {{DEFAULT_BRANCH}}
+        run: node harness/scripts/persist-records.mjs --base {{DEFAULT_BRANCH}} --remote origin
 
       # Gate results only exist when a generation was actually attempted.
       # The digest step below is NOT gated on that — see its own comment.
@@ -400,9 +448,19 @@ jobs:
           PULL_REQUEST: ${{ steps.pr.outcome }}
           PROMOTE: ${{ steps.promote.outcome }}
           VERIFY: ${{ steps.verify.outcome }}
+          RECORDS: ${{ steps.persist.outcome }}
+        # `add` returns 0 explicitly when it skips. GitHub runs this under
+        # `bash -eo pipefail`; the old one-liner `[ -n "$2" ] && ...` returned
+        # 1 for the absent path, and -e killed the step on it — on EVERY run,
+        # in both merge models, since one of the two paths is always absent.
+        # tests/scripts/workflow-shell.test.mjs runs this block under those
+        # exact flags.
         run: |
           gates='[]'
-          add() { [ -n "$2" ] && gates=$(echo "$gates" | jq --arg n "$1" --arg r "$2" '. + [{name:$n, result:$r}]'); }
+          add() {
+            if [ -z "$2" ]; then return 0; fi
+            gates=$(printf '%s' "$gates" | jq -c --arg n "$1" --arg r "$2" '. + [{name:$n, result:$r}]')
+          }
           add preflight "$PREFLIGHT"
           add review "$REVIEW"
           add guard "$GUARD"
@@ -410,8 +468,22 @@ jobs:
           add pull-request "$PULL_REQUEST"
           add promote "$PROMOTE"
           add verify "$VERIFY"
+          add records "$RECORDS"
           echo "json=$gates" >> "$GITHUB_OUTPUT"
           merged=false
-          [ "$PROMOTE" = "success" ] && merged=true
+          if [ "$PROMOTE" = "success" ]; then merged=true; fi
           echo "merged=$merged" >> "$GITHUB_OUTPUT"
       {{NOTIFY_STEPS}}
+
+      # Last, after the digest has had its say: a generation whose record
+      # could not be saved turns the whole run red. The persist step is
+      # continue-on-error so nothing after it is skipped, which on its own
+      # meant a lost record looked like a green run — the first real run on
+      # GitHub Actions lost one exactly that way. A red run is the one signal
+      # that reaches someone with no digest configured.
+      - name: Fail the run if this generation's record was not saved
+        if: always() && steps.persist.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::error::This generation's record could not be committed to {{DEFAULT_BRANCH}} — see the persist step. It exists only on this runner and is gone when the job ends."
+          exit 1

@@ -28,7 +28,7 @@ test('computeMetrics: yield, precision, recurrence, cost and per-lab/per-scope c
   const m = computeMetrics(RECORDS);
   assert.equal(m.total, 7);
   assert.deepEqual(m.byOutcome, { approved: 4, abandoned: 2, 'no-proposal': 1 });
-  assert.deepEqual(m.fates, { merged: 2, open: 0, closed: 1, reverted: 1 });
+  assert.deepEqual(m.fates, { merged: 2, open: 0, closed: 1, reverted: 1, rehearsed: 0 });
   assert.deepEqual(m.releaseYield, { kept: 2, total: 7 });
   assert.deepEqual(m.promotionPrecision, { stayed: 2, landed: 3, closedByOwner: 1 });
   assert.deepEqual(m.failureRecurrence, { recurred: 1, abandoned: 2 });
@@ -71,4 +71,20 @@ test('loadRecords reads every gen-NNN/attempts.json oldest first and counts malf
   assert.deepEqual(records.map((r) => r.generation), ['001', '002']);
   assert.equal(malformed, 1);
   assert.deepEqual(loadRecords({ repoRoot: path.join(repoRoot, 'nowhere') }), { records: [], malformed: 0 });
+});
+
+test('a change approved only in a local rehearsal is not counted as kept by a person (the first real campaigns)', async () => {
+  const { computeMetrics, renderReport, fateOf } = await import('../../harness/lib/report.mjs');
+  const records = [
+    { generation: '001', outcome: 'approved', run: { id: 'local-1', source: 'local' } },
+    { generation: '002', outcome: 'approved', run: { id: '42-1', source: 'github-actions' } },
+    { generation: '003', outcome: 'approved' }, // written before `run` existed: the old reading stands
+  ];
+  assert.equal(fateOf(records[0]), 'rehearsed');
+  assert.equal(fateOf(records[1]), 'merged');
+  assert.equal(fateOf(records[2]), 'merged');
+  const m = computeMetrics(records);
+  assert.equal(m.releaseYield.kept, 2);
+  assert.equal(m.fates.rehearsed, 1);
+  assert.match(renderReport(m), /1 approved only in a local rehearsal and never put to a person/);
 });

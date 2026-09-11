@@ -1,0 +1,221 @@
+{
+  "generation": "002",
+  "date": "2026-09-11",
+  "harnessVersion": "0.1.0",
+  "run": {
+    "id": "local-20260911T050255Z-51476",
+    "url": null,
+    "source": "local"
+  },
+  "outcome": "approved",
+  "scope": "focused",
+  "scopeReason": "context.ambition is \"focused\": every generation is a small, localised change",
+  "campaign": true,
+  "seatPromotion": null,
+  "suggestModel": "muse-spark-1.3 (meta)",
+  "fanOut": {
+    "asked": [
+      "gpt-6-astra (openai)",
+      "grok-4.6 (xai)",
+      "muse-spark-1.3 (meta)"
+    ],
+    "proposed": [
+      "gpt-6-astra",
+      "grok-4.6",
+      "muse-spark-1.3"
+    ],
+    "offeredEdits": [
+      "gpt-6-astra",
+      "grok-4.6",
+      "muse-spark-1.3"
+    ],
+    "failed": [],
+    "chosen": "muse-spark-1.3 (meta)",
+    "rankedBy": "claude-opus-5",
+    "rankingReason": "It fixes real data loss (valid rows with omitted trailing empty columns being dropped) in the primary, test-covered reader with a three-line pad, and it argues correctly that a short row can only mean missing trailing optionals, so the recovery is a no-op for clean files; Proposal 2 is the same idea",
+    "proposalFiles": [
+      "docs/generations/gen-002/proposals/gpt-6-astra.md",
+      "docs/generations/gen-002/proposals/grok-4.6.md",
+      "docs/generations/gen-002/proposals/muse-spark-1.3.md"
+    ],
+    "briefFeedback": {
+      "gpt-6-astra": "The source and mapping-integrity constraints helped identify a concrete retry bug. Whole-file buffering increases memory use but matches the primary reader's existing approach. I would delete the conflicting response-format requirements; no implementation constraint needed relaxing.",
+      "grok-4.6": "The 7/8 edge-case score plus gen-001's skip-with-warning made the next change obvious; \"never silently drop\" and frozen test names kept the edit small. Conflicting required output shapes (SUMMARY-first vs PILLAR-first) and \"create-only pattern\" with no pattern were noise. The no-shared-module rule blocks the obvious DRY of one reader used by all four scripts — that constraint is real, but it pushes copy-paste fixes. I would delete the duplicate format contracts and the html-fenced source dump.",
+      "muse-spark-1.3": "The frozen test list + measured 7/8 table genuinely helped — it pinpointed the single failing edge case without reading the harness. The exact-once SEARCH rule and 32k budget note helped keep the edit small. What constrained for no good reason: demanding PILLAR-format analysis and SUMMARY-format commit in different places with \"EXACTLY / no other structure\" on both — I had to guess which parser wins. I would delete one of the two response templates."
+    }
+  },
+  "screenshotsSent": 0,
+  "implementModel": "claude-opus-5",
+  "implementedBy": "claude-opus-5",
+  "selfImplemented": false,
+  "proposalSummary": "In `ICDMapper.read_mapping_file` (`icd_mapper.py`), keep the warning naming file and data-row number but recover the row instead of dropping it: if `len(row) < 8`, pad with `''` to length 8 (`row += [''] * (8 - len(row))`) and continue normal extraction. Missing trailing fields thus become `''` -> `",
+  "escalations": {
+    "opened": [
+      {
+        "id": "esc-001",
+        "title": "Characterisation tests never assert that a short row is kept, so this recovery can regress without a red build.",
+        "by": "grok-4.6 (xai)"
+      }
+    ],
+    "supported": [],
+    "dissented": [],
+    "flagged": [],
+    "judged": {
+      "agreed": [],
+      "disagreed": [],
+      "irrelevant": [],
+      "retired": []
+    }
+  },
+  "contextSize": null,
+  "spend": {
+    "calls": 11,
+    "inputTokens": 50545,
+    "outputTokens": 25911,
+    "totalTokens": 76456,
+    "estimatedCalls": 0,
+    "failedRequests": 0,
+    "refusedRequests": 0,
+    "maxGenerationTokens": 600000,
+    "byModel": {
+      "gpt-6-astra": {
+        "calls": 1,
+        "inputTokens": 5370,
+        "outputTokens": 630
+      },
+      "muse-spark-1.3": {
+        "calls": 1,
+        "inputTokens": 5558,
+        "outputTokens": 4604
+      },
+      "grok-4.6": {
+        "calls": 1,
+        "inputTokens": 6545,
+        "outputTokens": 1057
+      },
+      "claude-opus-5": {
+        "calls": 4,
+        "inputTokens": 23518,
+        "outputTokens": 16693
+      },
+      "gpt-5.5": {
+        "calls": 4,
+        "inputTokens": 9554,
+        "outputTokens": 2927
+      }
+    },
+    "bySite": {
+      "suggest": {
+        "calls": 3,
+        "inputTokens": 17473,
+        "outputTokens": 6291
+      },
+      "rank": {
+        "calls": 1,
+        "inputTokens": 2613,
+        "outputTokens": 851
+      },
+      "review": {
+        "calls": 4,
+        "inputTokens": 9554,
+        "outputTokens": 2927
+      },
+      "implement": {
+        "calls": 3,
+        "inputTokens": 20905,
+        "outputTokens": 15842
+      }
+    }
+  },
+  "tests": {
+    "inLoop": true,
+    "baseline": {
+      "passed": true,
+      "durationMs": 1644,
+      "commands": [
+        {
+          "command": "python -m pytest -q tests",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 1643
+        }
+      ]
+    }
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "by": "muse-spark-1.3 (meta)",
+      "outcome": "rejected-by-review",
+      "detail": "The change can create mappings with blank required fields (for example rows with fewer than five columns become entries with an empty ICD-10-AM code), risking invalid mappings in output.",
+      "tests": {
+        "passed": true,
+        "durationMs": 1585,
+        "commands": [
+          {
+            "command": "python -m pytest -q tests",
+            "exitCode": 0,
+            "timedOut": false,
+            "durationMs": 1585
+          }
+        ]
+      }
+    },
+    {
+      "attempt": 2,
+      "by": "claude-opus-5",
+      "outcome": "rejected-by-review",
+      "detail": "Rows with only five to seven fields but both code columns present are now accepted even though non-optional trailing data such as the ICD-10-AM descriptor may have been genuinely truncated, producing mappings with silently blanked fields.",
+      "tests": {
+        "passed": true,
+        "durationMs": 1637,
+        "commands": [
+          {
+            "command": "python -m pytest -q tests",
+            "exitCode": 0,
+            "timedOut": false,
+            "durationMs": 1637
+          }
+        ]
+      }
+    },
+    {
+      "attempt": 3,
+      "by": "claude-opus-5",
+      "outcome": "rejected-by-review",
+      "detail": "The padding path cannot recover any short row because column 7 (ICD-10-AM descriptor) is mandatory, so every row with fewer than 8 fields is still skipped; the stated improvement therefore does not work.",
+      "tests": {
+        "passed": true,
+        "durationMs": 1578,
+        "commands": [
+          {
+            "command": "python -m pytest -q tests",
+            "exitCode": 0,
+            "timedOut": false,
+            "durationMs": 1578
+          }
+        ]
+      }
+    },
+    {
+      "attempt": 4,
+      "by": "claude-opus-5",
+      "outcome": "approved",
+      "detail": "Recover short mapping rows whose omitted trailing columns are optional",
+      "tests": {
+        "passed": true,
+        "durationMs": 1621,
+        "commands": [
+          {
+            "command": "python -m pytest -q tests",
+            "exitCode": 0,
+            "timedOut": false,
+            "durationMs": 1621
+          }
+        ]
+      }
+    }
+  ],
+  "apiIssues": [],
+  "pullRequestUrl": null
+}

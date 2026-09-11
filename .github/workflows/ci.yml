@@ -20,18 +20,37 @@ concurrency:
 
 jobs:
   test:
-    name: Tests
+    name: Tests (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The exact minimum package.json's `engines` declares, and the
+        # current LTS. Testing only a floating major is how this workflow
+        # once went red on every run for weeks: Node 20 read the test glob
+        # as a literal filename, and nothing ran. If you raise `engines`,
+        # raise the first entry with it — tests/lib/ci-config.test.mjs
+        # fails when the two disagree.
+        node: ['22.11.0', '24']
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node }}
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
+      # tests/scripts/workflow-shell.test.mjs executes the generated
+      # workflow's `run:` blocks under GitHub's own bash flags, and needs jq
+      # to do it. Both ship on ubuntu-latest; this step makes a missing one
+      # an explicit failure here rather than a silently skipped test.
+      - name: Check the tools the shell tests need
+        run: bash --version | head -1 && jq --version
+
       - name: Run the harness's own test suite
+        env:
+          REQUIRE_SHELL_TESTS: 'true'
         run: npm test

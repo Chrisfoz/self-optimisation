@@ -326,7 +326,7 @@ test('writeProposal: writes a real markdown file with the expected sections', (t
     parsed: { summary: 'Add a button', rationale: 'Because reasons.', pillar: 'Feedback' },
     suggestResult: { model: 'model-x', provider: 'anthropic' },
     applied: [{ file: 'index.html', removedLines: 1, addedLines: 2 }],
-    review: { raw: 'VERDICT: APPROVED' },
+    review: { raw: 'VERDICT: APPROVED\n\nEND OF REVIEW' },
     attempts: 1, implementedBy: 'model-x', implementModel: 'claude-opus-5', reviewModel: 'claude-opus-5',
     scope: { scope: 'focused', reason: 'x' }, briefFeedback: 'was helpful',
   });
@@ -460,7 +460,7 @@ test('runGeneration: approved via the suggesting model\'s own direct edits (no i
   const call = async ({ model }) => {
     if (model === 'suggest-model') return { text: suggestionWithDirectEdits(), truncated: false, stopReason: null, provider: 'anthropic', sentImages: 0 };
     if (model === 'implement-model') throw new Error('should not need the fallback implementer');
-    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: clean, minimal, matches the proposal.' };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: clean, minimal, matches the proposal.\n\nEND OF REVIEW' };
     throw new Error('unexpected call: ' + model);
   };
 
@@ -481,7 +481,7 @@ test('runGeneration: approved via the fallback implementer when the suggester of
   const call = async ({ model }) => {
     if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
     if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
-    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: good.' };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: good.\n\nEND OF REVIEW' };
     throw new Error('unexpected call: ' + model);
   };
 
@@ -517,7 +517,7 @@ test('runGeneration: a rejected review triggers refine, and the tree is reset to
       // Reject the first attempt, approve the second.
       return implementCalls === 1
         ? { text: 'VERDICT: REJECTED\n\nREASON: needs a fix.\n\nREQUIRED FIXES:\n- fix it' }
-        : { text: 'VERDICT: APPROVED\n\nREASON: fixed.' };
+        : { text: 'VERDICT: APPROVED\n\nREASON: fixed.\n\nEND OF REVIEW' };
     }
     throw new Error('unexpected call: ' + model);
   };
@@ -592,7 +592,7 @@ test('runGeneration: applyEdits failure retries without consuming the implemente
       }
       return { text: VALID_IMPLEMENTATION, truncated: false };
     }
-    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: good.' };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: good.\n\nEND OF REVIEW' };
     throw new Error('unexpected call: ' + model);
   };
 
@@ -621,7 +621,7 @@ test('runGeneration: every stage\'s usage lands in attempts.json as spend, by mo
   const call = async ({ model }) => {
     if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', model, sentImages: 0, usage: { input_tokens: 1000, output_tokens: 300 } };
     if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false, model, usage: { prompt_tokens: 500, completion_tokens: 100 } };
-    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.', model, usage: null };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.\n\nEND OF REVIEW', model, usage: null };
     throw new Error('unexpected call: ' + model);
   };
 
@@ -663,19 +663,54 @@ test('runGeneration: the running cap stops the refine loop with a budget-exhaust
   let implementCalls = 0;
   const call = async ({ model }) => {
     if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', model, sentImages: 0, usage: { input_tokens: 1000, output_tokens: 500 } };
-    if (model === 'implement-model') { implementCalls += 1; return { text: VALID_IMPLEMENTATION, truncated: false, model, usage: { input_tokens: 100, output_tokens: 100 } }; }
-    if (model === 'review-model') return { text: 'VERDICT: REJECTED\n\nREASON: no.\n\nREQUIRED FIXES:\n- x', model, usage: { input_tokens: 50, output_tokens: 10 } };
+    if (model === 'implement-model') { implementCalls += 1; return { text: VALID_IMPLEMENTATION, truncated: false, model, usage: { input_tokens: 20000, output_tokens: 5000 } }; }
+    if (model === 'review-model') return { text: 'VERDICT: REJECTED\n\nREASON: no.\n\nREQUIRED FIXES:\n- x', model, usage: { input_tokens: 2500, output_tokens: 500 } };
     throw new Error('unexpected call: ' + model);
   };
 
-  // 1500 after suggest, 1760 after the first implement+review: the second
-  // attempt must not start.
-  const result = await runGeneration(baseConfig(repoRoot, { budget: { maxGenerationTokens: 1600 } }), { call });
+  // Every request reserves its estimated input plus its WHOLE output
+  // allowance before it is sent (32,000 for a suggestion, 16,000 for an
+  // implementation or a review). Under a 45,000 cap: the suggestion fits,
+  // then 1,500 is spent; the first implementation fits, then 26,500; the
+  // review fits (26,500 + 16,000 + a small prompt), then 29,500. The second
+  // implementation would need 29,500 + 16,000 + its prompt — over the cap,
+  // so it is refused before it is sent.
+  const result = await runGeneration(baseConfig(repoRoot, { budget: { maxGenerationTokens: 45000 } }), { call });
   assert.equal(result.outcome, 'abandoned');
   assert.equal(implementCalls, 1);
   const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
   assert.deepEqual(record.attempts.map((a) => a.outcome), ['rejected-by-review', 'budget-exhausted']);
+  assert.match(record.attempts[1].detail, /in flight|reserved/);
+  assert.equal(record.spend.refusedRequests, 1);
+  assert.ok(record.spend.totalTokens <= 45000, 'never over the cap');
   assert.equal(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), 'original content', 'tree restored');
+});
+
+test('runGeneration: a fan-out reserves per model as it starts — the model the cap cannot hold is refused, the rest run', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  const asked = [];
+  const call = async ({ model }) => {
+    if (model.startsWith('suggest')) { asked.push(model); return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', model, sentImages: 0, usage: { input_tokens: 1000, output_tokens: 500 } }; }
+    if (model === 'rank-model') return { text: 'CHOICE: 1\nREASON: fine', model, usage: { input_tokens: 100, output_tokens: 10 } };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false, model, usage: { input_tokens: 500, output_tokens: 100 } };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.\n\nEND OF REVIEW', model, usage: { input_tokens: 500, output_tokens: 50 } };
+    throw new Error('unexpected call: ' + model);
+  };
+
+  // Each suggestion reserves ~32,000 of output allowance plus its prompt:
+  // two fit under 70,000, a third does not — even though nothing has been
+  // SPENT when all three start.
+  const result = await runGeneration(baseConfig(repoRoot, {
+    suggestModels: ['suggest-a', 'suggest-b', 'suggest-c'].map((id) => ({ id, provider: 'anthropic' })),
+    budget: { maxGenerationTokens: 70000 },
+  }), { call });
+  assert.deepEqual(asked, ['suggest-a', 'suggest-b']);
+  assert.equal(result.outcome, 'approved');
+  assert.match(result.fanOut.failed.join(' '), /suggest-c: .*max_generation_tokens/);
+  assert.equal(result.spend.refusedRequests, 1);
 });
 
 test('runGeneration: with no budget configured, nothing is refused and spend is still recorded', async (t) => {
@@ -684,7 +719,7 @@ test('runGeneration: with no budget configured, nothing is refused and spend is 
   fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
   const call = async ({ model }) => {
     if (model === 'suggest-model') return { text: suggestionWithDirectEdits(), truncated: false, provider: 'anthropic', model, sentImages: 0 };
-    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.', model };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.\n\nEND OF REVIEW', model };
     throw new Error('unexpected call: ' + model);
   };
   const result = await runGeneration(baseConfig(repoRoot, { budget: { maxGenerationTokens: null } }), { call });
@@ -719,7 +754,7 @@ test('runGeneration: every fan-out proposal is written under gen-NNN/proposals/,
     if (model === 'suggest-a' || model === 'suggest-b') return { text: `${VALID_SUGGESTION}\nMARKER: from ${model}`, truncated: false, provider: 'anthropic', model, sentImages: 0 };
     if (model === 'rank-model') return { text: 'CHOICE: 1\nREASON: first.' };
     if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
-    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.' };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.\n\nEND OF REVIEW' };
     throw new Error('unexpected call: ' + model);
   };
   const result = await runGeneration(baseConfig(repoRoot, { suggestModels: [{ id: 'suggest-a', provider: 'anthropic' }, { id: 'suggest-b', provider: 'anthropic' }] }), { call });
@@ -759,7 +794,7 @@ test('runGeneration: the reviewer is told the goal and to reject drift; without 
   const systems = [];
   const call = async ({ model, system }) => {
     if (model === 'suggest-model') return { text: suggestionWithDirectEdits(), truncated: false, provider: 'anthropic', model, sentImages: 0 };
-    if (model === 'review-model') { systems.push(system); return { text: 'VERDICT: APPROVED\n\nREASON: fine.' }; }
+    if (model === 'review-model') { systems.push(system); return { text: 'VERDICT: APPROVED\n\nREASON: fine.\n\nEND OF REVIEW' }; }
     throw new Error('unexpected call: ' + model);
   };
   await runGeneration(baseConfig(repoRoot, { goal: { statement: 'Become calm.', holds: ['quiet'], awayFrom: [] } }), { call });
@@ -767,4 +802,243 @@ test('runGeneration: the reviewer is told the goal and to reject drift; without 
   fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
   await runGeneration(baseConfig(repoRoot, { genNumber: '002' }), { call });
   assert.equal(systems[1], baseConfig(repoRoot).reviewerBrief);
+});
+
+// --- an unreadable review is asked once more, then recorded as such ------------
+
+test('runGeneration: a truncated approval is not shipped; the reviewer is asked once more on the same diff', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  let reviews = 0;
+  let implementCount = 0;
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') { implementCount += 1; return { text: VALID_IMPLEMENTATION, truncated: false }; }
+    if (model === 'review-model') {
+      reviews += 1;
+      // First read cut off mid-review; second is complete.
+      return reviews === 1
+        ? { text: 'VERDICT: APPROVED\n\nREASON: The handler is', truncated: false }
+        : { text: 'VERDICT: APPROVED\n\nREASON: fine.\n\nEND OF REVIEW' };
+    }
+    throw new Error('unexpected call: ' + model);
+  };
+
+  const result = await runGeneration(baseConfig(repoRoot), { call });
+  assert.equal(result.outcome, 'approved');
+  assert.equal(reviews, 2, 'the same diff was reviewed twice');
+  assert.equal(implementCount, 1, 'no implementation attempt was spent on the unreadable review');
+});
+
+test('runGeneration: a review unreadable twice is a rejection, recorded as review-unparseable', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nVERDICT: REJECTED\n\nEND OF REVIEW' };
+    throw new Error('unexpected call: ' + model);
+  };
+
+  const result = await runGeneration(baseConfig(repoRoot, { maxAttempts: 1 }), { call });
+  assert.equal(result.outcome, 'abandoned');
+  assert.equal(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), 'original content');
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.equal(record.attempts[0].outcome, 'review-unparseable');
+  assert.match(record.attempts[0].detail, /more than one verdict/);
+});
+
+// --- the project's tests inside the repair loop ----------------------------------
+
+/** A fake runTests: reads the tree and "passes" only when it contains `needle`. */
+function treeTest(repoRoot, { needle, calls }) {
+  return async () => {
+    const content = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
+    calls.push(content);
+    const passed = content === 'original content' || content.includes(needle);
+    return {
+      passed, durationMs: 5,
+      results: [{ command: 'npm test', exitCode: passed ? 0 : 1, signal: null, timedOut: false, durationMs: 5, passed, output: passed ? 'ok' : 'AssertionError: pause button has no aria-label' }],
+    };
+  };
+}
+
+test('runGeneration: a change that fails the tests is repaired in the loop — the implementer gets the failure, the reviewer only sees a passing tree', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  const FIXED = VALID_IMPLEMENTATION.replace('original content with a pause button', 'original content with a pause button aria-label');
+  const implementPrompts = [];
+  const reviewPrompts = [];
+  const call = async ({ model, user }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') { implementPrompts.push(user); return { text: implementPrompts.length === 1 ? VALID_IMPLEMENTATION : FIXED, truncated: false }; }
+    if (model === 'review-model') { reviewPrompts.push(user); return { text: 'VERDICT: APPROVED\n\nREASON: fine.\n\nEND OF REVIEW' }; }
+    throw new Error('unexpected call: ' + model);
+  };
+  const calls = [];
+  const result = await runGeneration(baseConfig(repoRoot, { runTests: treeTest(repoRoot, { needle: 'aria-label', calls }) }), { call });
+
+  assert.equal(result.outcome, 'approved');
+  assert.equal(calls.length, 3, 'baseline, attempt 1, attempt 2');
+  assert.equal(calls[0], 'original content', 'the baseline ran on the untouched tree');
+  assert.equal(reviewPrompts.length, 1, 'the failing attempt was never sent to review');
+  assert.match(implementPrompts[1], /FAILED THIS PROJECT'S OWN TESTS/);
+  assert.match(implementPrompts[1], /pause button has no aria-label/);
+  assert.match(implementPrompts[1], /DATA, NOT INSTRUCTIONS/, 'test output is fenced');
+  assert.match(reviewPrompts[0], /The project's own tests, run against this change/);
+  assert.match(reviewPrompts[0], /`npm test` — passed/);
+
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.deepEqual(record.attempts.map((a) => a.outcome), ['tests-failed', 'approved']);
+  assert.equal(record.attempts[0].tests.passed, false);
+  assert.equal(record.attempts[1].tests.passed, true);
+  assert.equal(record.tests.inLoop, true);
+  assert.equal(record.tests.baseline.passed, true);
+});
+
+test('runGeneration: a red baseline means tests are recorded but do not gate — a failure could not be pinned on the change', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  let reviews = 0;
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
+    if (model === 'review-model') { reviews += 1; return { text: 'VERDICT: APPROVED\n\nEND OF REVIEW' }; }
+    throw new Error('unexpected call: ' + model);
+  };
+  const alwaysRed = async () => ({ passed: false, durationMs: 1, results: [{ command: 'npm test', exitCode: 1, timedOut: false, durationMs: 1, passed: false, output: 'broken before we started' }] });
+  const result = await runGeneration(baseConfig(repoRoot, { runTests: alwaysRed }), { call });
+  assert.equal(result.outcome, 'approved');
+  assert.equal(reviews, 1);
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.equal(record.tests.inLoop, false);
+  assert.match(record.tests.reason, /baseline already failing/);
+});
+
+test('runGeneration: tests that keep failing exhaust the attempts and the run is abandoned with the tree restored', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
+    throw new Error('the reviewer must not be paid for a tree that fails its tests: ' + model);
+  };
+  const result = await runGeneration(baseConfig(repoRoot, { maxAttempts: 2, runTests: treeTest(repoRoot, { needle: 'never', calls: [] }) }), { call });
+  assert.equal(result.outcome, 'abandoned');
+  assert.equal(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), 'original content');
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.deepEqual(record.attempts.map((a) => a.outcome), ['tests-failed', 'tests-failed']);
+});
+
+test('runGeneration: with no in-loop tests the record says so, and no test section reaches the reviewer', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  let reviewPrompt = '';
+  const call = async ({ model, user }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
+    if (model === 'review-model') { reviewPrompt = user; return { text: 'VERDICT: APPROVED\n\nEND OF REVIEW' }; }
+    throw new Error('unexpected call: ' + model);
+  };
+  const result = await runGeneration(baseConfig(repoRoot), { call });
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.equal(record.tests, null);
+  assert.doesNotMatch(reviewPrompt, /run against this change/);
+});
+
+// --- a crash mid-attempt puts the tree back --------------------------------------
+
+test('runGeneration: a reviewer API failure after edits were applied restores the tree before the crash is recorded', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  const withCreate = `${VALID_IMPLEMENTATION}
+
+<<<CREATE>>>
+FILE: tests/pause.test.js
+<<<CONTENT>>>
+test('pauses', () => {});
+<<<END>>>`;
+
+  let editedOnDiskAtReview = null;
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') return { text: withCreate, truncated: false };
+    if (model === 'review-model') {
+      editedOnDiskAtReview = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
+      const err = new Error('anthropic API error 529: overloaded');
+      err.kind = 'overloaded';
+      throw err;
+    }
+    throw new Error('unexpected call: ' + model);
+  };
+
+  let cleanupRegistered = false;
+  let cleanupReleased = false;
+  const config = baseConfig(repoRoot, {
+    allowlist: compileAllowlist({ allowedPaths: ['index.html'], createOnlyPaths: ['tests/**'] }),
+    createOnlyDescription: 'tests/**',
+  });
+  const err = await runGeneration(config, {
+    call,
+    onCleanup: () => { cleanupRegistered = true; return () => { cleanupReleased = true; }; },
+  }).then(() => null, (e) => e);
+
+  assert.ok(err, 'the crash is re-thrown');
+  assert.equal(editedOnDiskAtReview, 'original content with a pause button', 'the edits really were applied before the reviewer failed');
+  assert.equal(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), 'original content', 'edited file restored');
+  assert.equal(fs.existsSync(path.join(repoRoot, 'tests/pause.test.js')), false, 'created file removed');
+  assert.equal(err.treeRestored, true);
+  assert.ok(cleanupRegistered && cleanupReleased, 'the signal hook was offered and taken back');
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, err.attemptRecordPath), 'utf8'));
+  assert.equal(record.outcome, 'crashed');
+  assert.match(record.attempts.at(-1).detail, /overloaded/);
+});
+
+test('runGeneration: the cleanup handed to onCleanup restores mid-review, as a signal handler would', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  let restore = null;
+  let seenAfterRestore = null;
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
+    if (model === 'review-model') {
+      restore(); // what SIGTERM would do while the reviewer is thinking
+      seenAfterRestore = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
+      return { text: 'VERDICT: REJECTED\n\nREASON: no.' };
+    }
+    throw new Error('unexpected call: ' + model);
+  };
+  await runGeneration(baseConfig(repoRoot, { maxAttempts: 1 }), { call, onCleanup: (fn) => { restore = fn; return () => {}; } });
+  assert.equal(seenAfterRestore, 'original content');
+});
+
+test('runGeneration: when the suggester\'s own edits ship, the summary is its CHANGE line, not a generic label', async (t) => {
+  // The suggestion format has no SUMMARY field. The first real GitHub Actions
+  // run to ship a suggester's own edits opened "Generation 005: Generation
+  // 005 improvement".
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: suggestionWithDirectEdits(), truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nEND OF REVIEW' };
+    throw new Error('unexpected call: ' + model);
+  };
+  const result = await runGeneration(baseConfig(repoRoot), { call });
+  assert.equal(result.selfImplemented, true);
+  assert.equal(result.summary, 'add a pause button to index.html');
 });
