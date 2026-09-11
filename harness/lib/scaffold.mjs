@@ -23,6 +23,14 @@ import { normalizeApprovalClass, normalizeAmbition } from './adapter.mjs';
  */
 export const JS_YAML_VERSION = '5.3.0';
 
+/**
+ * The Node major the generated workflow runs the harness on. Must satisfy
+ * package.json's `engines` minimum — tests/lib/ci-config.test.mjs checks
+ * the two agree, because they drifted once already (the template said 20
+ * long after nothing here had been tested on it).
+ */
+export const NODE_VERSION = '22';
+
 /** Single-quote a path/command for safe use in a bash argument list — the same escaping bash itself expects. */
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -487,8 +495,13 @@ export function renderWorkflowTemplate(template, answers) {
       ? '  contents: write'
       : ['  contents: write', '  pull-requests: write'].join('\n');
 
-  let out = template;
+  // LF only. A Windows checkout with core.autocrlf hands this a CRLF
+  // template, and every block spliced in below is LF — the result was a
+  // file with mixed line endings that a reader cannot see and a diff tool
+  // reports as a rewrite of every line.
+  let out = template.replace(/\r\n/g, '\n');
   out = sub(out, '{{SCHEDULE_BLOCK}}', scheduleBlock(answers));
+  out = sub(out, '{{NODE_VERSION}}', NODE_VERSION);
   out = sub(out, '{{PERMISSION_LINES}}', permissionLines);
   out = sub(out, '{{RUNNER}}', answers.runner || 'ubuntu-latest');
   out = sub(out, '{{PROVIDER_ENV_LINES}}', providerEnvLines);

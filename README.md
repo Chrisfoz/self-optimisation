@@ -60,9 +60,12 @@ The one exception is `harness/lib/adapter.mjs`, which parses
 plus one small transitive dependency of its own) — deliberately scoped to
 that single file rather than left implicit; every other kernel component
 works with zero dependencies whether or not you ever run `npm install`.
-You do need **Node.js 20.6 or newer**: that's the version that added
-`--env-file` and the built-in test runner, both used below and both chosen
-specifically to avoid needing a dependency for either. Check with:
+You do need **Node.js 22.11 or newer** (the first 22.x LTS). `--env-file`
+and the built-in test runner, both used below and both chosen specifically to
+avoid needing a dependency for either, are older than that — but `npm test`
+passes a glob to `node --test`, which Node 20 reads as a literal filename,
+and 22.11 is the oldest version CI actually runs the suite on. Node 20 is
+past end of life. Check with:
 
 ```bash
 node --version
@@ -115,7 +118,7 @@ existing project, add this to your `.gitignore` now, before you forget:
 ```
 
 Unlike most Node setups, this harness reads `.env` **without a dependency**
-— no `dotenv` package, no build step. Node 20.6+ loads it natively:
+— no `dotenv` package, no build step. Node loads it natively:
 
 ```bash
 node --env-file=.env harness/scripts/check-model-releases.mjs

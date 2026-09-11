@@ -51,8 +51,8 @@ import { describeSeats } from '../lib/seats.mjs';
 import { normalizeAmbition } from '../lib/adapter.mjs';
 import { validateAdapter } from '../lib/validate.mjs';
 
-// path.join(..., '../x'), not import.meta.dirname — that global needs Node
-// 20.11+, and package.json's engines field only promises 20.6.0.
+// path.join(..., '../x'), not import.meta.dirname — kept as the one idiom every
+// file here uses, from when package.json promised Node 20.6.
 const harnessDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = process.cwd();
 const AUTO_YES = process.argv.includes('--yes') || process.argv.includes('-y');
