@@ -62,7 +62,7 @@ import {
 import { summarizeApiIssues } from './api-errors.mjs';
 import { harnessVersion } from './version.mjs';
 import { createSpendLedger, withSpend, projectedFanOut } from './spend.mjs';
-import { summarizeTestRun, renderTestFailure, renderTestPass } from './test-runner.mjs';
+import { summarizeTestRun, renderTestFailure, renderTestPass, failureExcerpt } from './test-runner.mjs';
 
 // ---------------------------------------------------------------------------
 // Pure text-processing helpers — ported verbatim, no genericisation needed.
@@ -1363,7 +1363,7 @@ export async function runGeneration(config, deps = {}) {
           log(`❌ Attempt ${attempt} (${step.by}): tests failed — ${failedCmd?.command} ${failedCmd?.timedOut ? 'timed out' : `exited ${failedCmd?.exitCode}`}\n`);
           attemptLog.push({
             attempt, by: step.by, outcome: 'tests-failed',
-            detail: oneLine(`${failedCmd?.command}: ${failedCmd?.timedOut ? 'timed out' : `exit ${failedCmd?.exitCode}`} — ${failedCmd?.output.slice(-300) ?? ''}`, 400),
+            detail: oneLine(`${failedCmd?.command}: ${failedCmd?.timedOut ? 'timed out' : `exit ${failedCmd?.exitCode}`} — ${failureExcerpt(failedCmd?.output) ?? failedCmd?.output.slice(-300) ?? ''}`, 400),
             tests: summarizeTestRun(testRun),
           });
           testFailure = evidence;

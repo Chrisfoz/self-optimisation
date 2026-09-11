@@ -259,10 +259,17 @@ if (improveResult.status !== 0) {
 console.log('\nStep 6/6 — Committing, guarding, and testing the change');
 const { allowedPaths, createOnlyPaths } = constitutionAllowlist(adapter);
 
+// What was IMPLEMENTED — the approved attempt's summary, the same value the
+// workflow's commit and pull-request title use — not the suggester's CHANGE
+// line. The first real campaign showed why: the implementer repaired a
+// proposal whose own edits failed the tests by a different mechanism, and a
+// commit titled from the proposal described code that was never written.
 let summary = `Generation ${genNumber}`;
 try {
   const record = JSON.parse(fs.readFileSync(path.join(repoRoot, genDirRel, 'attempts.json'), 'utf8'));
-  if (record.proposalSummary) summary = `Generation ${genNumber}: ${record.proposalSummary}`;
+  const approved = [...(record.attempts ?? [])].reverse().find((a) => a.outcome === 'approved');
+  const what = approved?.detail || record.proposalSummary;
+  if (what) summary = `Generation ${genNumber}: ${what}`;
 } catch { /* the generic message is fine */ }
 
 // The code change only — edited and newly created files — one pathspec at a

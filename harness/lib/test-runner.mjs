@@ -127,6 +127,21 @@ export async function runProjectTests({ repoRoot, commands, timeoutMs = 600000, 
   return { passed: results.length > 0 && results.every((r) => r.passed), results, durationMs: Date.now() - started };
 }
 
+/** Lines a test runner uses to say something failed, across the common ones. */
+const FAILURE_LINE = /\b(FAIL(ED|URE)?|ERROR|Error|Exception|Traceback|AssertionError|assert(ion)?\b|not ok|✖|✗|panicked)\b/;
+
+/**
+ * The lines of a run's output that say what failed, or null if none do.
+ * The tail of a failing run is not always where its failure is: the first
+ * real campaign's suite printed its one FAIL line mid-run and then pages of
+ * PASS lines, and the record kept 300 characters of PASS.
+ */
+export function failureExcerpt(output, { maxLines = 8, maxChars = 1200 } = {}) {
+  const lines = String(output ?? '').split(/\r?\n/).filter((l) => FAILURE_LINE.test(l) && !/^\s*(PASS|ok)\b/.test(l));
+  if (!lines.length) return null;
+  return lines.slice(-maxLines).join('\n').slice(-maxChars);
+}
+
 /** The compact shape kept in attempts.json: what ran and how it ended, no output. */
 export function summarizeTestRun(run) {
   if (!run) return null;
@@ -145,7 +160,8 @@ export function renderTestFailure(run) {
   const failed = run.results.find((r) => !r.passed);
   if (!failed) return null;
   const how = failed.timedOut ? 'timed out' : `exited ${failed.exitCode}${failed.signal ? ` (${failed.signal})` : ''}`;
-  return `\`${failed.command}\` ${how} after ${Math.round(failed.durationMs / 1000)}s. The end of its output:\n\n${fenceUntrusted('TEST OUTPUT', failed.output.trim() || '(no output)')}`;
+  const excerpt = failureExcerpt(failed.output);
+  return `\`${failed.command}\` ${how} after ${Math.round(failed.durationMs / 1000)}s.${excerpt ? `\n\nThe lines that report a failure:\n\n${fenceUntrusted('FAILING LINES', excerpt)}` : ''}\n\nThe end of its output:\n\n${fenceUntrusted('TEST OUTPUT', failed.output.trim() || '(no output)')}`;
 }
 
 /** One paragraph for the reviewer: which commands ran against this exact change, and that they passed. */
