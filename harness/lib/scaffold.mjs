@@ -247,6 +247,120 @@ export function buildAdapterObject(a) {
 }
 
 /**
+ * The inverse of buildAdapterObject(): the answers object an existing
+ * `project-adapter.yml` implies, so the generated workflow and install
+ * README can be rendered FROM the adapter (`init --from-adapter`) instead of
+ * from a fresh round of questions.
+ *
+ * Why it exists: the install README tells an owner to change
+ * `constitution.approval_class` "and re-run init with --force" — which asked
+ * every question again and overwrote the adapter they had just edited. The
+ * adapter is the source of truth; this makes it one.
+ *
+ * Pure. Provider facts that need the registry come in as functions, so this
+ * file stays free of it (the same reason init.mjs, not this file, resolves
+ * roleProviders).
+ *
+ * @param {object} adapter  A parsed project-adapter.yml.
+ * @param {object} deps
+ * @param {(name: string) => string} deps.providerEnvKey    Lab name → its API-key variable.
+ * @param {(model: string) => string|null} deps.modelProvider  Model id → lab name, or null if unknown.
+ * @returns {object} answers, in the shape init.mjs builds
+ */
+export function answersFromAdapter(adapter, { providerEnvKey, modelProvider }) {
+  const a = adapter ?? {};
+  const project = a.project ?? {};
+  const constitution = a.constitution ?? {};
+  const roles = a.roles ?? {};
+  const memory = a.memory ?? {};
+  const consensus = memory.escalation_consensus ?? {};
+  const context = a.context ?? {};
+  const deployment = a.deployment ?? {};
+  const num = (v) => (Number.isFinite(v) ? v : undefined);
+  const lab = (name) => ({ name, envKey: providerEnvKey(name) });
+
+  const roleModels = [roles.implement?.model, roles.review?.model, roles.rank?.model, ...(a.notify ? [a.notify.digest_model || 'claude-opus-5'] : [])];
+  const roleProviders = [...new Set(roleModels.filter(Boolean).map((m) => modelProvider(m)).filter(Boolean))].map(lab);
+
+  const answers = {
+    harnessVersion: a.harness?.version,
+    projectId: project.id,
+    repository: project.repository,
+    defaultBranch: project.default_branch || 'main',
+    goalStatement: project.goal?.statement,
+    goalHolds: project.goal?.holds,
+    goalAwayFrom: project.goal?.away_from,
+    providers: (a.providers?.watched ?? []).map(lab),
+    roleProviders,
+    snapshotPath: a.providers?.snapshot_path,
+    maxFanout: num(a.providers?.max_fanout),
+    allowedPaths: constitution.allowed_paths ?? [],
+    createOnlyPaths: constitution.create_only_paths ?? [],
+    frozenPaths: constitution.frozen_paths ?? [],
+    appendOnlyPaths: constitution.append_only_paths ?? [],
+    frozenFields: constitution.frozen_fields,
+    churnMaxFiles: num(constitution.churn_ceiling?.max_files),
+    churnMaxLines: num(constitution.churn_ceiling?.max_lines),
+    approvalClass: constitution.approval_class,
+    agentBriefPath: roles.agent_brief_path,
+    reviewerBriefPath: roles.reviewer_brief_path,
+    suggestMaxTokens: num(roles.suggest?.max_output_tokens),
+    implementModel: roles.implement?.model,
+    reviewModel: roles.review?.model,
+    rankModel: roles.rank?.model ?? '',
+    maxAttempts: num(roles.refine?.max_attempts),
+    ledgerPath: memory.escalation_ledger,
+    consensusModels: num(consensus.models),
+    consensusLabs: num(consensus.labs),
+    resurfaceAfter: num(consensus.resurface_after),
+    themesDir: memory.themes_review?.dir,
+    themesCadence: num(memory.themes_review?.cadence_generations),
+    generationsDir: context.generations_dir,
+    runtimeEvidenceDir: context.runtime_evidence_dir,
+    contextStrategy: context.strategy,
+    testFiles: context.test_files,
+    purposes: context.purposes,
+    historyLimit: num(context.history_limit),
+    scopeRequired: num(context.scope_required),
+    ambition: context.ambition,
+    deploymentStrategy: deployment.verify_strategy || 'none',
+    runner: deployment.ci?.runner,
+    maxGenerationTokens: num(a.budget?.max_generation_tokens),
+    cadenceCron: a.cadence?.schedule_cron,
+    // Absent means the adapter predates the flag: keep the schedule, as
+    // buildAdapterObject() would have written it.
+    includeSchedule: a.cadence?.scheduled !== false,
+    testCommands: a.evaluation?.test_commands ?? [],
+  };
+
+  if (deployment.verify_strategy === 'url' && deployment.production_url) {
+    answers.deploymentUrl = { productionUrl: deployment.production_url, watchedFiles: deployment.watched_files ?? [] };
+  }
+  if (deployment.verify_strategy === 'registry' && deployment.registry) {
+    const r = deployment.registry;
+    answers.deploymentRegistry = { ecosystem: r.ecosystem, package: r.package, groupId: r.group_id, artifactId: r.artifact_id, versionFile: r.version_file, registryUrl: r.registry_url };
+  }
+  if (deployment.verify_strategy === 'artifact' && deployment.artifact) {
+    const art = deployment.artifact;
+    answers.deploymentArtifact = { buildCommand: art.build_command, path: art.path, smokeCommand: art.smoke_command };
+  }
+  if (a.notify) {
+    const n = a.notify;
+    answers.notify = {
+      provider: n.provider || 'sendgrid',
+      envKey: `${String(n.provider || 'sendgrid').toUpperCase()}_API_KEY`,
+      recipient: n.recipient,
+      recipientName: n.recipient_name,
+      fromEmail: n.from?.email,
+      fromName: n.from?.name,
+      digestModel: n.digest_model,
+      escalationNotice: n.escalation_notice,
+    };
+  }
+  return answers;
+}
+
+/**
  * Render a full `project-adapter.yml` file: a short header pointing back
  * at the fully-commented example this was generated from (every RESERVED
  * field and the reasoning behind each LIVE one lives there, not
@@ -551,9 +665,9 @@ this stays reversible: \`git revert gen-NNN\`, or bisect between two of them.
 
 This is the advanced setting. If you did not mean to choose it, set
 \`constitution.approval_class: human-approval-required\` in
-\`project-adapter.yml\` and re-run init with \`--force\` to regenerate the
-workflow — the merge model is baked into the workflow file, not read from the
-adapter at run time.`
+\`project-adapter.yml\` and regenerate the workflow from it with
+\`node harness/cli/init.mjs --from-adapter --force\` — the merge model is baked
+into the workflow file, not read from the adapter at run time.`
       : `**\`human-approval-required\`** (the default) — when every gate passes
 (preflight, the independent review, the guarded-path check, your own tests),
 the workflow opens a **pull request** and stops. You merge it, or you don't.
@@ -562,10 +676,19 @@ Nothing reaches \`${answers.defaultBranch || 'main'}\` without you.
 The pull request's URL is written back into that generation's
 \`attempts.json\`, so the record of a run says where it ended up.
 
+**One repository setting this needs, which GitHub turns off by default:**
+Settings → Actions → General → Workflow permissions → tick **Allow GitHub
+Actions to create and approve pull requests**. Without it every generation
+passes its gates and then fails to open its pull request. (Or, with the
+\`gh\` CLI: \`gh api -X PUT repos/OWNER/REPO/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true\`
+— read-only is fine as the default: the workflow asks for the write
+permissions it needs itself.)
+
 To switch to autonomous merge later, set
 \`constitution.approval_class: autonomous-merge\` in \`project-adapter.yml\`
-and re-run init with \`--force\` — the merge model is baked into the workflow
-file, not read from the adapter at run time.`;
+and regenerate the workflow from it with
+\`node harness/cli/init.mjs --from-adapter --force\` — the merge model is baked
+into the workflow file, not read from the adapter at run time.`;
 
   const cadenceSection =
     answers.includeSchedule === false

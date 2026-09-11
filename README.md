@@ -239,7 +239,24 @@ appears. It deliberately stops there — it is the detector alone, useful on
 its own as a monthly nudge that a model worth trying now exists. The **full**
 loop (suggest → implement → review → guard → test → pull request → notify) is
 built, and `harness/cli/init.mjs` generates the workflow that runs it; see
-[`ARCHITECTURE.md`](ARCHITECTURE.md) for both diagrams and Step 6 below.
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for both diagrams and Step 7 below.
+
+### Step 7 — The full loop
+
+```bash
+node harness/cli/init.mjs                              # asks, then writes project-adapter.yml + the workflow
+node harness/cli/init.mjs --from-adapter --force       # later: regenerate the workflow from the adapter you edited
+```
+
+Two things the generated workflow needs that are easy to miss:
+
+- **The pull-request path needs one repository setting GitHub turns off by
+  default:** Settings → Actions → General → Workflow permissions → **Allow
+  GitHub Actions to create and approve pull requests**. Without it every
+  generation passes its gates and then cannot open its pull request.
+- **A secret for every lab the workflow calls** — the watched labs and the
+  labs your implement, review and rank models belong to. The generated
+  `SELF-IMPROVE-README.md` lists exactly which.
 
 ---
 
