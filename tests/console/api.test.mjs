@@ -217,3 +217,50 @@ test('malformed request URLs return 400 without stopping the service', async (t)
   assert.equal(code, 400);
   assert.equal((await fetch(base + '/healthz')).status, 200);
 });
+
+
+test('installation return ignores untrusted installation IDs and resumes discovery', async (t) => {
+  const sessions = new Map([['active', { token: 'secret', login: 'owner', csrf: 'csrf', expires: Date.now() + 60000 }]]);
+  const base = await server(t, { sessions });
+  const guest = await fetch(base + '/auth/installed?installation_id=999', { redirect: 'manual' });
+  assert.equal(guest.headers.get('location'), '/auth/github');
+  const connected = await fetch(base + '/auth/installed?installation_id=999', {
+    redirect: 'manual', headers: { cookie: '__Host-console=active' },
+  });
+  assert.equal(connected.headers.get('location'), '/console?github=installed');
+  assert.equal(sessions.get('active').installationId, undefined);
+});
+
+test('cancelled OAuth returns to the console and consumes its browser-bound state', async (t) => {
+  let exchanged = false;
+  const base = await server(t, {
+    env: { GITHUB_CLIENT_ID: 'client', GITHUB_CLIENT_SECRET: 'secret', GITHUB_APP_SLUG: 'app' },
+    fetchImpl: async () => { exchanged = true; throw new Error('unexpected'); },
+  });
+  const start = await fetch(base + '/auth/github', { redirect: 'manual' });
+  const state = new URL(start.headers.get('location')).searchParams.get('state');
+  const options = { redirect: 'manual', headers: { cookie: start.headers.get('set-cookie').split(';')[0] } };
+  const url = base + '/auth/callback?error=access_denied&state=' + state;
+  const cancelled = await fetch(url, options);
+  assert.equal(cancelled.headers.get('location'), '/console?github=cancelled');
+  assert.equal(exchanged, false);
+  assert.equal((await fetch(url, options)).status, 400);
+});
+
+test('revoked user tokens invalidate the local session', async (t) => {
+  const sessions = new Map([['active', { token: 'revoked', csrf: 'csrf', expires: Date.now() + 60000 }]]);
+  const base = await server(t, { sessions, fetchImpl: async () => Response.json({}, { status: 401 }) });
+  const result = await fetch(base + '/api/repositories', { headers: { cookie: '__Host-console=active' } });
+  assert.equal(result.status, 401);
+  assert.equal(sessions.size, 0);
+});
+
+test('non-ASCII CSRF values fail closed without a timingSafeEqual exception', async (t) => {
+  const sessions = new Map([['active', { token: 'secret', csrf: 'aa', expires: Date.now() + 60000 }]]);
+  const base = await server(t, { sessions });
+  const result = await fetch(base + '/auth/logout', post({}, 'https://console.example', {
+    cookie: '__Host-console=active', 'x-csrf-token': 'éé',
+  }));
+  assert.equal(result.status, 403);
+  assert.equal(sessions.size, 1);
+});

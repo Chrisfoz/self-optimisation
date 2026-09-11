@@ -12,6 +12,11 @@ are not created by the source changes.
 
 - Homepage: `https://console-production-763f.up.railway.app/`
 - User authorisation callback: `https://console-production-763f.up.railway.app/auth/callback`
+- Post-installation Setup URL: `https://console-production-763f.up.railway.app/auth/installed`.
+  Enable redirect on update so changing repository grants returns users to the console.
+  This is separate from the user authorisation callback above.
+- Allow installation on **Any account** if this console is intended for other users
+  and organisations; an App limited to its owner cannot connect customer repositories.
 - Repository permissions: **Contents: read/write**, **Pull requests: read/write**,
   **Actions: read/write**, **Workflows: read/write**, **Secrets: read-only**,
   **Metadata: read-only**.
@@ -40,7 +45,11 @@ work. A download does not claim to verify repository contents or secrets.
 
 ## Connect and install
 
-1. Sign in and grant the App access on GitHub; refresh the repository list.
+1. Click **Connect GitHub**, then **Manage repository access** to grant the App
+   selected repositories. Returning to the console tab refreshes the list; the
+   Refresh repositories button is also available. Use search and the account filter
+   to find a project. Only writable, unarchived repositories from active installations
+   appear. An organisation may require its owner to approve the installation.
 2. Select the repository. Its actual default branch and file tree are loaded.
 3. Add model keys directly in **GitHub → Settings → Secrets and variables → Actions**.
    The console checks names only. It deliberately does not accept plaintext keys
@@ -78,3 +87,4 @@ The public APIs generate files only. They do not run submitted test commands,
 call models or access a repository anonymously. GitHub actions require sign-in,
 current installation membership and, for writes, an origin and CSRF check.
 No generic GitHub proxy or secret-value endpoint is exposed.
+

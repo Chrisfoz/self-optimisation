@@ -275,3 +275,26 @@ test("upstream errors never reflect token or response contents", async () => {
     (error) => error.status === 403 && !error.message.includes("secret-token"),
   );
 });
+
+
+test('repository discovery includes account and visibility, skips suspended and read-only grants', async () => {
+  const calls = [];
+  const result = await repositories(async (route) => {
+    calls.push(route);
+    if (route.startsWith('/user/installations?')) return { installations: [{ id: 1, suspended_at: '2026-09-01' }, { id: 2 }] };
+    return { repositories: [
+      { full_name: 'team/private', private: true, description: 'A project', permissions: { push: true }, default_branch: 'develop' },
+      { full_name: 'team/read-only', permissions: { push: false } },
+      { full_name: 'team/archived', permissions: { push: true }, archived: true },
+    ] };
+  });
+  assert.deepEqual(result, [{ name: 'team/private', owner: 'team', private: true, description: 'A project', defaultBranch: 'develop', installationId: 2 }]);
+  assert.ok(!calls.some((r) => r.includes('/installations/1/')));
+});
+
+test('empty repositories explain how to create a default branch before inspection', async () => {
+  const { api } = fixture();
+  await assert.rejects(inspectRepository(async (route, options) =>
+    route === '/repos/owner/project' ? { size: 0 } : api(route, options), 'owner/project'),
+    /initial commit/);
+});

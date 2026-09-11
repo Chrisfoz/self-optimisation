@@ -63,6 +63,7 @@ export async function repositories(api) {
   const installs = await pages(api, "/user/installations", "installations");
   const repos = [];
   for (const installation of installs) {
+    if (installation.suspended_at) continue;
     const rows = await pages(
       api,
       `/user/installations/${installation.id}/repositories`,
@@ -70,9 +71,12 @@ export async function repositories(api) {
     );
     repos.push(
       ...rows
-        .filter((r) => !r.archived && r.permissions?.push)
+        .filter((r) => !r.archived && !r.disabled && r.permissions?.push)
         .map((r) => ({
           name: r.full_name,
+          owner: r.owner?.login || r.full_name.split("/")[0],
+          private: Boolean(r.private),
+          description: r.description || "",
           defaultBranch: r.default_branch,
           installationId: installation.id,
         })),
@@ -93,6 +97,8 @@ export async function inspectRepository(api, repository) {
     );
   const base = `/repos/${granted.name}`;
   const metadata = await api(base);
+  if (metadata.size === 0)
+    throw problem(422, "This repository is empty. Add an initial commit on GitHub, then connect again.");
   const branch = await api(
     `${base}/branches/${encodeURIComponent(metadata.default_branch)}`,
   );
@@ -344,3 +350,4 @@ export async function activateSchedule(api, repo, setup) {
   });
   return { number: pr.number, url: pr.html_url };
 }
+
