@@ -232,6 +232,11 @@ export function normalizeMetric(raw) {
     // prompt, and a plugin that returns a log file would quietly become the
     // largest block in it.
     detail: typeof raw.detail === 'string' && raw.detail.trim() ? raw.detail.trim().slice(0, 500) : null,
+    // How much this number moves between two runs of the same tree — the
+    // noise floor harness/lib/measure.mjs uses before calling a before/after
+    // difference a benefit or a regression. Absent for a deterministic
+    // plugin, which is the right default: any change is a real one.
+    ...(Number.isFinite(raw.tolerance) && raw.tolerance >= 0 ? { tolerance: raw.tolerance } : {}),
   };
 }
 

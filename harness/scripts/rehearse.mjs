@@ -211,6 +211,15 @@ const { number: genNumber, branch } = reserveGeneration(git, {
 console.log(`Step 5/6 — Generation ${genNumber} on branch ${branch}`);
 git('checkout', '-q', branch);
 
+// The project's evaluators on the untouched tree — the "before" that the
+// measurement after a change is compared with (harness/lib/measure.mjs).
+// Never gating, and silent for a project that configured none.
+const measure = (extraArgs = []) => run([script('run-evaluators.mjs'), ...extraArgs], {
+  stdio: ['ignore', 'ignore', 'inherit'],
+  env: spawnEnv({ GEN_NUMBER: genNumber, GITHUB_OUTPUT: '' }),
+});
+measure(['--baseline']);
+
 const improveResult = run([script('run-generation.mjs')], {
   stdio: 'inherit',
   env: spawnEnv({
@@ -262,6 +271,9 @@ for (const p of [...new Set([...allowedPaths, ...createOnlyPaths])]) {
   if (git('status', '--porcelain', '--', p)) git('add', '-A', '--', p);
 }
 git('commit', '-q', '-m', summary);
+// The same evaluators on the changed tree: metrics.json, and comparison.json
+// against the baseline taken before the loop ran.
+measure();
 persistLocally();
 
 const guardResult = run([script('check-guarded-paths.mjs'), baseBranch], { stdio: 'inherit' });

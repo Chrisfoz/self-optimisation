@@ -261,6 +261,21 @@ jobs:
           git config user.name "Self-Improvement Bot"
           node harness/scripts/next-generation.mjs --base {{DEFAULT_BRANCH}} --remote origin --generations-dir {{GENERATIONS_DIR}}
 
+      # The same evaluators as the step after the loop, on the tree as it is
+      # BEFORE any change — so the numbers measured afterwards have something
+      # to be compared against (harness/lib/measure.mjs writes
+      # comparison.json: benefits, regressions, and what the generation
+      # cost). Never gating, like every evaluator. A project with none
+      # configured runs this and it says so.
+      - name: Measure the baseline, before any change (never gating)
+        id: baseline
+        if: steps.gen.outputs.number
+        shell: bash
+        continue-on-error: true
+        env:
+          GEN_NUMBER: ${{ steps.gen.outputs.number }}
+        run: node harness/scripts/run-evaluators.mjs --baseline
+
       - name: Run the improvement loop
         id: improve
         if: steps.gen.outputs.number

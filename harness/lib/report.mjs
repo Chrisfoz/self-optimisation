@@ -33,7 +33,12 @@ export function loadRecords({ repoRoot = process.cwd(), generationsDir = 'docs/g
     try {
       const raw = fs.readFileSync(path.join(repoRoot, generationsDir, dir, 'attempts.json'), 'utf8');
       const record = JSON.parse(raw);
-      records.push({ ...record, generation: record.generation ?? dir.replace('gen-', '') });
+      // The before/after measurement, when this generation changed something
+      // and the project has evaluators (harness/lib/measure.mjs). Its own
+      // file, read beside the record rather than copied into it.
+      let comparison = null;
+      try { comparison = JSON.parse(fs.readFileSync(path.join(repoRoot, generationsDir, dir, 'comparison.json'), 'utf8')); } catch { /* none taken */ }
+      records.push({ ...record, generation: record.generation ?? dir.replace('gen-', ''), ...(comparison ? { comparison } : {}) });
     } catch {
       // A directory with a proposal.md but no record predates records; a
       // directory with a broken one is worth counting, not crashing over.
@@ -128,13 +133,35 @@ export function computeMetrics(records) {
 
   const campaign = records.filter((r) => r.campaign).length;
 
+  // Measured effect: the same evaluators before and after each approved
+  // change (harness/lib/measure.mjs), beside what it cost and what a person
+  // then did with it. The one table here that is about the PROJECT rather
+  // than the loop — whether the changes that shipped moved anything.
+  const measured = approved
+    .filter((r) => r.comparison?.comparable)
+    .map((r) => ({
+      generation: r.generation,
+      fate: fateOf(r),
+      tokens: Number.isFinite(r.spend?.totalTokens) ? r.spend.totalTokens : null,
+      benefits: r.comparison.benefits ?? [],
+      regressions: r.comparison.regressions ?? [],
+      changed: r.comparison.changed ?? [],
+    }));
+  const measurement = {
+    rows: measured,
+    notComparable: approved.filter((r) => r.comparison && !r.comparison.comparable).length,
+    withBenefit: measured.filter((m) => m.benefits.length).length,
+    withRegression: measured.filter((m) => m.regressions.length).length,
+    keptWithRegression: measured.filter((m) => m.regressions.length && m.fate === 'merged').length,
+  };
+
   return {
     total, byOutcome, approved: approved.length, fates,
     releaseYield: { kept, total },
     promotionPrecision: { stayed: fates.merged, landed, closedByOwner: fates.closed },
     failureRecurrence: { recurred, abandoned: n(byOutcome.abandoned) },
     cost: { records: withSpend.length, unknown: total - withSpend.length, tokens, keptWithSpend },
-    labs, scopes, campaign,
+    labs, scopes, campaign, measurement,
   };
 }
 
@@ -180,6 +207,22 @@ export function renderReport(metrics, { generatedAt = new Date(), generationsDir
     ...Object.entries(m.labs).sort().map(([k, v]) => `| ${k} | ${v.asked} | ${v.chosen} | ${v.approved} | ${v.kept} | ${v.selfImplemented} |`),
     ``,
   ];
+  const ms = m.measurement;
+  if (ms && (ms.rows.length || ms.notComparable)) {
+    const names = (list) => (list.length ? list.join(', ') : '—');
+    lines.push(
+      `## Measured effect`,
+      ``,
+      `The project's own evaluators, run on the untouched tree before each generation and on the changed tree after it — same evaluators, same config, or the pair is not compared. Benefits and regressions follow each metric's declared direction; a metric with no direction is only "changed". Nothing here gates. Fate is what a person did with the change afterwards.`,
+      ``,
+      `${ms.rows.length} measured change(s): ${ms.withBenefit} moved something the right way, ${ms.withRegression} moved something the wrong way${ms.keptWithRegression ? `, and ${ms.keptWithRegression} of those were kept anyway` : ''}.${ms.notComparable ? ` ${ms.notComparable} more could not be compared, because the evaluators changed between the two measurements.` : ''}`,
+      ``,
+      `| Generation | Fate | Tokens | Benefits | Regressions | Changed (no direction) |`,
+      `|---|---|---|---|---|---|`,
+      ...ms.rows.slice(-20).map((r) => `| ${r.generation} | ${r.fate} | ${r.tokens === null ? 'n/a' : r.tokens.toLocaleString()} | ${names(r.benefits)} | ${names(r.regressions)} | ${names(r.changed)} |`),
+      ``,
+    );
+  }
   if (malformed) lines.push(`_${malformed} attempts.json file(s) could not be parsed and are not counted._`, ``);
   return lines.join('\n');
 }
