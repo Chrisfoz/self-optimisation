@@ -146,6 +146,9 @@ function describeVisual(visual) {
  *   still pass, e.g. the project's `evaluation.test_commands` joined into
  *   prose. Optional — omitted from the prompt when not supplied, rather
  *   than inventing suite names.
+ * @param {string} [opts.testResults]  What the project's own test commands
+ *   did when run against this exact tree inside the loop
+ *   (test-runner.mjs's renderTestPass()). Omitted when the loop ran none.
  * @param {() => Promise<{available: boolean, images: Array, reason?: string}>} [opts.captureVisual]
  *   Project-supplied visual-capture hook. Defaults to a no-op that reports
  *   unavailable — see noVisualCapture() above.
@@ -168,6 +171,7 @@ export async function reviewChanges({
   filesChanged = [],
   repoRoot = process.cwd(),
   testDescription = null,
+  testResults = null,
   captureVisual = noVisualCapture,
   reviewModel = 'claude-opus-5',
   maxTokens = 16000,
@@ -200,7 +204,7 @@ ${diff}
 
 ### Full source of every touched file
 ${sources || '(no files reported as changed — treat this as a rejection)'}
-${testDescription ? `\n### What must still pass\n${testDescription}\n` : ''}
+${testDescription ? `\n### What must still pass\n${testDescription}\n` : ''}${testResults ? `\n### The project's own tests, run against this change\n${testResults}\n\nPassing tests are evidence, not a verdict: they show nothing the suite does not check. Judge the change itself.\n` : ''}
 ${describeVisual(visual)}
 
 Review the change and give your verdict.

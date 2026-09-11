@@ -218,6 +218,10 @@ const improveResult = run([script('run-generation.mjs')], {
     GEN_NUMBER: genNumber,
     SCOPE: args.scope || '',
     CAMPAIGN: campaign ? 'true' : '',
+    // The same commands preflight used, run inside the loop against each
+    // attempt; --skip-preflight means no tests at all, here as elsewhere.
+    TEST_COMMANDS: JSON.stringify(testCommands),
+    TEST_IN_LOOP: args.skipPreflight ? 'false' : '',
   }),
 });
 

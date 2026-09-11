@@ -495,8 +495,22 @@ export function notifyConfig(adapter) {
  * Nothing else may treat this as authoritative for what CI executes.
  */
 export function evaluationConfig(adapter) {
-  const raw = adapter?.evaluation?.test_commands;
-  return { testCommands: Array.isArray(raw) ? raw.filter((c) => typeof c === 'string' && c.trim()) : [] };
+  const e = adapter?.evaluation ?? {};
+  const raw = e.test_commands;
+  const passthrough = e.test_env_passthrough;
+  return {
+    testCommands: Array.isArray(raw) ? raw.filter((c) => typeof c === 'string' && c.trim()) : [],
+    // LIVE: run test_commands inside the generation, after each attempt's
+    // edits apply and before the review, so a failure is repaired in the
+    // loop rather than discovered after it (harness/lib/test-runner.mjs).
+    // On unless explicitly false — it costs no tokens, only test time.
+    testInLoop: e.test_in_loop !== false,
+    testTimeoutSeconds: Number.isFinite(e.test_timeout_seconds) && e.test_timeout_seconds > 0 ? e.test_timeout_seconds : 600,
+    // Names of environment variables the in-loop tests may see even though
+    // they look like credentials. Empty by default: the tests run on code
+    // no reviewer has seen yet, in a process holding every lab's key.
+    testEnvPassthrough: Array.isArray(passthrough) ? passthrough.filter((n) => typeof n === 'string' && n) : [],
+  };
 }
 
 /**

@@ -62,6 +62,7 @@ import {
 import { summarizeApiIssues } from './api-errors.mjs';
 import { harnessVersion } from './version.mjs';
 import { createSpendLedger, withSpend, projectedFanOut } from './spend.mjs';
+import { summarizeTestRun, renderTestFailure, renderTestPass } from './test-runner.mjs';
 
 // ---------------------------------------------------------------------------
 // Pure text-processing helpers — ported verbatim, no genericisation needed.
@@ -540,7 +541,7 @@ ${editSpec}`;
  * @param {string} proposal
  * @param {{applyErrors?: string[], reviewFeedback?: string, rejectedRender?: object, attempt: number, author: string}} state
  */
-export async function implement(promptConfig, proposal, { applyErrors, reviewFeedback, rejectedRender, attempt, author }, deps = {}) {
+export async function implement(promptConfig, proposal, { applyErrors, reviewFeedback, testFailure, testFailureBy, rejectedRender, attempt, author }, deps = {}) {
   const call = deps.call ?? callModelWithHeadroom;
   const log = deps.log ?? (() => {});
   const maxAttempts = deps.maxAttempts;
@@ -559,6 +560,20 @@ The usual cause is a SEARCH block that was not copied verbatim. Check
 whitespace and indentation character by character against the source below,
 and include more surrounding context where a snippet was ambiguous.
 Produce the full corrected set of edit blocks.
+`;
+  } else if (testFailure) {
+    correction = `
+# THE PREVIOUS ATTEMPT FAILED THIS PROJECT'S OWN TESTS
+
+${testFailureBy ? `That attempt was written by ${testFailureBy}, not by you. ` : ''}The edits applied cleanly, but when the project's test commands were run against the result, this is what happened:
+
+${testFailure}
+
+Find the cause in the change and fix it. Keep the same core improvement — do
+not substitute a different idea, and do not weaken, skip or delete a test to
+make it pass: a test that fails is evidence about the change, not an obstacle
+to it. The source below is the ORIGINAL, unmodified file content: the failed
+edits have been reverted, so write SEARCH blocks against what you see here.
 `;
   } else if (reviewFeedback) {
     correction = `
@@ -621,7 +636,7 @@ Implement the proposal above using the required edit format.`,
  * since the next generation reads this back and can see which ideas
  * already died and why.
  */
-export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize, apiIssues = [], pullRequestUrl = null, spend = null, campaign = false, seatPromotion = null, run = null }) {
+export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize, apiIssues = [], pullRequestUrl = null, spend = null, campaign = false, seatPromotion = null, run = null, tests = null }) {
   const dir = path.join(repoRoot, generationsDir, `gen-${genNumber}`);
   fs.mkdirSync(dir, { recursive: true });
   const relative = `${generationsDir}/gen-${genNumber}/attempts.json`;
@@ -669,6 +684,11 @@ export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generation
         // see harness/lib/spend.mjs. Null only for a record written by
         // something other than runGeneration().
         spend: spend ?? null,
+        // The project's own tests inside the loop (harness/lib/test-runner.mjs):
+        // the baseline on the untouched tree, and whether attempts were gated
+        // on them. Each attempt's own run is on its entry in `attempts`.
+        // Null when the project runs no tests in the loop.
+        tests: tests ?? null,
         attempts,
         // Actionable API failures only — "you need to fix a key or your
         // billing" — deduplicated by provider+kind. See api-errors.mjs.
@@ -1042,6 +1062,7 @@ export async function runGeneration(config, deps = {}) {
     seatPromotion = null,
     goal = null,
     run = null,
+    runTests = null,
   } = config;
 
   const rawCall = deps.call ?? callModelWithHeadroom;
@@ -1105,6 +1126,12 @@ export async function runGeneration(config, deps = {}) {
 
   const pristine = snapshotEditableFiles(repoRoot, editableFiles);
 
+  // What the in-loop tests found on the untouched tree, and whether they
+  // gate attempts. Filled in below, after the budget projection; declared
+  // here so every record written from here on can carry it.
+  let testsRecord = null;
+  let testsGate = false;
+
   // Projected, before anything is spent: the suggestion prompt is the same
   // for every model, so its size times the fan-out is the floor of what
   // this run will cost. A run that cannot fit under the cap is refused
@@ -1116,7 +1143,7 @@ export async function runGeneration(config, deps = {}) {
       const detail = `projected ${projected.estimatedTokens.toLocaleString()} input tokens across ${asking.length} model(s) exceeds budget.max_generation_tokens (${maxGenerationTokens.toLocaleString()}); nothing was called`;
       log(`💸 Over budget before the fan-out — ${detail}`);
       const recordPath = writeAttemptRecord({
-        repoRoot, generationsDir, genNumber, campaign, seatPromotion, run,
+        repoRoot, generationsDir, genNumber, campaign, seatPromotion, run, tests: testsRecord,
         outcome: 'over-budget',
         suggestResult: null,
         proposal: null,
@@ -1140,11 +1167,31 @@ export async function runGeneration(config, deps = {}) {
     }
   }
 
+  // The baseline: the same test commands on the tree this run started from,
+  // before a single model is paid. Green, and every attempt is tested
+  // before it is reviewed. Already red, and a failure could not be pinned on
+  // any attempt — so they are recorded but do not gate, and the record says
+  // why. (The workflow's preflight normally refuses a red baseline long
+  // before this; a rehearsal with --skip-preflight is how one gets here.)
+  if (typeof runTests === 'function') {
+    log(`🧪 Baseline — the project's tests on the untouched tree`);
+    const baseline = await runTests();
+    testsGate = baseline.passed;
+    testsRecord = { inLoop: testsGate, baseline: summarizeTestRun(baseline) };
+    if (baseline.passed) {
+      log(`   ✅ green in ${(baseline.durationMs / 1000).toFixed(1)}s — every attempt will be tested before it is reviewed\n`);
+    } else {
+      const failed = baseline.results.find((r) => !r.passed);
+      testsRecord.reason = `baseline already failing (${failed?.command ?? 'no command'}) — attempts are not gated on tests, since a failure could not be attributed to them`;
+      log(`   ⚠️  ${testsRecord.reason}\n`);
+    }
+  }
+
   const { proposals, failures } = await gatherProposals(promptConfig, asking, { call: callFor('suggest'), log });
 
   if (proposals.length === 0) {
     const recordPath = writeAttemptRecord({
-      repoRoot, generationsDir, genNumber, campaign, seatPromotion, run,
+      repoRoot, generationsDir, genNumber, campaign, seatPromotion, run, tests: testsRecord,
       outcome: 'no-proposal',
       suggestResult: null,
       proposal: null,
@@ -1226,6 +1273,8 @@ export async function runGeneration(config, deps = {}) {
 
     let applyErrors = null;
     let reviewFeedback = null;
+    let testFailure = null;
+    let testFailureBy = null;
     let rejectedRender = null;
     const attemptLog = crashState.attempts;
 
@@ -1274,7 +1323,7 @@ export async function runGeneration(config, deps = {}) {
           implemented = await implement(
             { ...promptConfig, implementModel, implementationNotes },
             proposal,
-            { applyErrors, reviewFeedback, rejectedRender, attempt, author: `${winner.id} (${winner.provider})` },
+            { applyErrors, reviewFeedback, testFailure, testFailureBy, rejectedRender, attempt, author: `${winner.id} (${winner.provider})` },
             { call: callFor('implement'), log, maxAttempts }
           );
         } catch (err) {
@@ -1292,11 +1341,41 @@ export async function runGeneration(config, deps = {}) {
         attemptLog.push({ attempt, by: step.by, outcome: 'edits-did-not-apply', detail: oneLine(outcome.errors.join('; '), 400) });
         applyErrors = step.direct ? null : outcome.errors;
         reviewFeedback = null;
+        testFailure = null;
         rejectedRender = null;
         continue;
       }
 
       log(`   applied ${outcome.applied.length} edit(s) to ${outcome.filesChanged.join(', ')}`);
+
+      // Stage 2b — the project's own tests, against this exact tree, BEFORE
+      // the review. A change that breaks them is repaired here with the
+      // failure in hand; it used to reach the workflow's test step only
+      // after this loop had finished, where the one thing left to do was
+      // abandon it. Review is not paid for on a tree that does not pass.
+      let testRun = null;
+      if (testsGate) {
+        log(`🧪 Stage 2b — the project's tests, against attempt ${attempt}`);
+        testRun = await runTests();
+        if (!testRun.passed) {
+          const evidence = renderTestFailure(testRun);
+          const failedCmd = testRun.results.find((r) => !r.passed);
+          log(`❌ Attempt ${attempt} (${step.by}): tests failed — ${failedCmd?.command} ${failedCmd?.timedOut ? 'timed out' : `exited ${failedCmd?.exitCode}`}\n`);
+          attemptLog.push({
+            attempt, by: step.by, outcome: 'tests-failed',
+            detail: oneLine(`${failedCmd?.command}: ${failedCmd?.timedOut ? 'timed out' : `exit ${failedCmd?.exitCode}`} — ${failedCmd?.output.slice(-300) ?? ''}`, 400),
+            tests: summarizeTestRun(testRun),
+          });
+          testFailure = evidence;
+          testFailureBy = step.direct ? step.by : null;
+          applyErrors = null;
+          reviewFeedback = null;
+          rejectedRender = null;
+          continue;
+        }
+        log(`   ✅ tests passed (${(testRun.durationMs / 1000).toFixed(1)}s)`);
+      }
+
       log(`🔎 Stage 3 — review`);
 
       const askReviewer = () => reviewChanges({
@@ -1306,6 +1385,7 @@ export async function runGeneration(config, deps = {}) {
         filesChanged: outcome.filesChanged,
         repoRoot,
         testDescription,
+        testResults: testRun ? renderTestPass(testRun) : null,
         captureVisual,
         reviewModel,
         goal,
@@ -1340,19 +1420,21 @@ export async function runGeneration(config, deps = {}) {
           attempt, by: step.by,
           outcome: unreadable ? 'review-unparseable' : 'rejected-by-review',
           detail: oneLine(review.reason || 'no reason given', 400),
+          ...(testRun ? { tests: summarizeTestRun(testRun) } : {}),
         });
         reviewFeedback = unreadable
           ? `The reviewer's response could not be read as one complete verdict (${review.problem}), twice. No required fix was reliably stated; what it did say follows. Re-check the change against the proposal and the source.\n\n${review.feedback}`
           : review.feedback;
         rejectedRender = review.visual;
         applyErrors = null;
+        testFailure = null;
         continue;
       }
 
       // Approved.
       const implementedBy = step.by;
       const summary = oneLine(parsed.summary || `Generation ${genNumber} improvement`, 80);
-      attemptLog.push({ attempt, by: step.by, outcome: 'approved', detail: summary });
+      attemptLog.push({ attempt, by: step.by, outcome: 'approved', detail: summary, ...(testRun ? { tests: summarizeTestRun(testRun) } : {}) });
 
       const proposalPath = writeProposal({
         repoRoot, generationsDir, genNumber, proposal, parsed, suggestResult,
@@ -1361,7 +1443,7 @@ export async function runGeneration(config, deps = {}) {
       });
 
       const attemptRecordPath = writeAttemptRecord({
-        repoRoot, generationsDir, genNumber, campaign, seatPromotion, run,
+        repoRoot, generationsDir, genNumber, campaign, seatPromotion, run, tests: testsRecord,
         outcome: 'approved', suggestResult, proposal, attempts: attemptLog,
         fanOut, implementedBy, implementModel, scope, escalations: escalationRound,
         apiIssues: summarizeApiIssues(failures),
@@ -1403,7 +1485,7 @@ export async function runGeneration(config, deps = {}) {
     // failed run.
     restoreTree();
     const attemptRecordPath = writeAttemptRecord({
-      repoRoot, generationsDir, genNumber, campaign, seatPromotion, run,
+      repoRoot, generationsDir, genNumber, campaign, seatPromotion, run, tests: testsRecord,
       outcome: 'abandoned', suggestResult, proposal, attempts: attemptLog,
       fanOut, implementedBy: null, implementModel, scope, escalations: escalationRound,
       apiIssues: summarizeApiIssues(failures),
@@ -1438,7 +1520,7 @@ export async function runGeneration(config, deps = {}) {
     let restoreError = null;
     try { restoreTree(); } catch (e) { restoreError = e; }
     const attemptRecordPath = writeAttemptRecord({
-      repoRoot, generationsDir, genNumber, campaign, seatPromotion, run,
+      repoRoot, generationsDir, genNumber, campaign, seatPromotion, run, tests: testsRecord,
       outcome: 'crashed',
       suggestResult: crashState.suggestResult,
       proposal: crashState.proposal,

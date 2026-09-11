@@ -410,10 +410,20 @@ test('budgetConfig: reads a positive cap, and treats absent, zero or junk as no 
 
 test('evaluationConfig: reads test_commands, drops non-string entries, defaults to empty', async () => {
   const { evaluationConfig } = await import('../../harness/lib/adapter.mjs');
-  assert.deepEqual(evaluationConfig({ evaluation: { test_commands: ['npm test', '  ', 42, 'npm run lint'] } }), { testCommands: ['npm test', 'npm run lint'] });
-  assert.deepEqual(evaluationConfig({}), { testCommands: [] });
-  assert.deepEqual(evaluationConfig(null), { testCommands: [] });
-  assert.deepEqual(evaluationConfig({ evaluation: { test_commands: 'npm test' } }), { testCommands: [] });
+  assert.deepEqual(evaluationConfig({ evaluation: { test_commands: ['npm test', '  ', 42, 'npm run lint'] } }).testCommands, ['npm test', 'npm run lint']);
+  assert.deepEqual(evaluationConfig({}).testCommands, []);
+  assert.deepEqual(evaluationConfig(null).testCommands, []);
+  assert.deepEqual(evaluationConfig({ evaluation: { test_commands: 'npm test' } }).testCommands, []);
+});
+
+test('evaluationConfig: in-loop tests are on unless explicitly off, with a timeout and an empty passthrough by default', async () => {
+  const { evaluationConfig } = await import('../../harness/lib/adapter.mjs');
+  assert.deepEqual(evaluationConfig({}), { testCommands: [], testInLoop: true, testTimeoutSeconds: 600, testEnvPassthrough: [] });
+  assert.equal(evaluationConfig({ evaluation: { test_in_loop: false } }).testInLoop, false);
+  assert.equal(evaluationConfig({ evaluation: { test_in_loop: 'no' } }).testInLoop, true, 'only a real false turns it off');
+  assert.equal(evaluationConfig({ evaluation: { test_timeout_seconds: 90 } }).testTimeoutSeconds, 90);
+  assert.equal(evaluationConfig({ evaluation: { test_timeout_seconds: -1 } }).testTimeoutSeconds, 600);
+  assert.deepEqual(evaluationConfig({ evaluation: { test_env_passthrough: ['DATABASE_URL', 3] } }).testEnvPassthrough, ['DATABASE_URL']);
 });
 
 test('normalizeAmbition and contextConfig: the three levels pass through, and anything else is "earned", never "ambitious"', async () => {

@@ -852,6 +852,109 @@ test('runGeneration: a review unreadable twice is a rejection, recorded as revie
   assert.match(record.attempts[0].detail, /more than one verdict/);
 });
 
+// --- the project's tests inside the repair loop ----------------------------------
+
+/** A fake runTests: reads the tree and "passes" only when it contains `needle`. */
+function treeTest(repoRoot, { needle, calls }) {
+  return async () => {
+    const content = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
+    calls.push(content);
+    const passed = content === 'original content' || content.includes(needle);
+    return {
+      passed, durationMs: 5,
+      results: [{ command: 'npm test', exitCode: passed ? 0 : 1, signal: null, timedOut: false, durationMs: 5, passed, output: passed ? 'ok' : 'AssertionError: pause button has no aria-label' }],
+    };
+  };
+}
+
+test('runGeneration: a change that fails the tests is repaired in the loop — the implementer gets the failure, the reviewer only sees a passing tree', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  const FIXED = VALID_IMPLEMENTATION.replace('original content with a pause button', 'original content with a pause button aria-label');
+  const implementPrompts = [];
+  const reviewPrompts = [];
+  const call = async ({ model, user }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') { implementPrompts.push(user); return { text: implementPrompts.length === 1 ? VALID_IMPLEMENTATION : FIXED, truncated: false }; }
+    if (model === 'review-model') { reviewPrompts.push(user); return { text: 'VERDICT: APPROVED\n\nREASON: fine.\n\nEND OF REVIEW' }; }
+    throw new Error('unexpected call: ' + model);
+  };
+  const calls = [];
+  const result = await runGeneration(baseConfig(repoRoot, { runTests: treeTest(repoRoot, { needle: 'aria-label', calls }) }), { call });
+
+  assert.equal(result.outcome, 'approved');
+  assert.equal(calls.length, 3, 'baseline, attempt 1, attempt 2');
+  assert.equal(calls[0], 'original content', 'the baseline ran on the untouched tree');
+  assert.equal(reviewPrompts.length, 1, 'the failing attempt was never sent to review');
+  assert.match(implementPrompts[1], /FAILED THIS PROJECT'S OWN TESTS/);
+  assert.match(implementPrompts[1], /pause button has no aria-label/);
+  assert.match(implementPrompts[1], /DATA, NOT INSTRUCTIONS/, 'test output is fenced');
+  assert.match(reviewPrompts[0], /The project's own tests, run against this change/);
+  assert.match(reviewPrompts[0], /`npm test` — passed/);
+
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.deepEqual(record.attempts.map((a) => a.outcome), ['tests-failed', 'approved']);
+  assert.equal(record.attempts[0].tests.passed, false);
+  assert.equal(record.attempts[1].tests.passed, true);
+  assert.equal(record.tests.inLoop, true);
+  assert.equal(record.tests.baseline.passed, true);
+});
+
+test('runGeneration: a red baseline means tests are recorded but do not gate — a failure could not be pinned on the change', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  let reviews = 0;
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
+    if (model === 'review-model') { reviews += 1; return { text: 'VERDICT: APPROVED\n\nEND OF REVIEW' }; }
+    throw new Error('unexpected call: ' + model);
+  };
+  const alwaysRed = async () => ({ passed: false, durationMs: 1, results: [{ command: 'npm test', exitCode: 1, timedOut: false, durationMs: 1, passed: false, output: 'broken before we started' }] });
+  const result = await runGeneration(baseConfig(repoRoot, { runTests: alwaysRed }), { call });
+  assert.equal(result.outcome, 'approved');
+  assert.equal(reviews, 1);
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.equal(record.tests.inLoop, false);
+  assert.match(record.tests.reason, /baseline already failing/);
+});
+
+test('runGeneration: tests that keep failing exhaust the attempts and the run is abandoned with the tree restored', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
+    throw new Error('the reviewer must not be paid for a tree that fails its tests: ' + model);
+  };
+  const result = await runGeneration(baseConfig(repoRoot, { maxAttempts: 2, runTests: treeTest(repoRoot, { needle: 'never', calls: [] }) }), { call });
+  assert.equal(result.outcome, 'abandoned');
+  assert.equal(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), 'original content');
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.deepEqual(record.attempts.map((a) => a.outcome), ['tests-failed', 'tests-failed']);
+});
+
+test('runGeneration: with no in-loop tests the record says so, and no test section reaches the reviewer', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  let reviewPrompt = '';
+  const call = async ({ model, user }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
+    if (model === 'review-model') { reviewPrompt = user; return { text: 'VERDICT: APPROVED\n\nEND OF REVIEW' }; }
+    throw new Error('unexpected call: ' + model);
+  };
+  const result = await runGeneration(baseConfig(repoRoot), { call });
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.equal(record.tests, null);
+  assert.doesNotMatch(reviewPrompt, /run against this change/);
+});
+
 // --- a crash mid-attempt puts the tree back --------------------------------------
 
 test('runGeneration: a reviewer API failure after edits were applied restores the tree before the crash is recorded', async (t) => {

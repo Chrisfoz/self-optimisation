@@ -395,6 +395,27 @@ deployment:
 #   test_commands: []
 #   preflight_required: true
 
+# --- LIVE: the same test_commands, run INSIDE the generation -------------
+# After each attempt's edits apply and before the independent review, the
+# harness runs test_commands against that exact tree (a baseline run on the
+# untouched tree comes first). A failure goes back to the implementer as
+# evidence — the failing command and the end of its output — for the next
+# attempt to fix, within refine.max_attempts and the token budget; a pass is
+# shown to the reviewer. Without this, a failing change reached the
+# workflow's test step only after the loop had finished and could not be
+# repaired. On by default whenever test_commands is set; it costs test time,
+# not tokens. See harness/lib/test-runner.mjs.
+#
+# SECURITY: these tests run model-written code BEFORE review. The child
+# process gets a scrubbed environment — every variable shaped like a
+# credential (…_KEY, …_TOKEN, …_SECRET, GH_PAT, …) and every lab key the
+# harness knows is removed. Name one here only if your suite truly needs it.
+#
+# evaluation:
+#   test_in_loop: true
+#   test_timeout_seconds: 600        # per command; the whole process tree is killed on timeout
+#   test_env_passthrough: []         # e.g. [DATABASE_URL] — deliberately empty by default
+
 # --- LIVE: harness/scripts/run-evaluators.mjs reads this ------------------
 # Quality-dimension evaluator plugins — the measurements that are NOT gates.
 # `test_commands` above are the gates: they run in CI and a failure stops the
