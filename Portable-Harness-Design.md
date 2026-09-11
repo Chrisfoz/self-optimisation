@@ -98,6 +98,8 @@ uniform:
 | `scripts/invoke-code-review.mjs` | 237 | Independent reviewer | Fresh-context call, fail-closed parse | ✅ **Ported** — `harness/lib/review.mjs`. Same split: the project's filled-in `reviewer-brief.md` is the entire system prompt. Visual capture is an injectable `captureVisual` hook defaulting to "not configured" rather than a dependency — carrotgame's visual-check.mjs stays the one worked example, not the default. 8 tests, including the fail-closed guarantee. |
 | `scripts/lib/visual-check.mjs` | 313 | Evaluator (visual dimension) | The render-then-attach-to-review-call pattern, best-effort-not-exception posture | Renders *this* project's two games at a phone viewport — becomes optional, only relevant to projects with a visual surface; needs a pluggable "how do I render this project" hook |
 | `scripts/lib/wordless-play.mjs` | 759 | Evaluator (accessibility dimension) | Instrumented-draw-call method for telling symbol from word | Extremely game-specific (canvas instrumentation) — **do not port as a default**, keep as a worked example of "a fitness function that measures the real artefact, not a proxy of it" |
+| `tests/browser/returning-visitor.mjs` | 229 | Evaluator (state-continuity dimension) — new row, found auditing generations 025-030, not yet ported | Seed real browser storage (`localStorage`/cookies) with what a *returning* visitor already has, load the page, and assert what actually renders — every other browser gate here opens a clean profile and is structurally blind to this. Table-driven cases, not derived from the source under test, so the check doesn't agree with a wrong default by construction. | The specific keys (`germ_view`, maze resume state) and pages are carrotgame's; the harness of "seed storage → real browser → assert render" is generic. **Not yet ported** — proposed as `harness/plugins/evaluators/state-continuity/`, config-driven (adapter supplies the storage-key/expected-render cases) rather than hardcoded. See `learning/01-principles.md` §22c for the incident (a retired renderer's changed default silently stayed authoritative for every player who had the now-hidden toggle) and portable rule. |
+| `scripts/stamp-assets.mjs` + `scripts/lib/asset-stamps.mjs` | 57 + 153 | Evaluator / guard (cache-freshness dimension) — new row, same audit | Content-hash every local, long-cache-lifetime asset reference (`?v=<hash of the file's own bytes>`); `--check` mode fails CI on drift, no-flag mode rewrites. Exists because the convention drifted 3 times out of 6 while a human had to remember it by hand. | The scanned page list and asset globs are carrotgame's own (`STAMPED_PAGES`); the hash-and-compare mechanism has no game-specific content at all. **Not yet ported** — proposed as `harness/lib/asset-stamps.mjs`, parameterised by adapter fields (`deployment.cache_lifetime_days`, a page/asset glob list) rather than a hardcoded page array. Relevant to any project whose deploy target sets a long `Cache-Control: max-age` on static assets, independent of whether it uses the self-improvement loop at all — see `learning/01-principles.md` §22c. |
 | `scripts/readiness-scorecard.mjs` | 463 | Evaluator (aggregate, non-gating) | The "measured, never gates" posture, retired-dimension handling | The six dimensions themselves are carrotgame's (hospital wifi, WCAG, touch targets) — becomes an adapter-defined metric list |
 | `scripts/check-guarded-paths.mjs` | 118 | Guard / bounded authority | FROZEN / APPEND_ONLY / FROZEN_FIELDS / churn-ceiling mechanism | ✅ **Ported** — `harness/lib/guard.mjs` (pure, git runner injectable for tests) + `harness/scripts/check-guarded-paths.mjs`. Rules come from `constitution.frozen_paths`/`append_only_paths`/`frozen_fields`/`churn_ceiling` in `project-adapter.yml`, glob strings converted via the existing `glob.mjs`. 10 tests: 8 unit (fake git, every rule kind) + 2 against a real temporary git repository, proving the assumed `git diff --name-status --find-renames`/`--shortstat` output shapes are what real git actually produces rather than what the reference implementation's code merely assumed. |
 | `scripts/lib/escalations.mjs` | 419 | Failure & proposal memory (the "argue without editing" channel) | The whole ledger + consensus-bar (3 models / 2 labs) + email mechanism | ✅ **Ported** — `harness/lib/escalations.mjs`, nearly verbatim; this file was already fully generic. `LEDGER_PATH`/`CONSENSUS` became overridable options rather than module constants; `renderForEmail` renamed `renderForNotification` since the harness's notifier is channel-agnostic by design (email/Slack/webhook). 15 tests, including the specific behaviors worth locking down: distinct-model-not-raw-count consensus counting, a second model raising the *same* title backing rather than duplicating, flagging exactly once (a 4th supporter after the bar is cleared must not re-flag), and support/dissent against an already-resolved entry being ignored. Since ported into the live loop: `orchestrator.mjs` folds every asked model's escalation fields into the ledger each run, an accepted entry becomes a work order a later ambitious generation carries out, and an entry nobody has engaged with for N generations is put back to the fan-out by name (C8). |
@@ -724,3 +726,60 @@ The general lesson, which applies well beyond these four fixes and is the
 reason the curiosity engine should care: **a gate can only be as right as the
 premise handed to it, and the cheapest bugs to miss are the ones every
 mechanism downstream reports correctly.**
+
+**Revised again, auditing generations 025-030 for what hadn't flowed back
+yet.** Not everything the reference implementation learns is a bug in code
+this harness already ported — some of it is a bug class this harness hasn't
+met yet, or a governance case its schema doesn't have a place for. Four
+findings from this pass, one of them a confirmed non-issue rather than a gap.
+
+*Confirmed non-issue, worth stating rather than assuming:* carrotgame's
+`d41d803` fixed a merge job that re-ran its release check minutes after
+`preflight`/`improve`/`test`, which silently swept up anything *any* lab
+published in that window and marked it "seen" without ever offering it a
+suggest cycle (it cost a real model, Meta's muse-spark-1.3, its own
+generation). `harness/templates/workflow.yml.tmpl` cannot reproduce this
+today: it is one sequential job that commits the snapshot immediately after
+`check-model-releases.mjs` runs, with nothing downstream re-fetching it — the
+same structural immunity the "Still open" note above already claims for the
+never-pushed-branch bug. Worth a one-line comment on the commit step saying
+so, since the immunity is a property of the job staying singular, and
+carrotgame's own history shows exactly the refactor (splitting jobs for
+clarity or parallelism) that would quietly reintroduce it.
+
+*Two new evaluator candidates, not yet ported:* `tests/browser/returning-visitor.mjs`
+and `scripts/stamp-assets.mjs` + `scripts/lib/asset-stamps.mjs` — added as rows
+in §3's Bucket B table above, with the incidents and portable rule now
+written up as `learning/01-principles.md` §22c. Both answer a question no
+existing gate here can: not "does a fresh visitor get this right" but "does
+someone who already has state or a cached file get this right, the moment
+this ships." Neither is game-specific — a state-continuity check applies to
+any project with client-side persisted preferences, and asset content-hashing
+applies to any project serving static assets with a long cache lifetime,
+independent of whether that project uses the self-improvement loop at all.
+
+*A governance case the schema has no field for yet:* carrotgame's
+`SELF-IMPROVEMENT.md` now records a "human-directed capability leap" — the
+creator pairing directly with a frontier model for a larger, riskier change
+than the loop would propose on its own, explicitly logged as *not* an
+autonomous generation, with no release identifier or date invented to make
+it look like one. `learning/01-principles.md` §2b writes this up as its own
+principle. The harness has nothing in `project-adapter.yml` or its generation
+record shape to distinguish this from an autonomous run today; a
+`provenance: autonomous | human-directed` field (or equivalent) on the
+generation record is the minimal addition, so a human-directed session can be
+recorded honestly rather than either invented-as-a-release or left off the
+record entirely. Not built.
+
+*A second real instance of the wrong-fitness-function lesson, worth citing as
+corroboration rather than filed as new:* generation 030's `BRIEF FEEDBACK`
+named the readiness scorecard's `oneHanded` dimension as measuring control
+*geometry*, not whether the game's core loop is reachable with one thumb —
+structurally the same shape as the `readingLevel` incident §3's
+`wordless-play` row already documents, just a different scored dimension,
+and the model escalated rather than chasing the wrong number. This is live
+evidence for `docs/Curiosity-Engine-Design.md` §3.3's claim that `BRIEF
+FEEDBACK` reliably surfaces real blind spots rather than noise — worth
+folding into that document as a dated example when the curiosity ledger
+(Stage B) is actually built, since it is exactly the kind of corroborated,
+cross-generation signal that ledger is designed to accumulate.

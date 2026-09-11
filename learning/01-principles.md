@@ -51,6 +51,38 @@ to end, on a Tuesday afternoon.
 inputs" door. Build it at the same time as the loop, not after the first
 midnight failure.
 
+### 2b. A human-directed leap is not a generation — and must not pretend to be one
+
+Principle 1's whole premise is that a model release is the trigger. Principle
+2's rehearsal door lets a human force that same cycle on demand, for testing.
+Neither covers a third case: sometimes the project's owner wants to hand a
+frontier model a bigger, riskier change than the loop would ever propose on
+its own — not to test the pipeline, but because the moment calls for it.
+
+That is a legitimate thing to want, and forcing it through the autonomous
+path is worse than not having it at all. The loop's whole audit trail — which
+model, which lab, why now — exists to make every change attributable to a
+real release. A human-directed session has none of that shape. Inventing a
+release identifier or a release date for it, just to make the log look
+consistent, would be a lie in the audit trail — and the escalation-consensus
+mechanism (principle 10b) is built entirely on trusting that trail is not
+faked.
+
+**Defence:** give a human-directed leap its own lane in the same record — a
+`provenance` (or equivalent) field distinguishing it from an autonomous
+generation, the model actually used named honestly as a session label rather
+than a release, and an explicit note that no release identifier is being
+claimed. It still goes through the same guard and the same tests as
+everything else; it just never enters the escalation-consensus count or the
+rotating-seat history as if a lab had shipped something.
+
+**Portable version:** an escape valve for "bigger than the loop would allow,
+on purpose, right now" is healthy — the alternative is someone quietly
+bypassing the pipeline entirely. But the record of *why* something changed is
+load-bearing elsewhere in the system (audit, consensus, trust), so the escape
+valve must write down what kind of event it was, rather than merging
+invisibly into a column that means something else.
+
 ---
 
 ## B. Who does what
@@ -676,6 +708,64 @@ low. A proxy metric and the thing it's a proxy *for* are different objects, and
 a scorer that improves the proxy without improving the target isn't a bug in
 the metric — it's the metric working exactly as specified against the wrong
 target.
+
+**A second instance, worth recording rather than treated as resolved:** a
+later run's accessibility score for one-handed play measured control
+*geometry* — where buttons sat on a portrait screen — and was structurally
+blind to whether the two actions a player needs at once were reachable with
+one thumb at all. The model asked to raise the score escalated instead of
+complying, naming exactly this gap unprompted. Same shape, different
+dimension, same fix in spirit: a score is not the thing it scores, and the
+loop should expect to keep finding this in whatever dimension it measures
+next, not treat one fix as having closed the category.
+
+### 22c. A fresh-profile gate cannot see what a returning visitor already has
+
+Every gate described so far — the guard, the test suite, principle 22's live
+fetch — starts from a clean environment. That reliably answers one question:
+what does a first-time visitor get? It cannot answer a different one: what
+does everyone who was already using the thing get, the moment this change
+ships?
+
+Two incidents, same shape, different layer. A commit retired an old renderer
+by changing the *default* it fell back to when nothing was stored, and hid
+the toggle that used to control it in the same change. A default only fires
+when nothing is stored — so everyone who had ever touched that toggle had
+something stored, and the retired renderer stayed authoritative for exactly
+those people, with the one control that could undo it now gone. Every gate in
+the project opened a clean profile and reported the fix as working, for
+three days, to nobody who actually had the problem. Separately, static
+assets were served with a week-long cache lifetime, and nothing but a changed
+URL made a returning visitor's browser fetch a changed file — a fix to
+silent sound effects once shipped correctly and reached nobody who already
+had the page, because the file that changed kept the same cache key.
+
+**Defence, for stored state:** a gate that seeds the exact state a real
+returning user would have — cookies, `localStorage`, a save file — *before*
+the page's own code runs, and checks what actually renders, in a real
+browser, separately from every clean-profile check. The rule this kind of
+gate encodes: retiring an affordance does not retire the state it wrote, so
+the commit that hides or removes a control must also stop reading, or
+actively clear, the key that control used to write.
+
+**Defence, for cached assets:** stamp every reference to a locally-served,
+long-cache-lifetime asset with a hash of its own current content, so the
+*content* changing is what changes the *URL* a returning browser has to
+fetch — never leave a person to remember to bump a version number by hand.
+Verify this in CI the same way any other gate is verified (principle 13):
+recompute the expected hash and fail if a shipped reference disagrees with
+it.
+
+**Portable version, tying both together:** a mechanism meant to carry
+something forward (a saved preference, a cached file) needs something
+checking what it actually still carries after a change — and a mechanism
+meant to *stop* carrying something forward (a retired feature, a fixed bug)
+needs something checking that it actually stopped, for people who were
+already carrying the old thing. See also 20c, which meets the identical
+shape one layer up, in what a prompt remembers rather than what a browser
+does — the same defect keeps recurring across unrelated parts of a system,
+because "does this still run" and "does this still carry what it should" are
+different questions, and only one of them is usually tested.
 
 ### 23. Generate the record; never hand-maintain it
 
