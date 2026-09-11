@@ -43,7 +43,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import '../providers/index.mjs';
 import {
-  loadAdapter, constitutionAllowlist, guardConfig, contextConfig,
+  loadAdapter, constitutionAllowlist, guardConfig, contextConfig, memoryConfig,
   evaluationConfig, approvalClass, snapshotPath as adapterSnapshotPath,
 } from '../lib/adapter.mjs';
 import { validateAdapter } from '../lib/validate.mjs';
@@ -243,8 +243,23 @@ function persistLocally() {
   const result = spawnSync(process.execPath, [script('persist-records.mjs'), '--base', baseBranch, '--no-push'], {
     cwd: repoRoot, env: spawnEnv({ GEN_NUMBER: genNumber }), stdio: ['ignore', 'inherit', 'inherit'],
   });
-  if (result.status !== 0) console.log(`   ⚠️  Could not commit the record to ${baseBranch}; it is still in ${genDirRel}.`);
-  else console.log(`   Record committed to ${baseBranch} (not pushed).`);
+  if (result.status !== 0) {
+    console.log(`   ⚠️  Could not commit the record to ${baseBranch}; it is still in ${genDirRel}.`);
+    return;
+  }
+  console.log(`   Record committed to ${baseBranch} (not pushed).`);
+  // The copies left in this branch's working tree are now redundant, and
+  // worse: the base branch tracks the same paths, so the `git checkout
+  // <base>` this script tells you to run would refuse ("untracked working
+  // tree files would be overwritten"). The first real campaign hit exactly
+  // that. Clear them — they are safe on the base branch.
+  const memory = memoryConfig(adapter);
+  const ctx = contextConfig(adapter);
+  const roots = [...new Set([genDirRel, memory.ledgerPath || 'docs/escalations/ledger.json', memory.themesDir || 'docs/themes', ctx.runtimeEvidenceDir || 'docs/runtime'])];
+  try { git('clean', '-fdq', '--', ...roots); } catch { /* nothing untracked */ }
+  for (const root of roots) {
+    try { git('checkout', '-q', '--', root); } catch { /* not tracked on this branch */ }
+  }
 }
 
 if (improveResult.status !== 0) {
