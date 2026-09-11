@@ -474,3 +474,16 @@ jobs:
           if [ "$PROMOTE" = "success" ]; then merged=true; fi
           echo "merged=$merged" >> "$GITHUB_OUTPUT"
       {{NOTIFY_STEPS}}
+
+      # Last, after the digest has had its say: a generation whose record
+      # could not be saved turns the whole run red. The persist step is
+      # continue-on-error so nothing after it is skipped, which on its own
+      # meant a lost record looked like a green run — the first real run on
+      # GitHub Actions lost one exactly that way. A red run is the one signal
+      # that reaches someone with no digest configured.
+      - name: Fail the run if this generation's record was not saved
+        if: always() && steps.persist.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::error::This generation's record could not be committed to {{DEFAULT_BRANCH}} — see the persist step. It exists only on this runner and is gone when the job ends."
+          exit 1

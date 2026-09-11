@@ -36,7 +36,14 @@ export function changedFiles(git, roots) {
   const present = roots.filter(Boolean);
   if (!present.length) return [];
   const raw = git('status', '--porcelain=v1', '-z', '--untracked-files=all', '--', ...present);
+  // Each entry is exactly "XY path": two status columns, a space, the path.
+  // A runner that trims the output would break the first entry's columns,
+  // so an entry that no longer matches that shape is refused loudly rather
+  // than silently mis-sliced.
   const entries = raw.split('\0').filter(Boolean);
+  for (const e of entries.slice(0, 1)) {
+    if (!/^[ MADRCU?!]{2} ./.test(e)) throw new Error(`Unexpected git status entry "${e}" — the runner must not trim git's output.`);
+  }
   const out = [];
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
@@ -49,8 +56,13 @@ export function changedFiles(git, roots) {
   return [...new Set(out)];
 }
 
+// trimEnd, never trim: `git status --porcelain` starts an entry for a
+// modified tracked file with a SPACE (" M path"), and a leading trim turned
+// the first such entry into "M path", so slice(3) ate the first letter of
+// the path. It shipped: the first real GitHub Actions run failed to persist
+// its record trying to copy "ocs/escalations/ledger.json".
 function makeGit(cwd) {
-  return (...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  return (...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trimEnd();
 }
 
 /**

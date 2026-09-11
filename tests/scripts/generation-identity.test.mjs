@@ -186,6 +186,41 @@ test('persistRecords: only files this run changed are copied, so a shared direct
   assert.equal(fs.readFileSync(path.join(c.dir, 'docs/themes/review-002.md'), 'utf8'), 'new\n');
 });
 
+test('persistRecords: a MODIFIED tracked file as the first entry keeps its full path (the first GitHub Actions run)', (t) => {
+  // " M docs/escalations/ledger.json" — the leading space is a status column.
+  // A trimmed runner turned it into "ocs/escalations/ledger.json" and the
+  // record was lost with the runner.
+  const { a, clone } = world(t);
+  fs.mkdirSync(path.join(a.dir, 'docs/escalations'), { recursive: true });
+  fs.writeFileSync(path.join(a.dir, 'docs/escalations/ledger.json'), '{"entries":[]}\n');
+  a.git('add', '-A');
+  a.git('commit', '-q', '-m', 'a ledger already on main');
+  a.git('push', '-q', 'origin', 'main');
+  a.git('checkout', '-q', '-b', 'agent/gen-003');
+  fs.writeFileSync(path.join(a.dir, 'docs/escalations/ledger.json'), '{"entries":[{"id":"esc-001"}]}\n');
+  writeRecord(a.dir, '003', 'approved');
+
+  const result = persistRecords({ repoRoot: a.dir, baseBranch: 'main', message: 'gen 3', roots: ['docs/escalations/ledger.json', 'docs/generations/gen-003'] });
+  assert.equal(result.pushed, true);
+  assert.ok(result.files.includes('docs/escalations/ledger.json'), result.files.join(', '));
+  const c = clone('c');
+  assert.match(fs.readFileSync(path.join(c.dir, 'docs/escalations/ledger.json'), 'utf8'), /esc-001/);
+});
+
+test('changedFiles refuses output from a runner that trimmed the status columns, rather than mis-slicing it', () => {
+  const trimming = () => 'M docs/escalations/ledger.json\0';
+  assert.throws(() => changedFiles(trimming, ['docs']), /must not trim/);
+});
+
+test('workflow: a record that could not be saved turns the whole run red, after the digest', () => {
+  for (const approvalClass of ['human-approval-required', 'autonomous-merge']) {
+    const { steps } = renderSteps({ projectId: 'p', allowedPaths: ['a'], testCommands: ['true'], approvalClass, providers: [{ name: 'anthropic', envKey: 'ANTHROPIC_API_KEY' }] });
+    const last = steps.at(-1);
+    assert.match(last.if, /steps\.persist\.outcome == 'failure'/);
+    assert.match(last.run, /exit 1/);
+  }
+});
+
 test('persistRecords without a remote (a rehearsal) commits to the local base branch only', (t) => {
   const { a } = world(t);
   const before = a.git('rev-parse', 'origin/main');
