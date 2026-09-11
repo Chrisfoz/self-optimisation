@@ -1436,7 +1436,12 @@ export async function runGeneration(config, deps = {}) {
 
       // Approved.
       const implementedBy = step.by;
-      const summary = oneLine(parsed.summary || `Generation ${genNumber} improvement`, 80);
+      // The implementer's SUMMARY line, else — when the suggester's own edits
+      // shipped, and the suggestion format has no SUMMARY field — its CHANGE
+      // line. Only then the generic label: the first real GitHub Actions run
+      // to ship a suggester's own edits opened a pull request titled
+      // "Generation 005: Generation 005 improvement".
+      const summary = oneLine(parsed.summary || extractField(proposal, 'CHANGE') || `Generation ${genNumber} improvement`, 80);
       attemptLog.push({ attempt, by: step.by, outcome: 'approved', detail: summary, ...(testRun ? { tests: summarizeTestRun(testRun) } : {}) });
 
       const proposalPath = writeProposal({

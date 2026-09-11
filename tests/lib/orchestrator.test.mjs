@@ -1025,3 +1025,20 @@ test('runGeneration: the cleanup handed to onCleanup restores mid-review, as a s
   await runGeneration(baseConfig(repoRoot, { maxAttempts: 1 }), { call, onCleanup: (fn) => { restore = fn; return () => {}; } });
   assert.equal(seenAfterRestore, 'original content');
 });
+
+test('runGeneration: when the suggester\'s own edits ship, the summary is its CHANGE line, not a generic label', async (t) => {
+  // The suggestion format has no SUMMARY field. The first real GitHub Actions
+  // run to ship a suggester's own edits opened "Generation 005: Generation
+  // 005 improvement".
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: suggestionWithDirectEdits(), truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nEND OF REVIEW' };
+    throw new Error('unexpected call: ' + model);
+  };
+  const result = await runGeneration(baseConfig(repoRoot), { call });
+  assert.equal(result.selfImplemented, true);
+  assert.equal(result.summary, 'add a pause button to index.html');
+});
