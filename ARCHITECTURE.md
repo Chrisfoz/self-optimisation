@@ -1,5 +1,17 @@
 # Architecture — what's actually built, in pictures
 
+**Console implementation update — 11 September 2026:** the browser installer
+is now implemented. `console/app.mjs` calls explicit HTTP endpoints;
+`configuration.mjs` validates input and calls the existing scaffolder;
+`github.mjs` performs installation-scoped GitHub operations through App
+user access tokens held in memory by `api.mjs`. The initial workflow is
+manual and PR-only; activation requires a separately reviewed PR after
+verified rehearsal gates. See [implementation status](console/IMPLEMENTATION.md)
+and [deployment configuration](console/DEPLOYMENT.md). Live authenticated
+acceptance is still outstanding. The first diagram below is retained as the
+**pre-implementation architecture snapshot**, not a current console status claim.
+
+
 This page exists because the other diagrams in this repository each answer a
 different question, and none of them answers "what does *self_optimisation
 itself* actually have working today" — which is the one a first-time visitor
@@ -11,13 +23,13 @@ portable pattern you'd lift into another project. Read
 
 | Layer | Where | Shows |
 |---|---|---|
-| **The whole project, today** | Below, on this page — new, added to answer "how do console/harness/curiosity relate" | Console + harness + curiosity as one picture, solid where built, dashed where proposed — the only diagram that spans all three |
+| **The project before the console implementation** | Below, on this page — new, added to answer "how do console/harness/curiosity relate" | Console + harness + curiosity as one picture, solid where built, dashed where proposed — the only diagram that spans all three |
 | **This repo's real status (the harness alone)** | Below, on this page — now **two** diagrams: one cycle end to end, then what happens inside the loop | What's actually built in the harness specifically. Everything drawn is real code with a test file; the warm-toned boxes are the ways a cycle ends without shipping, not unbuilt work |
 | **Portable pattern** | [`learning/diagrams/generic-loop.mmd`](learning/diagrams/generic-loop.mmd), `generic-guardrails.mmd`, `generic-context.mmd` — embedded and viewable in [`learning/02-blueprint.md`](learning/02-blueprint.md) and [`learning/05-guardrails-and-trust.md`](learning/05-guardrails-and-trust.md) | The abstract loop and guardrail layers, project-neutral — what you'd draw for *any* installation, including one that isn't this harness at all |
 | **Reference implementation, concretely** | [`learning/diagrams/worked-example-run.mmd`](learning/diagrams/worked-example-run.mmd), `worked-example-harness.mmd` — both embedded below since GitHub doesn't render a bare `.mmd` file as a picture | The same pattern as it actually runs in the reference implementation (real job names, real check counts, real token costs) — useful for seeing what the abstraction looks like once it's hit a real, live system |
 | **Proposed, not built** | [`learning/diagrams/proposed-curiosity-run.mmd`](learning/diagrams/proposed-curiosity-run.mmd), `proposed-curiosity-memory.mmd`, `proposed-curiosity-authorisation.mmd`, indexed at [`docs/curiosity/README.md`](docs/curiosity/README.md) | The curiosity design's own three diagrams — a second longitudinal pass, none of it built. Do not read as documentation of the harness. |
 
-## The whole project, in one picture
+## Historical project snapshot, in one picture
 
 Console, harness, and curiosity live at three different maturity levels, and
 no other diagram in this repository shows them on the same page. Solid boxes
@@ -375,3 +387,4 @@ flowchart TB
 Both diagrams describe the reference implementation, carrotgame — the check
 counts (98+601+19), token estimate (~59k), and provider-dispatch table are
 its numbers, not `self_optimisation`'s own.
+

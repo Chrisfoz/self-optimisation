@@ -88,7 +88,7 @@ because of a specific failure — usually one that already happened.
 | `tests/e2e/` | Whole-chain tests | Real git, real child processes; only model calls faked. |
 | `learning/` | Portable lessons | Written to be lifted into another project — must not depend on this repo's specifics. |
 | `docs/` | Research corpus **and** this project's own designs | Keep the two distinct: third-party PDFs are gitignored; `docs/curiosity/` and `docs/Curiosity-Engine-Design.md` are ours. |
-| `console/` | The install-flow design | Proposal, except `console/supabase/` which is a live schema. |
+| `console/` | Browser installer, HTTP API, GitHub App client and design records | Current implementation: `console/IMPLEMENTATION.md`; deployment requirements: `console/DEPLOYMENT.md`. |
 
 A file that doesn't fit one of these cleanly is worth raising in an issue
 before it sets a precedent.
@@ -132,8 +132,8 @@ OS-specific notes for the Node/Windows combination that fails confusingly.
 This repository's documentation is load-bearing — a human, and eventually an
 agent, reads it and acts on it. Drift here isn't cosmetic.
 
-- **Mark proposals as proposals.** `console/` and `docs/curiosity/` describe
-  things that don't exist. Any diagram, table, or sentence about them must
+- **Mark proposals as proposals.** Historical parts of `console/DESIGN.md` and `docs/curiosity/` describe
+  work that is not implemented; current console status is in `console/IMPLEMENTATION.md`. Any diagram, table, or sentence about them must
   make that unmistakable. In diagrams the convention is dashed and warm-toned
   for proposed, solid for real.
 - **Keep the three-way status agreement.** `README.md`'s Status table,
@@ -210,3 +210,4 @@ One point of possible confusion worth stating: `.agent/` is gitignored *in this
 repository*, but README's install guide tells a target project to **commit**
 it. Both are right — this repo is the tool, not an installation of it, so its
 own `.agent/` is throwaway local rehearsal state.
+

@@ -1,528 +1,273 @@
-<!-- About page for the proposed install console (console/DESIGN.md).
-     Authored as an Artifact body fragment: no <html>/<head>/<body> wrapper. -->
-<title>What Self-Optimisation Does</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Sans:wght@400;450;600;700&display=swap">
-
-<style>
-:root {
-  --ground:#EDEFF4; --surface:#FFFFFF; --surface-2:#F5F6FA;
-  --line:#D8DBE6; --line-soft:#E6E8F0;
-  --ink:#14161F; --ink-2:#3D4254; --muted:#6A7089;
-  --accent:#3F4E9E; --accent-2:#2E3B7D; --accent-wash:#E7E9F6;
-  --live:#1E7A4B; --live-wash:#E2F1E8;
-  --warn:#8A6100; --warn-wash:#F8EEDA;
-  --shadow:0 1px 2px rgba(20,22,31,.06), 0 8px 24px -12px rgba(20,22,31,.18);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --ground:#101219; --surface:#181B25; --surface-2:#1F222E;
-    --line:#2E3242; --line-soft:#252936;
-    --ink:#E8EAF2; --ink-2:#BFC4D6; --muted:#8990A8;
-    --accent:#8A97E8; --accent-2:#A6B0F0; --accent-wash:#232741;
-    --live:#5FC08C; --live-wash:#17301F;
-    --warn:#DFAE4B; --warn-wash:#302713;
-    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
-  }
-}
-:root[data-theme="dark"] {
-  --ground:#101219; --surface:#181B25; --surface-2:#1F222E;
-  --line:#2E3242; --line-soft:#252936;
-  --ink:#E8EAF2; --ink-2:#BFC4D6; --muted:#8990A8;
-  --accent:#8A97E8; --accent-2:#A6B0F0; --accent-wash:#232741;
-  --live:#5FC08C; --live-wash:#17301F;
-  --warn:#DFAE4B; --warn-wash:#302713;
-  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
-}
-
-* { box-sizing:border-box; }
-body {
-  margin:0; background:var(--ground); color:var(--ink);
-  font-family:"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
-  font-size:16px; line-height:1.62; -webkit-font-smoothing:antialiased;
-}
-.mono, code { font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.9em; }
-a { color:var(--accent); text-underline-offset:2px; }
-a:hover { color:var(--accent-2); }
-:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
-
-.wrap { max-width:880px; margin:0 auto; padding:32px 22px 76px; }
-.narrow { max-width:66ch; }
-
-.eyebrow {
-  font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif; font-weight:600;
-  text-transform:uppercase; letter-spacing:.09em; font-size:11px; color:var(--muted);
-  margin:0 0 8px;
-}
-
-/* ---- hero ---- */
-header.top { padding-bottom:26px; margin-bottom:30px; border-bottom:1px solid var(--line); }
-header.top h1 {
-  margin:0 0 12px; font-size:clamp(28px,4.4vw,40px); font-weight:700;
-  letter-spacing:-.028em; line-height:1.14; text-wrap:balance; max-width:19ch;
-}
-header.top .thesis { margin:0; font-size:18px; color:var(--ink-2); max-width:60ch; }
-header.top .thesis b { color:var(--ink); font-weight:600; }
-
-/* ---- sections ---- */
-section { margin-bottom:44px; }
-h2 { margin:0 0 10px; font-size:21px; font-weight:700; letter-spacing:-.018em; text-wrap:balance; }
-p { margin:0 0 14px; color:var(--ink-2); }
-
-/* ---- principle cards ---- */
-.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; margin-top:22px; }
-.card {
-  background:var(--surface); border:1px solid var(--line); border-radius:6px;
-  padding:16px 17px; box-shadow:var(--shadow);
-}
-.card h3 { margin:0 0 7px; font-size:14.5px; font-weight:600; letter-spacing:-.008em; line-height:1.35; }
-.card p { margin:0; font-size:13.5px; color:var(--muted); line-height:1.55; }
-
-/* ---- figure ---- */
-figure { margin:0; }
-.figframe {
-  background:var(--surface); border:1px solid var(--line); border-radius:6px;
-  padding:18px 14px 8px; box-shadow:var(--shadow); overflow-x:auto;
-}
-figcaption { margin-top:12px; font-size:13.5px; color:var(--muted); max-width:66ch; }
-
-.dg { font-family:"IBM Plex Sans", sans-serif; display:block; max-width:100%; height:auto; min-width:660px; margin:0 auto; }
-.dg .bx { fill:var(--surface-2); stroke:var(--line); stroke-width:1; }
-.dg .bx-ghost { fill:var(--surface-2); stroke:var(--line); stroke-width:1; opacity:.55; }
-.dg .bx-accent { fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.4; }
-.dg .t { fill:var(--ink); font-size:13px; font-weight:600; }
-.dg .s { fill:var(--muted); font-size:10.5px; }
-.dg .edge { stroke:var(--muted); stroke-width:1.4; fill:none; }
-.dg .edge-soft { stroke:var(--muted); stroke-width:1.2; fill:none; opacity:.65; }
-.dg .lbl { fill:var(--muted); font-size:10.5px; }
-.dg .gatebox { fill:none; stroke:var(--warn); stroke-width:1.2; stroke-dasharray:5 4; opacity:.9; }
-.dg .gatelbl { fill:var(--warn); font-size:11px; font-weight:600; letter-spacing:.05em; }
-.dg marker path { fill:var(--muted); }
-
-/* ---- steps ---- */
-ol.steps { margin:18px 0 0; padding:0; list-style:none; counter-reset:s; display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:2px 26px; }
-ol.steps li {
-  counter-increment:s; display:grid; grid-template-columns:26px 1fr; gap:10px;
-  padding:8px 0; border-bottom:1px solid var(--line-soft); font-size:14.5px; align-items:baseline;
-}
-ol.steps li::before {
-  content:counter(s); font-family:"IBM Plex Mono",monospace; font-size:11.5px;
-  color:var(--muted); font-variant-numeric:tabular-nums;
-}
-ol.steps li span { color:var(--muted); font-size:13px; display:block; }
-
-.cta {
-  display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:24px;
-}
-.btn {
-  display:inline-block; font-size:14.5px; font-weight:600; border-radius:6px;
-  padding:10px 18px; text-decoration:none; border:1px solid var(--line);
-  background:var(--surface); color:var(--ink);
-}
-.btn:hover { border-color:var(--muted); color:var(--ink); }
-.btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
-.btn.primary:hover { background:var(--accent-2); border-color:var(--accent-2); color:#fff; }
-:root[data-theme="dark"] .btn.primary { color:#12141C; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.primary { color:#12141C; } }
-.cta .aside { font-size:13px; color:var(--muted); }
-
-/* ---- status ---- */
-.scroll-x { overflow-x:auto; }
-table.status { width:100%; border-collapse:collapse; font-size:14px; }
-table.status th, table.status td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line-soft); vertical-align:top; }
-table.status th {
-  font-family:"IBM Plex Sans Condensed",sans-serif; text-transform:uppercase;
-  letter-spacing:.07em; font-size:10.5px; color:var(--muted); font-weight:600;
-}
-table.status td:first-child { color:var(--ink); }
-.pill {
-  display:inline-block; font-family:"IBM Plex Sans Condensed",sans-serif; font-weight:600;
-  font-size:10.5px; text-transform:uppercase; letter-spacing:.07em;
-  padding:2px 8px; border-radius:3px; white-space:nowrap;
-}
-.pill.yes { background:var(--live-wash); color:var(--live); }
-.pill.part { background:var(--warn-wash); color:var(--warn); }
-.pill.no { background:var(--surface-2); color:var(--muted); border:1px dashed var(--line); }
-
-footer.foot {
-  margin-top:8px; padding-top:20px; border-top:1px solid var(--line);
-  display:flex; flex-wrap:wrap; gap:10px 22px; align-items:baseline;
-  font-size:13.5px; color:var(--muted);
-}
-footer.foot .spacer { flex:1 1 30px; }
-
-/* ---- shared site nav (same markup on about / console / privacy) ---- */
-nav.sitenav {
-  display:flex; flex-wrap:wrap; gap:4px; align-items:center;
-  margin:0 0 26px; padding-bottom:14px; border-bottom:1px solid var(--line-soft);
-}
-nav.sitenav a {
-  font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;
-  font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.07em;
-  color:var(--muted); text-decoration:none; padding:6px 11px; border-radius:5px;
-}
-nav.sitenav a:hover { color:var(--ink); background:var(--surface-2); }
-nav.sitenav a[aria-current="page"] { color:var(--accent); background:var(--accent-wash); }
-nav.sitenav .navspace { flex:1 1 20px; }
-nav.sitenav .navrepo { font-size:12px; letter-spacing:.04em; text-transform:none; }
-
-/* ---- third-party embed ---- */
-.embed { margin:22px 0 8px; }
-.embed iframe { display:block; width:100%; max-width:640px; height:460px; border:0; border-radius:12px; }
-.embed .src { font-size:12.5px; color:var(--muted); margin:8px 0 0; }
-.metrics {
-  display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px;
-  margin:20px 0 10px; padding:0; list-style:none;
-}
-.metrics li {
-  background:var(--surface); border:1px solid var(--line); border-radius:8px;
-  padding:13px 15px; box-shadow:var(--shadow);
-}
-.metrics .fig {
-  display:block; font-size:22px; font-weight:700; letter-spacing:-.02em; color:var(--ink);
-}
-.metrics .cap { display:block; font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.45; }
-.asof { font-size:12.5px; color:var(--muted); }
-</style>
-
-<div class="wrap">
-
-  <nav class="sitenav" aria-label="Site">
-    <a href="https://claude.ai/code/artifact/34273fb4-75b4-4e09-af44-159ccc9677e7" aria-current="page">What it does</a>
-    <a href="https://claude.ai/code/artifact/00efd905-19bd-4d79-a613-e63182556742">The console</a>
-    <a href="https://claude.ai/code/artifact/476e81da-9930-46fb-bfb8-08b0c5a4911d">Privacy</a>
-    <span class="navspace"></span>
-    <a class="navrepo" href="https://github.com/Chrisfoz/self-optimisation">GitHub ↗</a>
+<title>Self-Optimisation — New models. Better software. Your rules.</title>
+<meta
+  name="description"
+  content="Give new AI models a turn to improve your repository, with independent review, protected paths and your own tests before a pull request."
+/>
+<link rel="stylesheet" href="/assets/console.css" />
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="/" aria-label="Self-Optimisation home"
+    ><span class="brand-mark">S↗</span> Self-Optimisation</a
+  >
+  <nav aria-label="Site">
+    <a href="/" aria-current="page">What it does</a
+    ><a href="/console">Console</a><a href="/privacy">Privacy</a
+    ><a href="https://github.com/Chrisfoz/self-optimisation">GitHub ↗</a>
   </nav>
-
-  <header class="top">
-    <p class="eyebrow">Self-Optimisation</p>
-    <h1>Your repository gets a second opinion every time the field moves.</h1>
-    <p class="thesis">When a lab ships a new frontier model, it gets exactly one
-    turn to propose one improvement to your project — and <b>four independent
-    gates it has to pass</b> before a single line reaches you.</p>
-  </header>
-
-  <section class="narrow">
-    <h2>The objective</h2>
-    <p>Software gets better when someone with fresh eyes reads it. Frontier
-    models now arrive every few weeks, each with genuinely different judgement
-    — and every one of them is a reader who has never seen your code before.
-    The problem has never been asking them. It's that acting on the answer
-    unsupervised is reckless, and reviewing every answer by hand is work you
-    won't keep doing.</p>
-    <p>So this is a governed loop rather than an assistant. The trigger is a
-    model release, not a calendar tick. The proposing seat rotates to whoever
-    shipped most recently, while the reviewing seat stays pinned to a model you
-    already trust. Changes arrive as exact edits to files you explicitly
-    allowed, applied all-or-nothing, checked by an independent reviewer, a
-    guard, and your own test suite. What reaches you is a pull request and a
-    short email explaining it.</p>
-
-    <div class="cards">
-      <div class="card">
-        <h3>The trigger is a release, not the calendar</h3>
-        <p>A run happens because there is a new mind to ask. Nothing new shipped this month? Then nothing runs, and nothing is spent.</p>
+</header>
+<main id="main">
+  <section class="hero wrap">
+    <div>
+      <p class="eyebrow">
+        A continuous improvement harness for your repository
+      </p>
+      <h1>New models.<br />Better software.<br /><em>Your rules.</em></h1>
+      <p class="hero-copy">
+        When a new AI model arrives, give it a turn to improve your project.
+        Keep the change only after independent review, protected-path checks and
+        your own tests.
+      </p>
+      <div class="button-row">
+        <a class="button primary" href="/console"
+          >Configure your repository <span aria-hidden="true">↗</span></a
+        ><a class="button quiet" href="#how">See how a run works ↓</a>
       </div>
-      <div class="card">
-        <h3>An agent can argue with a rule, never change it</h3>
-        <p>Protected paths are enforced against the real diff. A model that thinks a rule is wrong can say so — and it takes three models across two labs agreeing before that reaches you as a decision.</p>
+      <p class="caption">
+        Runs in your GitHub Actions · Uses your model API keys · Pull requests
+        by default
+      </p>
+    </div>
+    <div class="run-card" aria-label="Illustrative improvement run">
+      <div class="card-top">
+        <span class="eyebrow">One release. One opportunity.</span
+        ><span class="tag">Illustration</span>
       </div>
-      <div class="card">
-        <h3>Every run writes down what it tried</h3>
-        <p>Including the ones that shipped nothing. The next run reads it back, so the same dead end doesn't get proposed twice.</p>
+      <div class="run-trigger">
+        <span class="signal">↗</span>
+        <div>
+          <small>THE TRIGGER</small>
+          <h2>A lab ships a new model</h2>
+        </div>
+      </div>
+      <ol class="run-track">
+        <li>
+          <span>01</span>
+          <div>
+            <strong>Ask for a useful change</strong>
+            <p>Your goal, permitted files and past attempts give it context.</p>
+          </div>
+        </li>
+        <li>
+          <span>02</span>
+          <div>
+            <strong>Make it earn its place</strong>
+            <p>Exact edits. Independent review. Guard checks. Your tests.</p>
+          </div>
+        </li>
+        <li>
+          <span>03</span>
+          <div>
+            <strong>Bring you the evidence</strong>
+            <p>A reviewable pull request and a record of what happened.</p>
+          </div>
+        </li>
+      </ol>
+      <div class="run-result">
+        <span>YOUR DEFAULT BRANCH</span><strong>You decide what merges.</strong>
       </div>
     </div>
   </section>
-
-  <section>
-    <h2>One run, end to end</h2>
-    <p class="narrow">Everything between the release and the pull request is
-    automatic. The four boxed stages are the reason that's safe to say.</p>
-
-    <figure>
-      <div class="figframe">
-        <svg class="dg" viewBox="0 0 980 760" role="img"
-             aria-label="A new model release triggers one proposal per newly released model. The winning proposal is implemented as exact edits, then passes four gates — implementation allowlist, independent review, the guard, and your own tests — before a pull request opens and a digest is emailed. Every run's record feeds the next run's context, and a disputed rule escalates to a human decision.">
-          <defs>
-            <marker id="ar" viewBox="0 0 10 10" refX="9.2" refY="5"
-                    markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
-              <path d="M0 0 L10 5 L0 10 z"></path>
-            </marker>
-          </defs>
-
-          <!-- gate grouping -->
-          <rect class="gatebox" x="284" y="290" width="372" height="282" rx="8"></rect>
-          <text class="gatelbl" transform="rotate(-90 272 431)" x="272" y="431" text-anchor="middle">FOUR GATES · ANY ONE STOPS THE RUN</text>
-
-          <!-- edges down the spine -->
-          <line class="edge" x1="470" y1="70"  x2="470" y2="88"  marker-end="url(#ar)"></line>
-          <line class="edge" x1="470" y1="140" x2="470" y2="158" marker-end="url(#ar)"></line>
-          <line class="edge" x1="470" y1="210" x2="470" y2="228" marker-end="url(#ar)"></line>
-          <line class="edge" x1="470" y1="280" x2="470" y2="298" marker-end="url(#ar)"></line>
-          <line class="edge" x1="470" y1="350" x2="470" y2="368" marker-end="url(#ar)"></line>
-          <line class="edge" x1="470" y1="420" x2="470" y2="438" marker-end="url(#ar)"></line>
-          <line class="edge" x1="470" y1="490" x2="470" y2="508" marker-end="url(#ar)"></line>
-          <line class="edge" x1="470" y1="560" x2="470" y2="578" marker-end="url(#ar)"></line>
-          <line class="edge" x1="470" y1="630" x2="470" y2="648" marker-end="url(#ar)"></line>
-
-          <!-- 1 trigger -->
-          <rect class="bx-accent" x="300" y="24" width="340" height="44" rx="5"></rect>
-          <text class="t" x="320" y="43">A lab ships a new model</text>
-          <text class="s" x="320" y="59">checked on your schedule — monthly by default</text>
-
-          <!-- 2 context -->
-          <rect class="bx" x="300" y="94" width="340" height="44" rx="5"></rect>
-          <text class="t" x="320" y="113">Context is compiled</text>
-          <text class="s" x="320" y="129">your brief, the file tree, the last three runs</text>
-
-          <!-- 3 fan-out (stacked) -->
-          <rect class="bx-ghost" x="316" y="164" width="340" height="44" rx="5"></rect>
-          <rect class="bx-ghost" x="308" y="164" width="340" height="44" rx="5"></rect>
-          <rect class="bx" x="300" y="164" width="340" height="44" rx="5"></rect>
-          <text class="t" x="320" y="183">Each new model proposes one change</text>
-          <text class="s" x="320" y="199">in parallel, on its own lab's API</text>
-
-          <!-- 4 rank -->
-          <rect class="bx" x="300" y="234" width="340" height="44" rx="5"></rect>
-          <text class="t" x="320" y="253">Proposals are ranked blind</text>
-          <text class="s" x="320" y="269">authors withheld — only runs if more than one</text>
-
-          <!-- 5 implement -->
-          <rect class="bx" x="300" y="304" width="340" height="44" rx="5"></rect>
-          <text class="t" x="320" y="323">Written as exact edits</text>
-          <text class="s" x="320" y="339">all-or-nothing, only on paths you allowed</text>
-
-          <!-- 6 review -->
-          <rect class="bx" x="300" y="374" width="340" height="44" rx="5"></rect>
-          <text class="t" x="320" y="393">Independent review</text>
-          <text class="s" x="320" y="409">fresh context, pinned model, fails closed</text>
-
-          <!-- 7 guard -->
-          <rect class="bx" x="300" y="444" width="340" height="44" rx="5"></rect>
-          <text class="t" x="320" y="463">The guard checks the real diff</text>
-          <text class="s" x="320" y="479">protected paths, protected fields, size ceiling</text>
-
-          <!-- 8 tests -->
-          <rect class="bx" x="300" y="514" width="340" height="44" rx="5"></rect>
-          <text class="t" x="320" y="533">Your own tests run</text>
-          <text class="s" x="320" y="549">the project's existing suite, unchanged</text>
-
-          <!-- 9 PR -->
-          <rect class="bx" x="300" y="584" width="340" height="44" rx="5"></rect>
-          <text class="t" x="320" y="603">A pull request opens</text>
-          <text class="s" x="320" y="619">or merges itself, if that's what you chose</text>
-
-          <!-- 10 digest -->
-          <rect class="bx" x="300" y="654" width="340" height="44" rx="5"></rect>
-          <text class="t" x="320" y="673">A plain-language digest arrives</text>
-          <text class="s" x="320" y="689">what was tried, what shipped, what didn't</text>
-
-          <!-- memory feedback -->
-          <path class="edge-soft" d="M 300 676 H 186 Q 170 676 170 660 V 132 Q 170 116 186 116 H 290"
-                marker-end="url(#ar)"></path>
-          <text class="lbl" transform="rotate(-90 152 400)" x="152" y="400" text-anchor="middle">every run's record — including the ones that shipped nothing</text>
-
-          <!-- escalation branch -->
-          <line class="edge-soft" x1="640" y1="466" x2="736" y2="466" marker-end="url(#ar)"></line>
-          <text class="lbl" x="688" y="454" text-anchor="middle">a rule is disputed</text>
-          <text class="lbl" x="688" y="484" text-anchor="middle">3 models · 2 labs</text>
-          <rect class="bx-accent" x="744" y="432" width="226" height="68" rx="5"></rect>
-          <text class="t" x="762" y="458">You decide</text>
-          <text class="s" x="762" y="474">the only way a protected</text>
-          <text class="s" x="762" y="488">rule ever changes</text>
-        </svg>
-      </div>
-      <figcaption>One generation. The run stops dead at any of the four boxed
-      stages, and a stopped run still writes down what it tried — that record is
-      the arrow running back up to context. The branch on the right is the only
-      path by which a rule you set can change, and it ends at a person.</figcaption>
-    </figure>
-  </section>
-
-  <section>
-    <h2>Who sits in which seat</h2>
-    <p class="narrow">Four roles run in every generation. Only one of them
-    rotates — that's the whole design. The other three stay on models you
-    picked and can vouch for, so a brand-new model gets to <em>propose</em>
-    freely while nothing it says reaches your repository without a known
-    quantity checking it first.</p>
-
-    <div class="cards">
-      <div class="card">
-        <h3>🆕 The suggesting seat — rotates</h3>
-        <p>Whichever watched lab just shipped something new. Reads a curated
-        context pack, not your whole codebase, and proposes one specific
-        change. This is the only seat that changes hands, and it changes hands
-        because a release happened.</p>
-      </div>
-      <div class="card">
-        <h3>🔧 The implementer — pinned, your choice</h3>
-        <p>Turns the proposal into an exact edit — or steps aside when the
-        suggesting model wrote a usable patch itself. Defaults to Claude Opus,
-        and can be pointed at any lab's model instead.</p>
-      </div>
-      <div class="card">
-        <h3>🔍 The reviewer — pinned, your choice</h3>
-        <p>A fresh pass with no memory of the pitch. Configured
-        <em>separately</em> from the implementer, so the two can be different
-        models — and an unparseable verdict counts as a rejection, never an
-        approval.</p>
-      </div>
-      <div class="card">
-        <h3>✅ The gates — not a model at all</h3>
-        <p>Your own test suite and the guard. They don't care which model
-        wrote the change or how convincing its reasoning was. Green or it
-        stops.</p>
-      </div>
+  <section class="principles wrap" aria-label="Core principles">
+    <div>
+      <b>Release-driven</b>
+      <p>Checks on your schedule. Proposes when an unseen model is detected.</p>
     </div>
-
-    <p class="narrow" style="margin-top:18px">Picking a pinned model from a lab
-    you aren't watching is a normal thing to do — reviewing with Claude while
-    watching only OpenAI, say. Watching is about <em>where proposals come
-    from</em>; pinning is about <em>who you trust to check them</em>. The
-    installer works out which API keys that combination actually needs and
-    wires them all, rather than assuming the two lists are the same.</p>
+    <div>
+      <b>Bounded by design</b>
+      <p>You define what may change, what stays protected and the test gate.</p>
+    </div>
+    <div>
+      <b>A record, every time</b>
+      <p>Failed attempts and shipped changes both inform the next run.</p>
+    </div>
   </section>
-
-  <section>
-    <h2>What it starts asking, once it has a history</h2>
-    <p class="narrow"><b>This part is designed, not built.</b> Everything above
-    describes a loop that improves what it can already see. The gap it leaves
-    is that a loop like this only ever answers questions someone thought to
-    ask — it gets steadily better at fixing, and never gets curious.</p>
-    <p class="narrow">The proposed second pass changes what accumulates
-    between runs rather than what happens inside one:</p>
-    <ol class="steps">
-      <li>Every proposal carries an open question <span>asked from the first run — "none" is a fine answer — and the answers pile up where the next run can read them</span></li>
-      <li>Corroboration is counted, not assumed <span>a question only earns prompt space once independent models from different labs arrive at it separately</span></li>
-      <li>Every tenth-ish run looks for the pattern <span>not what happened, but what it meant — and, newly, what the project still doesn't understand about itself</span></li>
-      <li>Occasionally a run spends itself investigating <span>producing a sourced document instead of a diff, when the honest answer is "nobody here knows yet"</span></li>
+  <section id="how" class="wrap section">
+    <div class="section-intro">
+      <p class="eyebrow">THE IMPROVEMENT LOOP</p>
+      <h2>Fresh ideas enter.<br />Evidence decides what leaves.</h2>
+      <p>
+        A convincing proposal is only the beginning. Each change must pass the
+        checks you configured.
+      </p>
+    </div>
+    <div class="loop-grid">
+      <article>
+        <span class="step-label">01 / DISCOVER</span>
+        <h3>Watch the labs you choose</h3>
+        <p>
+          The first check establishes a baseline. Later checks compare model
+          catalogues against that saved snapshot. A manual campaign lets you try
+          a chosen model now.
+        </p>
+      </article>
+      <article>
+        <span class="step-label">02 / PROPOSE</span>
+        <h3>Give fresh eyes a clear goal</h3>
+        <p>
+          New models propose changes using your brief and run history. When
+          there are several proposals, the harness ranks them before
+          implementation.
+        </p>
+      </article>
+      <article>
+        <span class="step-label">03 / CHALLENGE</span>
+        <h3>Check the actual change</h3>
+        <p>
+          A pinned reviewer examines the result. Rejected edits can be refined
+          within your attempt limit. Protected paths and test failures stop
+          promotion.
+        </p>
+      </article>
+      <article>
+        <span class="step-label">04 / DECIDE & LEARN</span>
+        <h3>Review the pull request</h3>
+        <p>
+          Read what changed and why. The run keeps its outcome in your
+          repository, including when nothing ships. The next model starts with
+          that history.
+        </p>
+      </article>
+    </div>
+  </section>
+  <section class="dark-section">
+    <div class="wrap section">
+      <div class="section-intro">
+        <p class="eyebrow">THE CONTROL STAYS WITH YOU</p>
+        <h2>Different roles.<br />One quality bar.</h2>
+      </div>
+      <div class="role-grid">
+        <article>
+          <span class="tag">Rotating</span>
+          <h3>The suggester</h3>
+          <p>
+            A newly detected model offers its perspective. Your selected labs
+            determine who can propose.
+          </p>
+        </article>
+        <article>
+          <span class="tag">Pinned</span>
+          <h3>The implementer</h3>
+          <p>
+            Your chosen model writes or refines edits when needed. It does not
+            get to change the rules.
+          </p>
+        </article>
+        <article>
+          <span class="tag">Pinned</span>
+          <h3>The reviewer</h3>
+          <p>
+            Fresh context and a strict verdict. An unreadable or contradictory
+            approval is rejected.
+          </p>
+        </article>
+        <article>
+          <span class="tag">Deterministic</span>
+          <h3>The gates</h3>
+          <p>
+            The allowlist, diff guard and your existing tests check the work
+            regardless of which model wrote it.
+          </p>
+        </article>
+      </div>
+      <p class="dark-note">
+        The ranking model can be pinned separately, or selected from another
+        model family when available. Choosing a seat from an unwatched lab still
+        requires that lab’s key.
+      </p>
+    </div>
+  </section>
+  <section class="wrap section setup">
+    <div class="section-intro">
+      <p class="eyebrow">SET IT UP ONCE</p>
+      <h2>Ten decisions.<br />A setup you can inspect.</h2>
+      <p>
+        Connect your repository, define what better means, then review the
+        generated files before opening a setup pull request.
+      </p>
+      <a class="button primary" href="/console">Open the console ↗</a>
+    </div>
+    <ol class="setup-list">
+      <li><b>Connect</b><span>Choose the GitHub repository.</span></li>
+      <li>
+        <b>Labs & keys</b
+        ><span>Choose providers and add secrets on GitHub.</span>
+      </li>
+      <li>
+        <b>Seats</b><span>Pin implementer, reviewer and optional ranker.</span>
+      </li>
+      <li>
+        <b>Stages & tests</b
+        ><span>Set the test commands and refinement limit.</span>
+      </li>
+      <li>
+        <b>Boundaries</b><span>Allow edits and protect critical files.</span>
+      </li>
+      <li>
+        <b>Meta-goal</b
+        ><span>Describe the objective, constraints and quality bar.</span>
+      </li>
+      <li>
+        <b>Cadence</b><span>Choose how often to check for releases.</span>
+      </li>
+      <li>
+        <b>Approval</b><span>Decide how a successful change reaches you.</span>
+      </li>
+      <li>
+        <b>Budget</b><span>Bound proposal fan-out and token consumption.</span>
+      </li>
+      <li>
+        <b>Review & rehearse</b
+        ><span>Inspect files, merge setup and run a campaign.</span>
+      </li>
     </ol>
-    <p class="narrow">A repository with no history has nothing to be curious
-    about, and that's correct rather than a degraded mode — the first several
-    runs are the ordinary loop, quietly filling the record that makes the tenth
-    one worth having. The reason to build it at all is the bet above: if models
-    keep getting better at long tasks, the limit stops being <em>can it write
-    the change</em> and starts being <em>did anyone point it at the right
-    question</em>.</p>
   </section>
-
-  <section>
-    <h2>The bet this depends on</h2>
-    <p class="narrow">None of this works if frontier labs stop shipping, or
-    stop improving. That's an external bet, not something this loop controls —
-    so rather than assert it, here is the actual release cadence, live from an
-    independent tracker this project doesn't maintain.</p>
-
-    <div class="embed">
-      <iframe src="https://aireleasetracker.com/embed/releases-by-lab"
-              title="Releases by Lab Over Time — AI Release Tracker"
-              loading="lazy"></iframe>
-      <p class="src"><a href="https://aireleasetracker.com/analytics?utm_source=embed&amp;utm_medium=referral&amp;utm_campaign=releases-by-lab"
-        target="_blank" rel="noopener">Releases by Lab Over Time — via AI Release Tracker</a> ·
-        an independent third-party site, not affiliated with this project.</p>
+  <section class="wrap section evidence">
+    <div>
+      <p class="eyebrow">WHAT TO EXPECT</p>
+      <h2>Useful work.<br />Honest limits.</h2>
     </div>
-
-    <p class="narrow">Cadence is only half of it. The other half is whether
-    each new model is actually <em>more capable</em> — and the clearest public
-    measure is METR's <b>50% task-completion time horizon</b>: how long a task
-    takes a skilled human, at the length where an AI agent succeeds half the
-    time. A longer horizon means a model can carry more of a change on its own
-    before it needs a person.</p>
-
-    <ul class="metrics">
-      <li><span class="fig">320 min</span><span class="cap">Claude Opus 4.5 — the longest horizon in METR's published 1.1 set</span></li>
-      <li><span class="fig">214 min</span><span class="cap">GPT-5</span></li>
-      <li><span class="fig">~89 days</span><span class="cap">Doubling time of that horizon, measured on models released since 2024</span></li>
-    </ul>
-
-    <p class="narrow asof">Figures from METR's Time Horizon 1.1 measurement set,
-    as published on their <a href="https://metr.org/time-horizons/" target="_blank" rel="noopener">time
-    horizons page</a> (last updated 8 May 2026). These are quoted rather than
-    embedded because METR offers no embeddable chart — so treat the numbers as
-    a dated snapshot and follow the link for the current set. METR's own
-    caveats are worth carrying with them: confidence intervals are wide,
-    the trend is sensitive to which tasks are in the suite, and measurements
-    above 16 hours are unreliable on the current one.</p>
-
-    <p class="narrow">This is why the trigger is a release rather than a
-    calendar tick. If the curve flattens, this loop quietly stops proposing
-    anything — which is the correct behaviour, not a failure. Nothing here
-    depends on the bet paying off <em>this</em> month; it depends on it being
-    worth asking each time someone ships.</p>
-  </section>
-
-  <section>
-    <h2>What you set up, once</h2>
-    <p class="narrow">The console asks ten questions and writes four files to
-    your repository as a pull request. There's no terminal, no YAML to
-    hand-write, and no step where an API key of yours reaches anyone but
-    GitHub.</p>
-    <ol class="steps">
-      <li>Install on your repository <span>GitHub's own picker — one repo or several, nothing granted beyond what you select</span></li>
-      <li>Choose which labs get a seat <span>pick two, or all nine</span></li>
-      <li>Choose who implements and who reviews <span>pinned models, defaulting to Claude Opus — set separately, so they can differ</span></li>
-      <li>Choose which stages run <span>review and the guard can't be switched off</span></li>
-      <li>Mark what may change <span>and what must never be touched</span></li>
-      <li>Say what "better" means here <span>the one thing no template can guess</span></li>
-      <li>Set how often it checks <span>monthly by default</span></li>
-      <li>Decide who says yes <span>a pull request, or automatic merge</span></li>
-      <li>Set how wide it may fan out <span>and see the moment a key stops working</span></li>
-      <li>Review the diff, then rehearse once <span>the schedule stays off until it passes</span></li>
-    </ol>
-    <div class="cta">
-      <a class="btn primary" href="https://claude.ai/code/artifact/00efd905-19bd-4d79-a613-e63182556742">Walk through the console</a>
-      <a class="btn" href="https://claude.ai/code/artifact/476e81da-9930-46fb-bfb8-08b0c5a4911d">Privacy policy</a>
-      <span class="aside">The console is a clickable wireframe — it writes nothing yet.</span>
+    <div>
+      <h3>The harness runs today</h3>
+      <p>
+        The generation loop has been exercised with real model calls and GitHub
+        Actions. The console uses the same configuration and workflow generator
+        as the command-line installer.
+      </p>
+      <h3>Setup depends on your deployment</h3>
+      <p>
+        GitHub sign-in requires a configured GitHub App. You can prepare and
+        download configuration without signing in. API keys are entered on
+        GitHub, never in this console.
+      </p>
+      <h3>Better models do not guarantee better changes</h3>
+      <p>
+        Your test coverage and project brief still matter. The wider curiosity
+        programme remains partly implemented; it is not a promise of autonomous
+        research.
+      </p>
+      <a
+        href="https://github.com/Chrisfoz/self-optimisation/tree/main/docs/campaigns"
+        >Read the real campaign records ↗</a
+      >
     </div>
   </section>
-
-  <section>
-    <h2>What's real today</h2>
-    <p class="narrow">This project's habit is to say which parts are running
-    code and which are still a person doing it by hand. The page you're reading
-    inherits that.</p>
-    <div class="scroll-x">
-      <table class="status">
-        <tr><th>Part</th><th>State</th><th></th></tr>
-        <tr>
-          <td>Propose → implement → review → refine</td>
-          <td><span class="pill yes">runs today</span></td>
-          <td>End to end, against your own config and brief files.</td>
-        </tr>
-        <tr>
-          <td>The guard, the memory, promotion, the digest</td>
-          <td><span class="pill yes">runs today</span></td>
-          <td>Real tested code, each a step in the generated workflow rather than something a person invokes by hand.</td>
-        </tr>
-        <tr>
-          <td>One workflow that chains all of it</td>
-          <td><span class="pill yes">runs today</span></td>
-          <td>A generator writes it for your project: detect → probe → preflight → improve → guard → test → promote → verify → notify, as one job.</td>
-        </tr>
-        <tr>
-          <td>The console on this page</td>
-          <td><span class="pill part">generator built, front end not</span></td>
-          <td>What the console would <em>write</em> already exists and is tested — today you reach it through a terminal prompt rather than this form.</td>
-        </tr>
-        <tr>
-          <td>The curiosity pass</td>
-          <td><span class="pill no">a proposal</span></td>
-          <td>Designed in detail, none of it built. See "What it starts asking" above.</td>
-        </tr>
-      </table>
-    </div>
+  <section class="wrap final-cta">
+    <h2>Give the next model<br />a well-defined job.</h2>
+    <a class="button primary" href="/console">Configure your repository ↗</a>
   </section>
-
-  <footer class="foot">
-    <a href="https://github.com/Chrisfoz/self-optimisation">Repository</a>
-    <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/console/DESIGN.md">Console design</a>
-    <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/CONTRIBUTING.md">Contributing</a>
-    <a href="https://claude.ai/code/artifact/00efd905-19bd-4d79-a613-e63182556742">The console</a>
-    <a href="https://claude.ai/code/artifact/476e81da-9930-46fb-bfb8-08b0c5a4911d">Privacy</a>
-    <span class="spacer"></span>
-    <span>A portable harness for model-release-driven software improvement.</span>
-  </footer>
-</div>
+</main>
+<footer class="wrap footer">
+  <span>Self-Optimisation · MIT licensed</span
+  ><a href="https://github.com/Chrisfoz/self-optimisation">Source</a
+  ><a href="/privacy">Privacy</a>
+</footer>
