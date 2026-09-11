@@ -1,0 +1,212 @@
+{
+  "generation": "004",
+  "date": "2026-09-11",
+  "harnessVersion": "0.1.0",
+  "run": {
+    "id": "34573271359-1",
+    "url": "https://github.com/Chrisfoz/icd-mapper-harness-campaign/actions/runs/34573271359/attempts/1",
+    "source": "github-actions"
+  },
+  "outcome": "approved",
+  "scope": "focused",
+  "scopeReason": "context.ambition is \"focused\": every generation is a small, localised change",
+  "campaign": true,
+  "seatPromotion": null,
+  "suggestModel": "kimi-k3 (moonshot)",
+  "fanOut": {
+    "asked": [
+      "deepseek-v4-pro (deepseek)",
+      "glm-5.3 (zai)",
+      "kimi-k3 (moonshot)"
+    ],
+    "proposed": [
+      "deepseek-v4-pro",
+      "glm-5.3",
+      "kimi-k3"
+    ],
+    "offeredEdits": [
+      "deepseek-v4-pro",
+      "glm-5.3",
+      "kimi-k3"
+    ],
+    "failed": [],
+    "chosen": "kimi-k3 (moonshot)",
+    "rankedBy": "claude-opus-5",
+    "rankingReason": "All three make the same core encoding fix, but Proposal 3 is the most precisely specified — it decodes the whole file before any state mutation, so a mid-file failure can no longer leave a half-populated unique-code set, and it mirrors the already-validated `icd_mapper.py` reader line-for-line while",
+    "proposalFiles": [
+      "docs/generations/gen-004/proposals/deepseek-v4-pro.md",
+      "docs/generations/gen-004/proposals/glm-5.3.md",
+      "docs/generations/gen-004/proposals/kimi-k3.md"
+    ],
+    "briefFeedback": {
+      "deepseek-v4-pro": "The exact source snippets and generation history were the most useful; they let me see that `icd_mapper.py` and `icd_mapper_list.py` already handle encodings while `icd_mapper_unique.py` does not, and they warned me away from re-attempting short-row recovery. The limitation of one improvement per generation prevented me from also adding a shared encoding helper across the scripts, which would reduce duplication but would be more than one focus. The frozen tests being append-only is a good backstop, though the measured edge-case names can be slightly misleading because they are not all covered by those tests.",
+      "glm-5.3": "The generation history with failure reasons was the most valuable part — it stopped me re-attempting the short-row design that review already rejected three times. The measured dimensions give useful steering. The frozen-tests constraint is reasonable, but the fact that tests only cover `icd_mapper.py` while three sibling scripts share the same fragile reading logic means improvements to the siblings are unverifiable by the gate — I'd let the harness add smoke tests for the other scripts.",
+      "kimi-k3": "Genuinely helpful: the non-negotiable constraints made the choice obvious once I noticed a sibling reader violating the spirit of constraint 1; the detailed gen-002 failure record (three rejections with reasons) steered me away from a fourth doomed attempt at short-row recovery; and the source dump preserving trailing whitespace made exact-match edits feasible. Constraining for no good reason: the brief hints \"the four scripts duplicate a lot of reading logic\" but the editable allowlist is exactly those four files and the \"create-only pattern\" for new files is referenced yet never defined — so the hinted fix is inexpressible; either define the pattern and bless one helper module, or delete the hint. The dual format requirement (SUMMARY/RATIONALE \"exactly this format\" vs the PILLAR/PROBLEM/… structure) is contradictory on its face — state explicitly that both are expected. I would delete the \"files over 500 lines\" metric at this scale (pure noise) and the html code fences around source, which add mismatch paranoia with no benefit."
+    }
+  },
+  "screenshotsSent": 0,
+  "implementModel": "claude-opus-5",
+  "implementedBy": "kimi-k3 (moonshot)",
+  "selfImplemented": true,
+  "proposalSummary": "Rewrite the body of `ICDMapper.read_mapping_file` in icd_mapper_unique.py to mirror icd_mapper.py exactly: (1) try `open(file_path, 'r', encoding='utf-8-sig')` and `readlines()`; on `UnicodeDecodeError`, re-open with `encoding='latin-1'` and `readlines()`; (2) parse with `csv.reader(lines[1:], quoti",
+  "escalations": {
+    "opened": [
+      {
+        "id": "esc-002",
+        "title": "support esc-001",
+        "by": "deepseek-v4-pro (deepseek)"
+      },
+      {
+        "id": "esc-003",
+        "title": "The characterisation tests only exercise `icd_mapper.py`; the three sibling scripts can regress freely.",
+        "by": "glm-5.3 (zai)"
+      },
+      {
+        "id": "esc-004",
+        "title": "Define the create-only file pattern (or bless one named stdlib helper module) so the triplicated reader logic can be deduplicated as a singl",
+        "by": "kimi-k3 (moonshot)"
+      }
+    ],
+    "supported": [
+      {
+        "id": "esc-001",
+        "by": "deepseek-v4-pro (deepseek)"
+      },
+      {
+        "id": "esc-001",
+        "by": "glm-5.3 (zai)"
+      }
+    ],
+    "dissented": [
+      {
+        "id": "esc-001",
+        "by": "kimi-k3 (moonshot)"
+      }
+    ],
+    "flagged": [
+      {
+        "id": "esc-001",
+        "title": "Characterisation tests never assert that a short row is kept, so this recovery can regress without a red build.",
+        "target": "pipeline",
+        "notification": "esc-001 — Characterisation tests never assert that a short row is kept, so this recovery can regress without a red build.\nTarget: pipeline\nRaised by: grok-4.6 (xai), generation 002\nAgreement: 3 distinct models across 3 labs (xai, deepseek, zai)\n\nThe case:\ntests/test_icd_mapper.py has no case for a non-blank row with omitted trailing columns. Add one fixture row with <8 fields and assert the ICD-10 code is present via get_mapping. That would lock 8/8 recovery. Risk is low if the fixture only omits trailing empties and expects the same None-for-blank behaviour as test_optional_columns_become_none_when_blank.\n\nBacked by:\n  - grok-4.6 (xai, generation 002)\n  - deepseek-v4-pro (deepseek, generation 004)\n      the characterisation suite has no short-row fixture, so any future short-row recovery can be lost without a red build. Adding a fixture row with fewer than 8 fields and asserting `get_mapping` returns the ICD-10 code would lock the intended 8/8 edge-case behaviour. The risk is low if the row omits only trailing empty columns and expects the same None-for-blank semantics as the existing optional-column test.\n  - glm-5.3 (zai, generation 004)\n      short-row recovery has been accepted-then-rejected three times precisely because no test pins the intended behaviour; a fixture row with omitted trailing empties plus an assertion via `get_mapping` would settle it.\n\nArgued against by:\n  - kimi-k3 (moonshot, generation 004)\n      it asks the pipeline to lock short-row recovery (asserting the code is present via get_mapping), but review rejected that recovery three times in gen-002 because a short row cannot be distinguished from one with a genuinely truncated mandatory descriptor; accepting such rows risks silently blanked required fields. The rehearsed, safe behaviour is warn-and-skip, which already satisfies the brief (\"reported, not dropped without a word\"). Locking \"kept\" would enshrine behaviour reviewers deemed unsafe; if a test is added, it should assert the warning-and-skip, not the recovery."
+      }
+    ],
+    "judged": {
+      "agreed": [],
+      "disagreed": [],
+      "irrelevant": [],
+      "retired": []
+    }
+  },
+  "contextSize": null,
+  "spend": {
+    "calls": 5,
+    "inputTokens": 25321,
+    "outputTokens": 47589,
+    "totalTokens": 72910,
+    "estimatedCalls": 0,
+    "failedRequests": 0,
+    "refusedRequests": 0,
+    "maxGenerationTokens": 600000,
+    "byModel": {
+      "glm-5.3": {
+        "calls": 1,
+        "inputTokens": 6109,
+        "outputTokens": 1562
+      },
+      "kimi-k3": {
+        "calls": 1,
+        "inputTokens": 6143,
+        "outputTokens": 13880
+      },
+      "deepseek-v4-pro": {
+        "calls": 1,
+        "inputTokens": 6426,
+        "outputTokens": 30352
+      },
+      "claude-opus-5": {
+        "calls": 1,
+        "inputTokens": 4644,
+        "outputTokens": 808
+      },
+      "gpt-5.5": {
+        "calls": 1,
+        "inputTokens": 1999,
+        "outputTokens": 987
+      }
+    },
+    "bySite": {
+      "suggest": {
+        "calls": 3,
+        "inputTokens": 18678,
+        "outputTokens": 45794
+      },
+      "rank": {
+        "calls": 1,
+        "inputTokens": 4644,
+        "outputTokens": 808
+      },
+      "review": {
+        "calls": 1,
+        "inputTokens": 1999,
+        "outputTokens": 987
+      }
+    }
+  },
+  "tests": {
+    "inLoop": true,
+    "baseline": {
+      "passed": true,
+      "durationMs": 1101,
+      "commands": [
+        {
+          "command": "python -m pip install -q -r requirements.txt pytest",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 610
+        },
+        {
+          "command": "python -m pytest -q tests",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 490
+        }
+      ]
+    }
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "by": "kimi-k3 (moonshot)",
+      "outcome": "approved",
+      "detail": "Harden icd_mapper_unique reads with utf-8-sig and latin-1 fallback",
+      "tests": {
+        "passed": true,
+        "durationMs": 1100,
+        "commands": [
+          {
+            "command": "python -m pip install -q -r requirements.txt pytest",
+            "exitCode": 0,
+            "timedOut": false,
+            "durationMs": 611
+          },
+          {
+            "command": "python -m pytest -q tests",
+            "exitCode": 0,
+            "timedOut": false,
+            "durationMs": 488
+          }
+        ]
+      }
+    }
+  ],
+  "apiIssues": [],
+  "pullRequestUrl": "https://github.com/Chrisfoz/icd-mapper-harness-campaign/pull/2",
+  "pullRequest": {
+    "state": "open",
+    "mergedAt": null,
+    "closedAt": null,
+    "mergeCommit": null,
+    "syncedAt": "2026-09-11"
+  }
+}

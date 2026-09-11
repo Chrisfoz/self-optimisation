@@ -18,11 +18,12 @@ call.
 
 ## Start here
 
-**→ Tier 6's one open item: run the generated workflow for real on GitHub
-Actions** — a scratch repository, `init`, secrets, one campaign dispatch, a
-real pull request. Real generations have now run through `harness/` (Tier 6,
-2026-09-11, [`docs/campaigns/`](docs/campaigns/)); what has never happened is
-the workflow itself running them. Then 2.1a.
+**→ A person's verdict, then 2.1a.** The generated workflow has now run real
+generations on GitHub Actions (Tier 6, 2026-09-11,
+[`docs/campaigns/`](docs/campaigns/)). What has not happened is a human
+merging or closing one of its pull requests and the next cycle reading that
+back — three are open in `Chrisfoz/icd-mapper-harness-campaign`. After that,
+2.1a: a larger repository, to force the `context.strategy: scoped` question.
 
 *Superseded 2026-09-11 — kept for the record:*
 **→ Tier 0.5's one open item: a real generation through `harness/`, then
@@ -681,13 +682,16 @@ the real campaigns that tested the fixes, in
 - [x] **C2 — Measure against a reproducible baseline.** The same
   (fingerprinted) evaluators before and after; `comparison.json`; benefits,
   regressions, cost and fate in `REPORT.md`.
-- [ ] **C3 — Prove the harness with real campaigns.** *Partly done:* four
-  real generations, two different projects, eight labs, seven findings
-  fixed the same day. **Still open:** a real run of the generated workflow
-  on GitHub Actions against a real repository (secrets, `GITHUB_TOKEN`, a
-  real pull request, a person's merge or close read back). *Done when:* one
-  campaign dispatch has produced a pull request and its record on the
-  default branch, linked from the README.
+- [x] **C3 — Prove the harness with real campaigns.** Four rehearsed
+  generations on two different projects, then three generations run by the
+  generated workflow on GitHub Actions (`Chrisfoz/icd-mapper-harness-campaign`,
+  private) — each a pull request, the records on `main`, a PR's state read
+  back into its record. Eleven findings fixed the same day, one of them a
+  record the first Actions run lost. *Done when:* one campaign dispatch has
+  produced a pull request and its record on the default branch, linked from
+  the README — **true**, via [`docs/campaigns/`](docs/campaigns/).
+  **Left for the owner:** review the three open pull requests; a merge or
+  a close, then one more cycle, is the real read-back test not yet run.
 - [ ] **C4 — Scoped context retrieval and tool use, guided by the
   campaigns.** Not started, deliberately: the campaigns did not force
   `context.strategy: scoped` (both projects fit `full-dump`), so the

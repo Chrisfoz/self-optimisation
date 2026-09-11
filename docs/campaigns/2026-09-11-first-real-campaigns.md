@@ -2,7 +2,8 @@
 
 **Four generations with real model calls, through `harness/` itself, on two
 projects chosen to be different: a children's browser game and a Python
-command-line tool.** Until this date every check in this repository faked the
+command-line tool — then three more, the same day, run by the generated
+workflow on GitHub Actions.** About 790,000 tokens in all. Until this date every check in this repository faked the
 three model calls. This is what happened when they were real, written up
 failures and all, because the failures are the point.
 
@@ -12,12 +13,12 @@ installation that produced them (adapter, briefs, evaluator plugins).
 
 ## What ran, and how
 
-- **How:** locally, with `node --env-file=.env harness/scripts/rehearse.mjs
+- **How:** first locally, with `node --env-file=.env harness/scripts/rehearse.mjs
   --models …` — the same chain the generated workflow runs (validate →
   preflight → campaign → probe → claim a generation → baseline measurement →
   suggest → rank → implement → in-loop tests → review → refine → persist →
   guard → tests), in a scratch clone of each project with a local bare
-  remote. **Not** on GitHub Actions; see *What is still not proven*.
+  remote. Then on GitHub Actions — see *Then on GitHub Actions*.
 - **Seats:** implement `claude-opus-5`, review `gpt-5.5` (a different lab from
   the implementer, on purpose), rank defaulted to `claude-opus-5`. Suggest was
   the models named for each campaign generation.
@@ -153,18 +154,54 @@ Not fixed, noted:
   evaluator attaches for the next generation and the reviewer, and nowhere
   in the numbers — which is the honest place for it.
 
+## Then on GitHub Actions
+
+The same afternoon, the ICD mapper — carrying its two rehearsed generations
+on `main` — was pushed to a new private repository
+(`Chrisfoz/icd-mapper-harness-campaign`), its workflow generated from its
+adapter, five lab secrets set, and three campaign generations dispatched
+from the Actions tab. The workflow, install README, records and diffs are in
+[`2026-09-11/icd-mapper-github-actions/`](2026-09-11/icd-mapper-github-actions/).
+
+| Run | Generation | What happened | Tokens |
+|---|---|---|---|
+| 1 | **003** — claimed on the remote, numbered past the two rehearsed records | glm-5.3's proposal, implemented and approved; **pull request #1 opened** — and then **the record was lost**, and the run was green | 54,319 *(from the log; the record is gone)* |
+| 2 | **004** — numbered past 003's branch, although 003's record never reached `main` | kimi-k3 (answering this time) won and implemented its own change, approved first time; **PR #2**; record on `main` with the PR URL and a run id linking back to the run | 72,910 |
+| 3 | **005** | **the read-back wrote PR #2's state (`open`) into generation 004's record on `main`** before anything else ran; deepseek-v4-pro's own edits approved first time; **PR #3** | 46,052 |
+
+Every gate ran on a real runner: validate, campaign, probe, preflight (a
+`pip install` and pytest), the claim, the baseline measurement, the loop with
+its in-loop tests, the after measurement, the guard, the tests again, the pull
+request, the URL write-back, persistence, the gate summary. The pull requests
+contain the code change and nothing else — no record files — and the one
+checked was mergeable.
+
+It found four more defects, fixed the same day:
+
+| Finding | Fix |
+|---|---|
+| **Run 1 lost its record — and stayed green.** `git status --porcelain` starts a modified tracked file's entry with a space; the persist step's git helper trimmed it, and the first letter of the path went with it (`ocs/escalations/ledger.json`). Every local test and rehearsal happened to list an untracked file first, which has no leading space. And because the step is `continue-on-error` and no digest was configured, nothing said the record was gone. | `9843334` — trim only the end, refuse a mis-shaped entry rather than mis-slice it, and a last step that turns the run red whenever the record was not saved. The regression test reproduces the exact runner error on the old code. |
+| There was **no way to regenerate the workflow from an existing adapter.** The install README said "re-run init with `--force`", which asks every question again and overwrites the adapter. | `d18b506` — `init --from-adapter [--force]`, with round-trip tests holding it byte-identical to the questions' answers |
+| **The default pull-request path cannot open a pull request on a new repository** until "Allow GitHub Actions to create and approve pull requests" is ticked — off by default, and mentioned nowhere. | `d18b506` — named in both READMEs, with the one-line `gh api` fix |
+| A self-implemented generation's pull request was titled **"Generation 005: Generation 005 improvement"**: the suggestion format has no `SUMMARY` field. | `1f8459a` — its `CHANGE` line |
+
+And one thing that worked on its first real try: the transient-network retry
+added that morning never had to fire — Kimi answered cleanly — so it is
+tested, but still unexercised by a real dropped connection.
+
 ## What is still not proven
 
 - **Nobody reviewed these changes.** Generation 001 of each project was
   merged by the campaign operator (an AI session) so that 002 could build on
   it, and labelled as such in each repository's history; 002 was never
-  merged. No product owner has looked at any of them — which is exactly
-  what the reports now say.
-- **The generated workflow has not run on GitHub Actions against a real
-  repository.** Its steps are executed under GitHub's own bash flags in the
-  test suite (`tests/scripts/workflow-shell.test.mjs`,
-  `tests/scripts/generation-identity.test.mjs`), but a real run — secrets,
-  the real `GITHUB_TOKEN`, a real pull request — is the next step.
+  merged. The three pull requests on GitHub are open, waiting for their
+  owner. No product owner has looked at any of them — which is exactly what
+  the reports say.
+- **The read-back of a merged or closed pull request** has not happened in a
+  real run: it needs a person to merge or close one, then another cycle.
+  (Generation 003's pull request can never be read back: its record is the
+  one that was lost.)
+- **A public example repository.** The GitHub runs are in a private one.
 - **`context.strategy: scoped`** was not forced: both projects were small
   enough for `full-dump` (the game's editable file is ~120,000 characters,
   ~30,000 tokens). WORKPLAN 2.1's larger-repository question is still open.

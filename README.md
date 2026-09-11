@@ -29,11 +29,15 @@ project-agnostic.
 deliberately different projects (a children's browser game and a Python
 CLI), locally via `rehearse.mjs`. They are written up, failures included, in
 [`docs/campaigns/`](docs/campaigns/), and they found real defects in the
-harness that the fake-model test suite never could; those are fixed.
-**What is still not true:** the generated workflow has not yet run a
-generation on GitHub Actions against a real repository — its steps are
-tested by executing them under GitHub's own bash flags, but not in a real
-run. That is the next item in [`WORKPLAN.md`](WORKPLAN.md). See
+harness that the fake-model test suite never could; those are fixed. The
+same day **the generated workflow ran three generations on GitHub Actions**
+against a real repository — real secrets, a claimed generation number, a
+pull request each, records on the default branch, and a pull request's state
+read back into its record — and found four more, also fixed.
+**What is still not true:** no person has reviewed any of those changes yet,
+the read-back of a *merged or closed* pull request has not happened in a real
+run, and the Actions runs are in a private repository rather than a public
+example. See [`WORKPLAN.md`](WORKPLAN.md) Tier 6. See
 [`ARCHITECTURE.md`](ARCHITECTURE.md) for the two diagrams, and
 [Status in detail](#status-in-detail) for the per-component table.
 
