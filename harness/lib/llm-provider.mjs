@@ -41,6 +41,22 @@ import { estimateRequestTokens } from './spend.mjs';
 const PROVIDER_PATTERNS = [];
 const PROVIDERS = {};
 
+// Exact model id → provider name, consulted before the pattern table.
+//
+// A pattern only knows the naming conventions that existed when its provider
+// file was written, and this harness exists to run models that do not exist
+// yet. The month a lab ships a model under a name its own pattern does not
+// match — a new family name, a joint release, a reseller's id — pattern
+// resolution throws and the seat is unusable until someone edits a regex in
+// this repository. That is the opposite of the flexibility a pinned seat is
+// for, so an installation can name the lab itself (project-adapter.yml's
+// `roles.<seat>.provider`) and pin it here at startup.
+//
+// Lowercased keys: catalogues are inconsistent about case (see
+// model-aliases.mjs on `ZHIPU/GLM-5.3`), and a pin that missed because of
+// capitalisation would fail exactly like no pin at all.
+const PINNED_MODEL_PROVIDERS = new Map();
+
 /**
  * Register a provider. Called as a side effect of importing a file under
  * harness/providers/ — see harness/providers/anthropic.mjs for the shape.
@@ -83,7 +99,41 @@ export function registerProvider(name, config) {
 }
 
 /**
- * Map a model id to the lab that serves it, by pattern only.
+ * Declare which lab serves one exact model id, for ids no registered
+ * pattern matches. Checked by resolveProvider() before the pattern table,
+ * so everything downstream — callModel(), the seats, validation — keeps
+ * working unchanged for a model this harness has never heard of.
+ *
+ * Called at startup from run-generation.mjs for any seat whose adapter
+ * entry names a `provider`. It is deliberately not a second way to describe
+ * a lab: the provider must already be registered, because the pin says who
+ * serves a model, not how to call one.
+ *
+ * @param {string} model     Exact model id, as the lab's API spells it.
+ * @param {string} provider  A registered provider name.
+ */
+export function pinModelProvider(model, provider) {
+  if (!model || typeof model !== 'string') {
+    throw new Error(`Invalid model id: ${JSON.stringify(model)}`);
+  }
+  if (!PROVIDERS[provider]) {
+    throw new Error(
+      `Cannot pin model "${model}" to provider "${provider}": no provider is registered under that name. ` +
+      `Registered: ${Object.keys(PROVIDERS).join(', ') || 'none'}.`
+    );
+  }
+  PINNED_MODEL_PROVIDERS.set(model.toLowerCase(), provider);
+}
+
+/** The provider pinned for an exact model id, or null. */
+export function pinnedModelProvider(model) {
+  if (!model || typeof model !== 'string') return null;
+  return PINNED_MODEL_PROVIDERS.get(model.toLowerCase()) ?? null;
+}
+
+/**
+ * Map a model id to the lab that serves it: an explicit pin
+ * (pinModelProvider) first, then the pattern table.
  * Throws rather than guessing — sending a model id to the wrong provider
  * returns a confusing 404, which is exactly the failure this function exists
  * to prevent.
@@ -97,13 +147,16 @@ export function resolveProvider(model) {
   if (!model || typeof model !== 'string') {
     throw new Error(`Invalid model id: ${JSON.stringify(model)}`);
   }
+  const pinned = pinnedModelProvider(model);
+  if (pinned) return pinned;
   for (const [pattern, provider] of PROVIDER_PATTERNS) {
     if (pattern.test(model)) return provider;
   }
   throw new Error(
     `Cannot resolve a provider for model "${model}". ` +
     `No registered provider's pattern matches it, and none was supplied explicitly. ` +
-    `Either import the provider file that registers it, or pass { provider } explicitly.`
+    `Either import the provider file that registers it, name its lab explicitly ` +
+    `(roles.<seat>.provider in project-adapter.yml), or pass { provider } explicitly.`
   );
 }
 

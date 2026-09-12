@@ -110,8 +110,12 @@ function getJson({ hostname, path, headers }) {
  * `generateContent` support check), which is about that catalogue's own
  * semantics and stays with the provider; the generic keyword filter is
  * applied uniformly here so it can't be forgotten by a new provider file.
+ *
+ * Exported for harness/scripts/refresh-model-catalogue.mjs, which needs the
+ * same listing this detector compares against a snapshot — one catalogue
+ * fetch, one filter, one place they can drift out of sync (which is none).
  */
-async function fetchModels(providerName, key, isChatModelOptions) {
+export async function fetchModels(providerName, key, isChatModelOptions) {
   const provider = getProvider(providerName);
   if (!provider) {
     return { status: 'error', models: [], reason: `provider "${providerName}" is not registered` };

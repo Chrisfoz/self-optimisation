@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import '../../harness/providers/index.mjs';
-import { resolveProvider, registeredProviders, __testing } from '../../harness/lib/llm-provider.mjs';
+import { resolveProvider, registeredProviders, pinModelProvider, pinnedModelProvider, __testing } from '../../harness/lib/llm-provider.mjs';
 
 // Real model ids pulled from the reference implementation's own generation
 // log — see SELF-IMPROVEMENT.md in the reference implementation. Resolving
@@ -29,6 +29,31 @@ test('resolveProvider resolves real-world model ids to the correct lab', () => {
 
 test('resolveProvider throws rather than guessing on an unrecognised id', () => {
   assert.throws(() => resolveProvider('mystery-model-1'), /Cannot resolve a provider/);
+});
+
+// The seat-flexibility path: a model whose name no pattern was written for
+// is exactly the case this harness exists to handle, and before pinning
+// existed it could not fill a seat at all without someone editing a regex.
+test('a pinned model id resolves to the lab it was pinned to, whatever its name', () => {
+  assert.throws(() => resolveProvider('atlas-1'), /Cannot resolve a provider/);
+  pinModelProvider('atlas-1', 'openai');
+  assert.equal(resolveProvider('atlas-1'), 'openai');
+  assert.equal(pinnedModelProvider('atlas-1'), 'openai');
+});
+
+test('a pin beats the pattern table, and is case-insensitive like a real catalogue', () => {
+  // A lab re-listing another lab's model is a real case (model-aliases.mjs);
+  // the pattern would send this to Anthropic, and the pin must win.
+  pinModelProvider('claude-opus-5-via-reseller', 'zai');
+  assert.equal(resolveProvider('CLAUDE-OPUS-5-VIA-RESELLER'), 'zai');
+  assert.equal(pinnedModelProvider('claude-OPUS-5-via-Reseller'), 'zai');
+});
+
+test('pinning to a lab this harness cannot call fails loudly, at startup', () => {
+  assert.throws(() => pinModelProvider('atlas-2', 'not-a-lab'), /no provider is registered/);
+  assert.throws(() => pinModelProvider('', 'openai'), /Invalid model id/);
+  assert.equal(pinnedModelProvider('atlas-2'), null);
+  assert.equal(pinnedModelProvider(null), null);
 });
 
 test('resolveProvider rejects a non-string model id', () => {

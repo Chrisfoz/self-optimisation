@@ -286,6 +286,13 @@ export function rolesConfig(adapter) {
     implementModel: adapter?.roles?.implement?.model ?? null,
     reviewModel: adapter?.roles?.review?.model ?? null,
     rankModel: adapter?.roles?.rank?.model ?? null,
+    // The lab serving each pinned model, when the installation named one
+    // rather than leaving it to be guessed from the id. Null is the normal
+    // case and means "resolve by pattern" — see llm-provider.mjs's
+    // pinModelProvider() for why naming it has to be possible at all.
+    implementProvider: adapter?.roles?.implement?.provider ?? null,
+    reviewProvider: adapter?.roles?.review?.provider ?? null,
+    rankProvider: adapter?.roles?.rank?.provider ?? null,
     maxAttempts: Number.isFinite(adapter?.roles?.refine?.max_attempts)
       ? adapter.roles.refine.max_attempts
       : null,

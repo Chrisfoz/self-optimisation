@@ -264,3 +264,100 @@ test('non-ASCII CSRF values fail closed without a timingSafeEqual exception', as
   assert.equal(result.status, 403);
   assert.equal(sessions.size, 1);
 });
+
+test("the model list is public before a repository, and live once there is one", async (t) => {
+  // The console holds no lab key, so the only live catalogue it can offer is
+  // the connected project's own snapshot, written by that project's last run.
+  const snapshot = {
+    openai: ["gpt-6-astra", "atlas-1"],
+    _unfixable: { openai: { "atlas-0": { generation: 3 } } },
+  };
+  const sessions = new Map([
+    ["active", { token: "secret", login: "owner", csrf: "csrf", expires: Date.now() + 60000 }],
+  ]);
+  const base = await server(t, {
+    sessions,
+    fetchImpl: async (url) => {
+      const route = url.replace("https://api.github.com", "");
+      if (route.startsWith("/user/installations?"))
+        return Response.json({ installations: [{ id: 10 }] });
+      if (route.startsWith("/user/installations/10/repositories?"))
+        return Response.json({
+          repositories: [
+            { full_name: "owner/project", default_branch: "main", permissions: { push: true } },
+          ],
+        });
+      if (route === "/repos/owner/project") return Response.json({ default_branch: "main", size: 40 });
+      if (route.includes("/branches/")) return Response.json({ commit: { sha: "head-sha" } });
+      if (route.endsWith("/git/commits/head-sha")) return Response.json({ tree: { sha: "base-tree" } });
+      if (route.includes("/git/trees/base-tree?"))
+        return Response.json({
+          tree: [
+            { type: "blob", path: "src/app.js", size: 10 },
+            { type: "blob", path: ".agent/model-snapshot.json", size: 120 },
+          ],
+        });
+      if (route.includes("/contents/.agent/model-snapshot.json"))
+        return Response.json({ content: Buffer.from(JSON.stringify(snapshot)).toString("base64") });
+      throw new Error("Unexpected request: " + route);
+    },
+  });
+
+  const shipped = await (await fetch(base + "/api/models")).json();
+  assert.equal(shipped.repository, null);
+  assert.equal(shipped.counts.repository, 0);
+  assert.ok(shipped.counts.bundled > 0);
+
+  const live = await (
+    await fetch(base + "/api/models?repository=owner/project", {
+      headers: { cookie: "__Host-console=active" },
+    })
+  ).json();
+  assert.equal(live.repository, "owner/project");
+  assert.equal(live.snapshotPath, ".agent/model-snapshot.json");
+  assert.ok(live.snapshotReadAt);
+  const openai = live.labs.find((l) => l.name === "openai");
+  const atlas = openai.models.find((m) => m.id === "atlas-1");
+  assert.equal(atlas.unseen, true);
+  assert.equal(atlas.needsLab, true);
+  // The diagnostic ledger is not a lab and never becomes a pickable model.
+  assert.ok(!live.labs.some((l) => l.name === "_unfixable"));
+
+  // Signed out, the same query is refused rather than quietly answered from
+  // the bundled list: it names someone's repository.
+  assert.equal((await fetch(base + "/api/models?repository=owner/project")).status, 401);
+});
+
+test("a repository with no snapshot still returns the bundled list, and says why", async (t) => {
+  const sessions = new Map([
+    ["active", { token: "secret", login: "owner", csrf: "csrf", expires: Date.now() + 60000 }],
+  ]);
+  const base = await server(t, {
+    sessions,
+    fetchImpl: async (url) => {
+      const route = url.replace("https://api.github.com", "");
+      if (route.startsWith("/user/installations?"))
+        return Response.json({ installations: [{ id: 10 }] });
+      if (route.startsWith("/user/installations/10/repositories?"))
+        return Response.json({
+          repositories: [
+            { full_name: "owner/project", default_branch: "main", permissions: { push: true } },
+          ],
+        });
+      if (route === "/repos/owner/project") return Response.json({ default_branch: "main", size: 40 });
+      if (route.includes("/branches/")) return Response.json({ commit: { sha: "head-sha" } });
+      if (route.endsWith("/git/commits/head-sha")) return Response.json({ tree: { sha: "base-tree" } });
+      if (route.includes("/git/trees/base-tree?"))
+        return Response.json({ tree: [{ type: "blob", path: "src/app.js", size: 10 }] });
+      throw new Error("Unexpected request: " + route);
+    },
+  });
+  const live = await (
+    await fetch(base + "/api/models?repository=owner/project", {
+      headers: { cookie: "__Host-console=active" },
+    })
+  ).json();
+  assert.equal(live.counts.repository, 0);
+  assert.ok(live.counts.bundled > 0);
+  assert.match(live.snapshotReason, /No model snapshot/);
+});

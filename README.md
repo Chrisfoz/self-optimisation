@@ -166,6 +166,21 @@ walkthrough that's the opposite of `.env` — it holds no secrets and it
 *must* travel with the repo. `examples/workflows/watch-releases.yml`
 already commits it automatically as part of the workflow (Step 6 below).
 
+The same snapshot is what the console's model picker reads when you connect
+a repository: it is the only live list of models your account can actually
+call that ever reaches a browser, because the console holds no lab key. To
+refresh the shorter list the console ships with instead — for a deploy of
+your own — run
+
+```bash
+node --env-file=.env harness/scripts/refresh-model-catalogue.mjs
+```
+
+which lists every lab you hold a key for and rewrites
+[`harness/data/model-catalogue.json`](harness/data/model-catalogue.json). A
+lab with no key keeps whatever that file already had rather than being
+emptied.
+
 **Optional but recommended once you're past trying it once:** rather than
 repeating `--providers` on every invocation, copy
 [`harness/project-adapter.example.yml`](harness/project-adapter.example.yml)
