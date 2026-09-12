@@ -118,6 +118,57 @@ export async function inspectRepository(api, repository) {
     base,
   };
 }
+/**
+ * The connected repository's own model snapshot — every model each watched
+ * lab listed on that project's last detector run, written with that
+ * project's keys. The console never holds a lab key (console/DESIGN.md
+ * §2.2), so this file is the only route by which a live, account-accurate
+ * model list can reach the picker.
+ *
+ * Absent is the normal case before the first run, not an error: a project
+ * that has not run the detector yet simply has no live list, and the picker
+ * falls back to the bundled catalogue. Anything unreadable — malformed
+ * JSON, a file too large to be this, a path that turned out to be a
+ * directory — is reported the same way, because none of them is worth
+ * failing a setup screen over.
+ *
+ * @returns {Promise<{snapshot: object|null, path: string|null, readAt: string|null, reason: string|null}>}
+ */
+export async function repositorySnapshot(api, repo) {
+  const blobs = repo.tree.filter((f) => f.type === "blob");
+  const file =
+    blobs.find((f) => f.path === ".agent/model-snapshot.json") ||
+    blobs.find((f) => f.path.endsWith("/model-snapshot.json")) ||
+    blobs.find((f) => f.path === "model-snapshot.json");
+  if (!file)
+    return {
+      snapshot: null,
+      path: null,
+      readAt: null,
+      reason:
+        "No model snapshot in this repository yet. It is written the first time the release check runs.",
+    };
+  if (file.size > 524288)
+    return { snapshot: null, path: file.path, readAt: null, reason: `${file.path} is too large to be a model snapshot.` };
+  let content;
+  try {
+    content = await api(
+      `${repo.base}/contents/${file.path.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(repo.defaultBranch)}`,
+    );
+  } catch (error) {
+    // A snapshot that cannot be fetched costs the picker its live half and
+    // nothing else — never the screen.
+    return { snapshot: null, path: file.path, readAt: null, reason: error.message };
+  }
+  try {
+    const raw = Buffer.from(String(content.content || ""), "base64").toString("utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+    return { snapshot: parsed, path: file.path, readAt: new Date().toISOString(), reason: null };
+  } catch {
+    return { snapshot: null, path: file.path, readAt: null, reason: `${file.path} could not be read as a model snapshot.` };
+  }
+}
 export async function secretsStatus(api, repo, required) {
   const secrets = await pages(api, `${repo.base}/actions/secrets`, "secrets");
   const names = new Set(secrets.map((s) => s.name));

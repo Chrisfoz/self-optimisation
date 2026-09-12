@@ -504,6 +504,25 @@ fieldset legend {
   display: block;
   margin-top: 6px;
 }
+/* A seat is one decision — which model, and which lab serves it — so the two
+   controls sit on one row and wrap together on a narrow screen. */
+.seat {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 0 18px;
+  align-items: start;
+}
+.seat .field {
+  min-width: 0;
+}
+@media (max-width: 700px) {
+  .seat {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .seat .field {
+    margin-top: 0;
+  }
+}
 input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {

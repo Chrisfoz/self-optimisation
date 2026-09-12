@@ -4,12 +4,14 @@ import {
   PROTECTED,
   configure,
   harnessFiles,
+  modelCatalogue,
   requiredSecretNames,
 } from "./configuration.mjs";
 import {
   githubClient,
   repositories,
   inspectRepository,
+  repositorySnapshot,
   secretsStatus,
   openSetup,
   rehearsalStatus,
@@ -85,6 +87,18 @@ export function createApi({
       }
       if (req.method === "GET" && path === "/api/catalog") {
         json(200, { labs: LABS, protectedPaths: PROTECTED });
+        return true;
+      }
+      // The model pick-list. Without a repository this is the catalogue this
+      // deploy shipped with — no sign-in needed, because it is a fact about
+      // this deploy, not about anyone's account. With one (below, after the
+      // session check) it also carries that project's live snapshot.
+      if (
+        req.method === "GET" &&
+        path === "/api/models" &&
+        !url.searchParams.get("repository")
+      ) {
+        json(200, { ...modelCatalogue(), repository: null, snapshotPath: null, snapshotReason: null });
         return true;
       }
       // Installation query parameters are navigation hints, never proof of access.
@@ -236,7 +250,7 @@ export function createApi({
         json(200, { repositories: await repositories(gh) });
         return true;
       }
-      const allowedGet = ["/api/repository", "/api/setup", "/api/runs"];
+      const allowedGet = ["/api/repository", "/api/setup", "/api/runs", "/api/models"];
       const allowedPost = [
         "/api/secrets",
         "/api/setup",
@@ -259,6 +273,16 @@ export function createApi({
           existingSetup: repo.tree.some(
             (f) => f.path === "project-adapter.yml",
           ),
+        });
+        return true;
+      }
+      if (req.method === "GET" && path === "/api/models") {
+        const { snapshot, path: snapshotPath, readAt, reason } = await repositorySnapshot(gh, repo);
+        json(200, {
+          ...modelCatalogue({ snapshot, snapshotReadAt: readAt }),
+          repository: repo.name,
+          snapshotPath,
+          snapshotReason: reason,
         });
         return true;
       }

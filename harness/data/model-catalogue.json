@@ -1,0 +1,49 @@
+{
+  "note": "Bundled model catalogue, read by harness/lib/model-catalogue.mjs and served by the console's /api/models. It is a STARTING list, never an authority: a lab can ship a model an hour after this file is committed. Regenerate it with `node --env-file=.env harness/scripts/refresh-model-catalogue.mjs`, which lists every lab you hold a key for and rewrites this file with real release dates. A connected repository's own .agent/model-snapshot.json always takes precedence in the console, because it was written with that project's keys and is current.",
+  "fetchedAt": null,
+  "source": "recorded-runs",
+  "sourceDetail": "Seeded from models this harness has actually called and recorded, not from a live /models listing: docs/campaigns/2026-09-11-first-real-campaigns.md and the generation records beneath docs/campaigns/2026-09-11/. Release dates are unknown for these entries, so they carry none.",
+  "labs": {
+    "anthropic": {
+      "source": "recorded-runs",
+      "models": [
+        { "id": "claude-opus-5", "created": null },
+        { "id": "claude-fable-5-1", "created": null }
+      ]
+    },
+    "openai": {
+      "source": "recorded-runs",
+      "models": [
+        { "id": "gpt-6-astra", "created": null },
+        { "id": "gpt-5.5", "created": null }
+      ]
+    },
+    "google": {
+      "source": "recorded-runs",
+      "models": [
+        { "id": "gemini-3.8-flash", "created": null },
+        { "id": "gemini-3.1-pro-preview", "created": null }
+      ]
+    },
+    "moonshot": {
+      "source": "recorded-runs",
+      "models": [{ "id": "kimi-k3", "created": null }]
+    },
+    "deepseek": {
+      "source": "recorded-runs",
+      "models": [{ "id": "deepseek-v4-pro", "created": null }]
+    },
+    "xai": {
+      "source": "recorded-runs",
+      "models": [{ "id": "grok-4.6", "created": null }]
+    },
+    "meta": {
+      "source": "recorded-runs",
+      "models": [{ "id": "muse-spark-1.3", "created": null }]
+    },
+    "zai": {
+      "source": "recorded-runs",
+      "models": [{ "id": "glm-5.3", "created": null }]
+    }
+  }
+}

@@ -15,12 +15,60 @@ import {
 } from "../harness/lib/scaffold.mjs";
 import { harnessVersion } from "../harness/lib/version.mjs";
 import { globToRegExp } from "../harness/lib/glob.mjs";
+import { buildCatalogue } from "../harness/lib/model-catalogue.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const template = fs.readFileSync(
   new URL("../harness/templates/workflow.yml.tmpl", import.meta.url),
   "utf8",
 );
+// Read once at boot, like the console's pages: a deploy's files never change
+// under it, and a missing or corrupt catalogue should stop the service now
+// rather than 500 on the first person who opens the model picker.
+const BUNDLED_CATALOGUE = JSON.parse(
+  fs.readFileSync(
+    fileURLToPath(new URL("../harness/data/model-catalogue.json", import.meta.url)),
+    "utf8",
+  ),
+);
+
+/**
+ * The model pick-list: what this deploy shipped with, merged with the
+ * connected repository's own `.agent/model-snapshot.json` when one was read.
+ * The console holds no lab keys, so that snapshot — written by the project's
+ * last run, with the project's keys — is the only live catalogue that can
+ * reach this screen. See harness/lib/model-catalogue.mjs.
+ */
+export function modelCatalogue({ snapshot = null, snapshotReadAt = null } = {}) {
+  const catalogue = buildCatalogue({
+    bundled: BUNDLED_CATALOGUE,
+    snapshot,
+    snapshotReadAt,
+    provider: getProvider,
+  });
+  return {
+    ...catalogue,
+    labs: catalogue.labs.map((lab) => ({
+      ...lab,
+      models: lab.models.map((model) => ({
+        ...model,
+        // Whether this ID has to carry its lab explicitly. An ID a provider
+        // pattern already routes correctly needs no `provider:` line in the
+        // generated adapter, and the console should not write one; an ID
+        // that resolves nowhere — or, worse, resolves to a DIFFERENT lab
+        // than the one listing it — is unusable without one.
+        needsLab: (() => {
+          try {
+            return resolveProvider(model.id) !== lab.name;
+          } catch {
+            return true;
+          }
+        })(),
+      })),
+    })),
+  };
+}
+
 export const LABS = registeredProviders().map((name) => ({
   name,
   envKey: getProvider(name).envKey,
@@ -83,6 +131,9 @@ export function configure(input, { tree = null, defaultBranch = null } = {}) {
     "implementModel",
     "reviewModel",
     "rankModel",
+    "implementProvider",
+    "reviewProvider",
+    "rankProvider",
     "allowedPaths",
     "createOnlyPaths",
     "frozenPaths",
@@ -119,23 +170,33 @@ export function configure(input, { tree = null, defaultBranch = null } = {}) {
     if (!found) fail(`Unknown lab: ${name}`);
     return found;
   };
-  const model = (value, name, optional = false) => {
-    if (!value && optional) return null;
+  // A pinned seat takes a model ID and, optionally, the lab that serves it.
+  // The lab is not decoration: without it an ID is only usable if it happens
+  // to match a provider pattern written before that model existed, which is
+  // precisely the wrong constraint for a tool whose whole purpose is running
+  // models that shipped after it did. Name the lab and any ID works.
+  const seat = (value, labName, name, optional = false) => {
+    if (!value && optional) return { model: null, provider: null };
     if (
       typeof value !== "string" ||
       !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,150}$/.test(value)
     )
-      fail(`Enter a recognised ${name} model ID.`);
+      fail(`Enter a valid ${name} model ID.`);
+    if (labName) return { model: value, provider: provider(labName).name };
     try {
-      resolveProvider(value);
+      return { model: value, provider: resolveProvider(value) };
     } catch {
-      fail(`Enter a recognised ${name} model ID.`);
+      fail(
+        `The ${name} model ID "${value}" does not name a lab this harness recognises. Choose its lab so the run knows who to call.`,
+      );
     }
-    return value;
   };
-  const implementModel = model(input.implementModel, "implementer");
-  const reviewModel = model(input.reviewModel, "reviewer");
-  const rankModel = model(input.rankModel, "ranker", true);
+  const implementSeat = seat(input.implementModel, input.implementProvider, "implementer");
+  const reviewSeat = seat(input.reviewModel, input.reviewProvider, "reviewer");
+  const rankSeat = seat(input.rankModel, input.rankProvider, "ranker", true);
+  const implementModel = implementSeat.model;
+  const reviewModel = reviewSeat.model;
+  const rankModel = rankSeat.model;
   const allowedPaths = pathList(input.allowedPaths, "Editable paths");
   const createOnlyPaths = pathList(input.createOnlyPaths, "Create-only paths");
   const frozenPaths = [
@@ -222,14 +283,19 @@ export function configure(input, { tree = null, defaultBranch = null } = {}) {
     providers: watched.map(provider),
     roleProviders: [
       ...new Set(
-        [implementModel, reviewModel, rankModel]
-          .filter(Boolean)
-          .map(resolveProvider),
+        [implementSeat, reviewSeat, rankSeat]
+          .map((s) => s.provider)
+          .filter(Boolean),
       ),
     ].map(provider),
     implementModel,
     reviewModel,
     rankModel,
+    // Written into project-adapter.yml only when the lab could not have been
+    // read off the model ID — see scaffold.mjs's buildAdapterObject().
+    implementProvider: input.implementProvider ? implementSeat.provider : "",
+    reviewProvider: input.reviewProvider ? reviewSeat.provider : "",
+    rankProvider: input.rankProvider ? rankSeat.provider : "",
     allowedPaths,
     createOnlyPaths,
     frozenPaths,
@@ -279,7 +345,7 @@ export function configure(input, { tree = null, defaultBranch = null } = {}) {
     warnings: [
       "The setup workflow is manual and opens pull requests. Scheduling and automatic merge remain off during rehearsal.",
       "Test commands execute in your GitHub Actions runner. Include any dependency installation your tests need.",
-      ...(resolveProvider(implementModel) === resolveProvider(reviewModel)
+      ...(implementSeat.provider === reviewSeat.provider
         ? [
             "Implementer and reviewer use the same lab. Consider a different lab for independent judgement.",
           ]
@@ -329,15 +395,21 @@ export function activationFiles(input) {
 
 export function requiredSecretNames(input) {
   const names = list(input.labs || [], "Labs");
-  for (const model of [
-    input.implementModel,
-    input.reviewModel,
-    input.rankModel,
-  ].filter(Boolean)) {
+  for (const [model, lab] of [
+    [input.implementModel, input.implementProvider],
+    [input.reviewModel, input.reviewProvider],
+    [input.rankModel, input.rankProvider],
+  ].filter(([model]) => model)) {
+    if (lab) {
+      names.push(lab);
+      continue;
+    }
     try {
       names.push(resolveProvider(model));
     } catch {
-      fail("A pinned model ID does not match a supported provider.");
+      fail(
+        "A pinned model ID does not name a supported lab. Choose the lab for that seat.",
+      );
     }
   }
   return [...new Set(names)].map((name) => {

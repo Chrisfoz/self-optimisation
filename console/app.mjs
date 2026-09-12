@@ -16,8 +16,11 @@ const inputs = [
   "repository",
   "defaultBranch",
   "implementModel",
+  "implementProvider",
   "reviewModel",
+  "reviewProvider",
   "rankModel",
+  "rankProvider",
   "testCommands",
   "setupCommands",
   "allowedPaths",
@@ -40,7 +43,10 @@ let step = 0,
   revision = 0,
   repoRequest = 0,
   repositories = [],
-  listRequest = 0;
+  listRequest = 0,
+  catalogue = { labs: [], counts: { bundled: 0, repository: 0, unseen: 0 }, fetchedAt: null },
+  modelsRequest = 0;
+const SEATS = ["implement", "review", "rank"];
 const lineList = (value) =>
   value
     .split("\n")
@@ -175,6 +181,87 @@ function changed() {
   summary();
   save();
 }
+/** Every catalogue model as one flat list, newest and unseen-first — the order /api/models already sorted them into. */
+function catalogueModels() {
+  return catalogue.labs.flatMap((lab) =>
+    lab.models.map((model) => ({ ...model, provider: lab.name })),
+  );
+}
+function describeCatalogue() {
+  const { repository = 0, unseen = 0 } = catalogue.counts || {};
+  const when = catalogue.fetchedAt
+    ? new Date(catalogue.fetchedAt).toLocaleDateString()
+    : null;
+  const listed = `${catalogueModels().length} model${catalogueModels().length === 1 ? "" : "s"} listed`;
+  if (repository)
+    return (
+      `${listed} · ${repository} read from ${catalogue.repository}'s own model snapshot` +
+      (catalogue.snapshotReadAt
+        ? ` just now (${catalogue.snapshotPath})`
+        : "") +
+      (unseen
+        ? ` · ${unseen} of them newer than the list this console shipped with`
+        : "")
+    );
+  return (
+    `${listed} from the list this console shipped with${when ? `, refreshed ${when}` : " (never refreshed from the labs themselves)"}. ` +
+    (session.connected && repo
+      ? catalogue.snapshotReason ||
+        "This repository has no model snapshot yet."
+      : "Connect a repository to load the live list its own last run wrote, using its keys — this console never holds one.")
+  );
+}
+function renderModels() {
+  $("#model-catalogue").replaceChildren(
+    ...catalogueModels().map((model) => {
+      const option = new Option(
+        `${model.provider}${model.unseen ? " · newer than the bundled list" : ""}`,
+        model.id,
+      );
+      return option;
+    }),
+  );
+  $("#catalogue-state").textContent = describeCatalogue();
+  for (const seat of SEATS) syncSeatLab(seat, false);
+}
+/**
+ * Keep a seat's lab beside its model ID. A model the catalogue routes by its
+ * own name needs no lab and gets none — writing one would put a line in the
+ * generated adapter that changes nothing. A model whose name resolves
+ * nowhere (or to a different lab) is unusable without it, so it is filled in
+ * and the run can call a model this harness has never heard of.
+ */
+function syncSeatLab(seat, overwrite = true) {
+  const input = $("#" + seat + "Model");
+  const select = $("#" + seat + "Provider");
+  if (!input || !select) return;
+  const entry = catalogueModels().find(
+    (m) => m.id.toLowerCase() === input.value.trim().toLowerCase(),
+  );
+  if (!entry) return;
+  if (entry.needsLab && (overwrite || !select.value)) select.value = entry.provider;
+  else if (!entry.needsLab && overwrite && select.value === entry.provider)
+    select.value = "";
+}
+async function loadModels() {
+  const request = ++modelsRequest;
+  const query =
+    session.connected && repo
+      ? "?repository=" + encodeURIComponent(repo.name)
+      : "";
+  $("#catalogue-state").textContent = "Reading the model list…";
+  try {
+    const data = await api("/api/models" + query);
+    if (request !== modelsRequest) return;
+    catalogue = data;
+    renderModels();
+  } catch (error) {
+    if (request !== modelsRequest) return;
+    $("#catalogue-state").textContent =
+      "The model list could not be read. You can still type a model ID. " +
+      error.message;
+  }
+}
 function summary() {
   const data = draft();
   $("#summary-repo").textContent = data.repository || "No repository selected";
@@ -228,6 +315,21 @@ function validateStep() {
     throw new Error("Repository must be owner/name.");
   if (step === 1 && !data.labs.length)
     throw new Error("Choose at least one lab.");
+  // A model the catalogue knows only because a project listed it may carry a
+  // name this harness cannot route on its own. Say so here rather than
+  // letting the generator reject the whole configuration nine steps later.
+  if (step === 2)
+    for (const seat of SEATS) {
+      const entry = catalogueModels().find(
+        (m) => m.id.toLowerCase() === (data[seat + "Model"] || "").trim().toLowerCase(),
+      );
+      if (entry?.needsLab && !data[seat + "Provider"]) {
+        $("#" + seat + "Provider").focus();
+        throw new Error(
+          `Choose the lab that serves ${entry.id} — its name does not tell the harness who to call.`,
+        );
+      }
+    }
   if (step === 4 && !data.allowedPaths.length && !data.createOnlyPaths.length)
     throw new Error("Choose editable or create-only paths.");
   if (
@@ -335,6 +437,9 @@ async function connectRepository() {
   renderTree();
   changed();
   status("Repository connected.");
+  // Its own snapshot is the live model list — read it now rather than making
+  // someone find the refresh button to discover the seats screen got better.
+  await loadModels();
   await refreshSetup();
 }
 function renderTree() {
@@ -566,6 +671,9 @@ action("#next", () => {
   show(step + 1);
 });
 action("#generate", generate);
+action("#refresh-models", loadModels);
+for (const seat of SEATS)
+  $("#" + seat + "Model").addEventListener("change", () => syncSeatLab(seat));
 action("#refresh-repos", loadRepositories);
 $("#repo-search").addEventListener("input", filterRepositories);
 $("#repo-owner").addEventListener("change", filterRepositories);
@@ -671,6 +779,11 @@ async function init() {
       return label;
     }),
   );
+  for (const seat of SEATS)
+    $("#" + seat + "Provider").replaceChildren(
+      new Option("From the model ID", ""),
+      ...catalog.labs.map((lab) => new Option(lab.name, lab.name)),
+    );
   $("#protected-list").replaceChildren(
     ...catalog.protectedPaths.map((p) => node("li", p)),
   );
@@ -688,6 +801,7 @@ async function init() {
   });
   restore();
   show(0, false);
+  await loadModels();
   summary();
   $("#deployment-field").hidden =
     $("input[name=approvalClass]:checked").value !== "autonomous-merge";

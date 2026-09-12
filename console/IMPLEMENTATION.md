@@ -15,7 +15,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) before enabling sign-in.
 |---|---|---|---|
 | 1. Connect | Fixed example repository and inactive manage button | App sign-in, browser-bound state/PKCE, current installation membership, repository picker and real default branch/tree | HTTP OAuth tests; revoked grants, branch metadata and truncated-tree tests |
 | 2. Labs and API keys | Google, Qwen and Meta key names disagreed with the registry; custody claims had no implementation | Provider names come from the harness registry; keys entered on GitHub; required repository secret names verified without reading values | Watched plus unwatched-seat key union; missing secrets prevent writes |
-| 3. Seats | Hard-coded model menu and key mapping | Editable implement/review/rank model IDs, registry resolution, optional cross-family ranker | Model validation; separate seat values appear in generated adapter and workflow |
+| 3. Seats | Hard-coded model menu and key mapping | Implement/review/rank model IDs picked from a live catalogue or typed freely, with an optional explicit lab per seat so a model no provider pattern matches is still usable; registry resolution; optional cross-family ranker | Model validation; catalogue merge and `/api/models`; explicit lab reaches `roles.<seat>.provider`; separate seat values appear in generated adapter and workflow |
 | 4. Stages and tests | Toggles suggested unsupported omissions; no real project test inputs | Core stages remain fixed; dependency setup, test commands and attempt limit are real inputs | Workflow parsing; setup precedes harness install; unsafe expression/multiline inputs rejected |
 | 5. Boundaries | Example file tree | Actual connected tree plus editable/create-only/frozen patterns, permanent installer protections | Real file matching, path conflicts, traversal and protected edits rejected |
 | 6. Meta-goal | Example game text; not connected to actual brief generation | Project goal, constraints and hints generate committed goal and real model briefs | Generated bundle passes the harness structural validator in a temporary project |
@@ -32,6 +32,31 @@ decisions and implementation limits. The existing long article and oversized flo
 figure are replaced with a responsive composition, navy/blue/lime palette and
 shared typography across the console and privacy page. Third-party fonts and the
 embedded release tracker are removed; the README retains the independent source.
+
+### The model list on step 3
+
+Seats are pinned to model IDs, and a harness whose purpose is running models
+released after it was written cannot ask people to remember those IDs — or
+restrict them to the ones a pattern in this repository happens to match.
+Step 3 therefore offers a list and a **Refresh model list** button, from two
+sources kept distinguishable because they are not equally true:
+
+- `harness/data/model-catalogue.json`, shipped with the deploy and refreshed
+  by `harness/scripts/refresh-model-catalogue.mjs` (which needs lab keys, so
+  it runs on a maintainer's machine, never here).
+- The connected repository's own `.agent/model-snapshot.json` — every model
+  each watched lab listed on that project's last run, written with that
+  project's keys. The console holds no lab key and never will, so this is the
+  only route by which a live, account-accurate list can reach the screen. A
+  model in it that the bundled list has never seen is marked as newer than
+  what this console shipped with; nothing claims a release date the data does
+  not carry.
+
+Beside each seat is an optional lab. An ID whose own name routes it needs
+none and is given none, so the generated adapter stays quiet; an ID that
+resolves nowhere — the whole point of pinning a model that shipped this
+morning — carries `roles.<seat>.provider`, which the run pins at startup
+(`pinModelProvider()`), and its lab's key joins the required secrets.
 
 The installer has a ten-step navigation rail, step-level required-field checks,
 a configuration summary, explicit connection/empty/error states, inspectable file

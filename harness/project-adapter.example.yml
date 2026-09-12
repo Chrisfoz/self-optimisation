@@ -146,10 +146,19 @@ roles:
   # this out for you and wires the union of both sets into the generated
   # workflow; if you change a model here by hand afterward, add the secret
   # yourself.
+  #
+  # Each seat also takes an OPTIONAL `provider:` naming the lab that serves
+  # its model. Leave it out and the lab is worked out from the model id,
+  # which is right for every id matching a pattern in harness/providers/.
+  # Set it when it doesn't — a model released under a new family name, a
+  # joint release, a reseller's id — and that model becomes usable without
+  # anyone editing a regex in this harness. It must name a registered
+  # provider; the run pins it at startup and fails immediately if it can't.
   suggest:
     max_output_tokens: 32000   # covers a full analysis plus an ambitious edit set
   implement:
     model: claude-opus-5       # the pinned fallback implementer
+    # provider: anthropic      # only needed when the id doesn't name its own lab
   review:
     model: claude-opus-5       # pinned — this gate does not rotate
   rank:

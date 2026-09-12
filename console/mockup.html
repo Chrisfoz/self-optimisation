@@ -124,37 +124,75 @@
           <h2>Pin the models you trust</h2>
           <p class="lede">
             The suggester rotates. These roles stay on the model IDs you choose.
-            An ID’s provider is resolved by the harness; availability is
-            verified during rehearsal.
+            Pick from the list below or type any model ID your account can
+            call; availability is verified during rehearsal.
           </p>
-          <label class="field"
-            ><span>Implementer model ID</span
-            ><input
-              id="implementModel"
-              placeholder="e.g. claude-opus-5"
-              required /></label
-          ><label class="field"
-            ><span>Reviewer model ID</span
-            ><input
-              id="reviewModel"
-              placeholder="Exact model ID from your provider"
-              required
-            /><small
-              >A different lab can bring a more independent perspective.</small
-            ></label
-          ><label class="field"
-            ><span>Ranker model ID (optional)</span
-            ><input
-              id="rankModel"
-              placeholder="Automatic cross-family selection"
-            /><small
-              >Leave blank to let the harness select another model family when
-              available.</small
-            ></label
-          >
+          <div class="button-row">
+            <button type="button" id="refresh-models" class="button">
+              Refresh model list
+            </button>
+          </div>
+          <p id="catalogue-state" class="status" role="status"></p>
+          <datalist id="model-catalogue"></datalist>
+          <div class="seat">
+            <label class="field"
+              ><span>Implementer model ID</span
+              ><input
+                id="implementModel"
+                list="model-catalogue"
+                autocomplete="off"
+                placeholder="e.g. claude-opus-5"
+                required /></label
+            ><label class="field"
+              ><span>Implementer lab</span
+              ><select id="implementProvider">
+                <option value="">From the model ID</option>
+              </select></label
+            >
+          </div>
+          <div class="seat">
+            <label class="field"
+              ><span>Reviewer model ID</span
+              ><input
+                id="reviewModel"
+                list="model-catalogue"
+                autocomplete="off"
+                placeholder="Exact model ID from your provider"
+                required
+              /><small
+                >A different lab can bring a more independent perspective.</small
+              ></label
+            ><label class="field"
+              ><span>Reviewer lab</span
+              ><select id="reviewProvider">
+                <option value="">From the model ID</option>
+              </select></label
+            >
+          </div>
+          <div class="seat">
+            <label class="field"
+              ><span>Ranker model ID (optional)</span
+              ><input
+                id="rankModel"
+                list="model-catalogue"
+                autocomplete="off"
+                placeholder="Automatic cross-family selection"
+              /><small
+                >Leave blank to let the harness select another model family when
+                available.</small
+              ></label
+            ><label class="field"
+              ><span>Ranker lab</span
+              ><select id="rankProvider">
+                <option value="">From the model ID</option>
+              </select></label
+            >
+          </div>
           <p class="notice">
             Use model IDs your account can call. Display names and subscription
-            names are not API model IDs.
+            names are not API model IDs. A model ID whose lab this harness
+            cannot recognise still works — name its lab beside it, and nothing
+            in the harness needs changing to run a model released this morning.
           </p>
         </section>
         <section data-step="3" hidden>
