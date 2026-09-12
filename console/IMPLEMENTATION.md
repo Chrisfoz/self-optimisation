@@ -70,3 +70,32 @@ text nodes, not HTML interpolation. API keys are never requested by the UI.
 - Rehearsal must create an improvement PR and pass every required gate to unlock
   activation. A no-proposal or rejected attempt does not qualify simply because
   GitHub marks the containing workflow successful.
+
+
+## GitHub connection follow-through
+
+The Connect screen now includes repository search (name and description), account
+filtering, public/private labels and actionable empty states. App installation
+returns through `/auth/installed`; that route ignores installation IDs as authority
+and returns through sign-in when needed. Returning to the originating console tab
+after managing access refreshes discovery. Cancelled authorisation returns to the
+console, and revoked user tokens clear the local session.
+
+Switching or refreshing repositories immediately clears previous verified state,
+file trees, secret checks and setup controls. Late repository/setup responses are
+discarded. Tokens remain server-only and every operation rechecks installation
+grants. No new permissions, token storage or dependencies were introduced.
+
+Deployment still needs an operator-owned GitHub App and the variables in
+DEPLOYMENT.md. Automated tests use simulated GitHub responses; a live customer
+authorisation and organisation-installation acceptance check remains necessary.
+
+Verification commands:
+
+- `node --test 'tests/console/*.test.mjs'` exercises the API and GitHub boundary.
+- `node tests/console/github-browser.mjs` is an optional Playwright browser check;
+  install Playwright and Chromium in your test environment first, or set
+  `PLAYWRIGHT_MODULE` to an existing installation's `index.mjs`. It covers search,
+  accounts, delayed responses, access removal, expired sessions and mobile width.
+  This browser check was added but could not run in the implementation environment
+  because Chromium was unavailable.

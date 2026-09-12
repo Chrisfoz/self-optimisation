@@ -38,7 +38,9 @@ let step = 0,
   generated = null,
   selectedFile = null,
   revision = 0,
-  repoRequest = 0;
+  repoRequest = 0,
+  repositories = [],
+  listRequest = 0;
 const lineList = (value) =>
   value
     .split("\n")
@@ -114,7 +116,18 @@ async function api(path, body) {
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || "Request failed.");
+  if (!response.ok) {
+    if (response.status === 401 && session.connected) {
+      session = { ...session, connected: false, csrf: null };
+      clearRepository();
+      repositories = [];
+      $("#repo-filters").hidden = true;
+      $("#repo-picker-field").hidden = true;
+      renderConnection();
+      status(result.error || "GitHub sign-in expired. Connect again.", true);
+    }
+    throw new Error(result.error || "Request failed.");
+  }
   return result;
 }
 function action(id, fn) {
@@ -154,8 +167,7 @@ function changed() {
   $("#deployment-field").hidden =
     $("input[name=approvalClass]:checked").value !== "autonomous-merge";
   if (repo && repo.name !== $("#repository").value) {
-    repo = null;
-    $("#defaultBranch").readOnly = false;
+    clearRepository();
     $("#repo-state").textContent =
       "Reconnect this repository to load its files.";
     $("#tree").replaceChildren();
@@ -244,30 +256,75 @@ function external(text, url) {
   link.rel = "noopener noreferrer";
   return link;
 }
+function clearRepository() {
+  repoRequest++;
+  revision++;
+  repo = null;
+  generated = null;
+  $("#defaultBranch").readOnly = false;
+  $("#tree").replaceChildren();
+  $("#setup-state").replaceChildren();
+  $("#secret-status").replaceChildren();
+  $("#generated").hidden = true;
+  $("#open-pr").disabled = true;
+  for (const id of ["refresh-setup", "rehearse", "activate"]) $("#" + id).hidden = true;
+  $("#repo-state").textContent = "Choose a repository to verify its access and load its files.";
+}
+function filterRepositories() {
+  const query = $("#repo-search").value.trim().toLowerCase();
+  const owner = $("#repo-owner").value;
+  const visible = repositories.filter((r) => (!owner || r.owner === owner) &&
+    (r.name + " " + r.description).toLowerCase().includes(query));
+  const selected = repo?.name || $("#repository").value;
+  $("#repo-picker").replaceChildren(new Option("Select a repository", ""),
+    ...visible.map((r) => new Option(`${r.name} · ${r.private ? "Private" : "Public"}`, r.name)));
+  if (visible.some((r) => r.name === selected)) $("#repo-picker").value = selected;
+  $("#repo-count").textContent = repositories.length
+    ? `${visible.length} of ${repositories.length} repositories${visible.length ? "" : " · Try another search or account."}`
+    : "No writable repositories available. Use Manage repository access to install the App on selected repositories. Organisation approval may be required.";
+}
 async function loadRepositories() {
-  const data = await api("/api/repositories");
-  $("#repo-picker").replaceChildren(
-    new Option("Select a repository", ""),
-    ...data.repositories.map((r) => new Option(r.name, r.name)),
-  );
+  const request = ++listRequest;
+  clearRepository();
+  repositories = [];
+  $("#repo-picker").replaceChildren(new Option("Loading repositories…", ""));
+  $("#repo-picker").disabled = true;
   $("#repo-picker-field").hidden = false;
-  if (data.repositories.some((r) => r.name === $("#repository").value)) {
-    $("#repo-picker").value = $("#repository").value;
-    await connectRepository();
+  try {
+    const data = await api("/api/repositories");
+    if (request !== listRequest || !session.connected) return;
+    repositories = data.repositories.sort((a, b) => a.name.localeCompare(b.name));
+    const owner = $("#repo-owner").value;
+    $("#repo-owner").replaceChildren(new Option("All accounts", ""),
+      ...[...new Set(repositories.map((r) => r.owner))].sort().map((o) => new Option(o, o)));
+    if (repositories.some((r) => r.owner === owner)) $("#repo-owner").value = owner;
+    $("#repo-filters").hidden = false;
+    filterRepositories();
+    if ($("#repo-picker").value) await connectRepository();
+  } catch (error) {
+    if (request !== listRequest) return;
+    $("#repo-picker").replaceChildren(new Option("Could not load repositories", ""));
+    $("#repo-count").textContent = "Repository access could not be checked. Refresh to try again.";
+    throw error;
+  } finally {
+    if (request === listRequest) $("#repo-picker").disabled = false;
   }
-  if (!data.repositories.length)
-    status(
-      "No writable repositories are installed. Grant access on GitHub, then refresh.",
-    );
 }
 async function connectRepository() {
   const name = $("#repo-picker").value;
-  const request = ++repoRequest;
+  clearRepository();
+  const request = repoRequest;
   if (!name) return;
+  $("#repository").value = name;
+  changed();
   status("Reading repository and default branch…");
-  const data = await api(
-    "/api/repository?repository=" + encodeURIComponent(name),
-  );
+  let data;
+  try {
+    data = await api("/api/repository?repository=" + encodeURIComponent(name));
+  } catch (error) {
+    if (request !== repoRequest) return;
+    throw error;
+  }
   if (request !== repoRequest) return;
   repo = data;
   $("#repository").value = data.name;
@@ -354,9 +411,11 @@ function showFile(name) {
 }
 async function refreshSetup() {
   if (!session.connected || !repo) return;
+  const request = repoRequest;
   const state = await api(
     "/api/setup?repository=" + encodeURIComponent(repo.name),
   );
+  if (request !== repoRequest) return;
   $("#setup-state").replaceChildren();
   $("#refresh-setup").hidden = !state.setup;
   $("#rehearse").hidden = true;
@@ -508,6 +567,17 @@ action("#next", () => {
 });
 action("#generate", generate);
 action("#refresh-repos", loadRepositories);
+$("#repo-search").addEventListener("input", filterRepositories);
+$("#repo-owner").addEventListener("change", filterRepositories);
+let returningFromGitHub = false;
+$("#install-app").addEventListener("click", () => { save(); returningFromGitHub = true; });
+$("#sign-in").addEventListener("click", save);
+window.addEventListener("focus", () => {
+  if (returningFromGitHub && session.connected) {
+    returningFromGitHub = false;
+    loadRepositories().catch((e) => status(e.message, true));
+  }
+});
 $("#repo-picker").addEventListener("change", () =>
   connectRepository().catch((e) => status(e.message, true)),
 );
@@ -568,8 +638,23 @@ action("#back-setup", () => {
   $("#setup-view").hidden = false;
 });
 $("#setup-form").addEventListener("submit", (e) => e.preventDefault());
-$("#setup-form").addEventListener("input", changed);
+$("#setup-form").addEventListener("input", (event) => {
+  if (event.target.id === "repository") clearRepository();
+  changed();
+});
 $("#setup-form").addEventListener("change", changed);
+function renderConnection() {
+  $("#connection").textContent = session.connected
+    ? `Signed in as ${session.login}. Choose an installed repository.`
+    : session.configured
+      ? "Sign in to load repositories and open a setup pull request."
+      : "GitHub sign-in has not been configured on this deployment yet. You can complete all ten steps and download the setup bundle.";
+  $("#sign-in").hidden = !session.configured || session.connected;
+  $("#sign-out").hidden = !session.connected;
+  $("#refresh-repos").hidden = !session.connected;
+  $("#install-app").hidden = !session.installUrl;
+  if (session.installUrl) $("#install-app").href = session.installUrl;
+}
 async function init() {
   const results = await Promise.all([api("/api/session"), api("/api/catalog")]);
   [session, catalog] = results;
@@ -606,18 +691,13 @@ async function init() {
   summary();
   $("#deployment-field").hidden =
     $("input[name=approvalClass]:checked").value !== "autonomous-merge";
-  $("#connection").textContent = session.connected
-    ? `Signed in as ${session.login}. Choose an installed repository.`
-    : session.configured
-      ? "Sign in to load repositories and open a setup pull request."
-      : "GitHub sign-in has not been configured on this deployment yet. You can complete all ten steps and download the setup bundle.";
-  $("#sign-in").hidden = !session.configured || session.connected;
-  $("#sign-out").hidden = !session.connected;
-  $("#refresh-repos").hidden = !session.connected;
-  $("#install-app").hidden = !session.installUrl;
-  if (session.installUrl) $("#install-app").href = session.installUrl;
+  renderConnection();
+  const githubResult = new URLSearchParams(location.search).get("github");
+  if (githubResult === "cancelled") status("GitHub connection was cancelled. Connect again when you’re ready.");
+  if (githubResult) history.replaceState(null, "", "/console");
   if (session.connected) await loadRepositories();
 }
 init().catch((error) =>
   status("Could not load the console. " + error.message, true),
 );
+

@@ -20,7 +20,7 @@ import {
 const equal = (a, b) =>
   typeof a === "string" &&
   typeof b === "string" &&
-  a.length === b.length &&
+  Buffer.byteLength(a) === Buffer.byteLength(b) &&
   timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const id = () => randomBytes(32).toString("hex");
 export function createApi({
@@ -87,6 +87,12 @@ export function createApi({
         json(200, { labs: LABS, protectedPaths: PROTECTED });
         return true;
       }
+      // Installation query parameters are navigation hints, never proof of access.
+      // Repository discovery always rechecks the authenticated user's grants.
+      if (req.method === "GET" && path === "/auth/installed") {
+        redirect(session ? "/console?github=installed" : "/auth/github");
+        return true;
+      }
       if (req.method === "GET" && path === "/auth/github") {
         if (!ready)
           throw problem(
@@ -124,13 +130,16 @@ export function createApi({
         if (
           !ready ||
           !login ||
-          !equal(login.nonce, sid) ||
-          !url.searchParams.get("code")
+          !equal(login.nonce, sid)
         )
           throw problem(
             400,
             "Sign-in expired or could not be verified. Start again.",
           );
+        if (url.searchParams.get("error") || !url.searchParams.get("code")) {
+          redirect("/console?github=cancelled", { "set-cookie": cookie("", 0) });
+          return true;
+        }
         const response = await fetchImpl(
           "https://github.com/login/oauth/access_token",
           {
@@ -321,6 +330,11 @@ export function createApi({
       }
       return true;
     } catch (error) {
+      if (error.status === 401 && !path.startsWith("/auth/")) {
+        const sid = (req.headers.cookie || "").split(";")
+          .map((c) => c.trim()).find((c) => c.startsWith(cookieName + "="))?.slice(cookieName.length + 1);
+        sessions.delete(sid);
+      }
       json(error.status || 502, {
         error: error.status
           ? error.message
@@ -345,3 +359,4 @@ export async function readJson(req) {
     throw problem(400, "Invalid JSON.");
   }
 }
+

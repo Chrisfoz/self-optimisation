@@ -43,7 +43,7 @@
           <div id="connection" class="notice">Checking GitHub connection…</div>
           <div class="button-row">
             <a id="sign-in" class="button primary" href="/auth/github" hidden
-              >Sign in with GitHub</a
+              >Connect GitHub</a
             ><a
               id="install-app"
               class="button"
@@ -56,6 +56,12 @@
             ><button id="sign-out" class="button" type="button" hidden>
               Sign out
             </button>
+          </div>
+          <p class="caption">Connect your account, grant access to selected repositories, then choose a project. Connecting alone does not change any files.</p>
+          <div id="repo-filters" hidden>
+            <label class="field"><span>Find a repository</span><input id="repo-search" type="search" placeholder="Search by name or description" autocomplete="off" /></label>
+            <label class="field"><span>Account or organisation</span><select id="repo-owner"><option value="">All accounts</option></select></label>
+            <p id="repo-count" class="status" role="status"></p>
           </div>
           <label class="field" id="repo-picker-field" hidden
             ><span>Available repositories</span
@@ -467,3 +473,4 @@
   ><a href="/privacy">Privacy</a>
 </footer>
 <script type="module" src="/assets/app.mjs"></script>
+
