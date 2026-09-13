@@ -43,6 +43,40 @@ example. See [`WORKPLAN.md`](WORKPLAN.md) Tier 6. See
 
 ---
 
+## Download and run it locally
+
+**This project is for downloading from GitHub and running on your own
+computer.** Nothing is hosted for you: you clone it (or download the ZIP),
+run it locally, and change whatever you like. It has two halves, and each is
+set up in one place:
+
+| Half | Folder | What it is | Configured in |
+|---|---|---|---|
+| **Frontend** | `console/` | The website: what the project does, how to run it, the console wireframe, the privacy policy | Page files in `console/`; the shared nav and footer in `console/partials/nav.html` and `footer.html`; routes in `PAGES` in `console/server.mjs`; the port with `PORT` |
+| **Backend** | `harness/` | The loop that asks each new model to improve a project, gates the change, and opens a pull request | `project-adapter.yml` (labs, editable paths, ambition, budget) and `.env` (API keys) in the project you install it into |
+
+The quick version, with [Node.js 22.11+](https://nodejs.org) installed:
+
+```bash
+git clone https://github.com/Chrisfoz/self-optimisation.git
+cd self-optimisation
+npm install
+npm start          # then open http://localhost:3000
+```
+
+**New to this, or building with an AI assistant?** Open
+**http://localhost:3000/how-to-run** once it's running (the source is
+[`console/how-to-run.html`](console/how-to-run.html)). It covers every step
+in plain language: downloading the project, running the website, putting the
+harness into your own project, where each setting lives, prompts you can
+paste into Claude Code or Cursor, and fixes for the usual errors. The section
+below is the same backend setup in more depth.
+
+To host the website somewhere else, `railway.json` is set up for Railway, and
+any host that runs `npm start` works, with `/healthz` as the health check.
+
+---
+
 ## Getting started
 
 This walks through installing the harness into **your own project** — not
@@ -576,9 +610,11 @@ self_optimisation/
 │                                     # campaigns/ — real-model runs written up with their
 │                                     # records, and curiosity/ — a second longitudinal
 │                                     # pass, 4 of its 10 components built, the rest gated on A'
-├── console/                         # a proposed browser-based install flow — the UI
-│                                     # (about/mockup/privacy.html, DESIGN.md) is design
-│                                     # and wireframe only, not built; server.mjs, the one
+├── console/                         # the frontend, and a proposed browser-based install
+│                                     # flow — how-to-run.html is the local setup guide;
+│                                     # partials/ holds the nav and footer every page
+│                                     # includes; about/mockup/privacy.html and DESIGN.md
+│                                     # are design and wireframe, not built; server.mjs, the one
 │                                     # service that hosts it (`npm start`, railway.json),
 │                                     # is BUILT and serves those pages; its Supabase schema
 │                                     # (console/supabase/migrations/) is BUILT and live,

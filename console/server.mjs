@@ -14,12 +14,16 @@
  * publish the rest of the repository. A table cannot do either — a path it
  * doesn't name is a 404.
  *
- * The three pages are authored as Artifact body fragments (no <html>, no
- * <head>) so they can also be published as claude.ai artifacts. renderPage()
- * gives them the same skeleton the artifact host does — charset, viewport,
- * and its small reset — so a page looks the same in both places, and
- * rewrites their claude.ai cross-links to this server's own routes, since an
+ * The pages are authored as body fragments (no <html>, no <head>), the shape
+ * a claude.ai artifact takes. The site nav and footer are not in them: each
+ * lives once in console/partials/, and a page says where it goes with an
+ * `<!-- include:nav -->` marker. renderPage() inlines those, marks the nav
+ * link for the page being served, gives the result the same skeleton the
+ * artifact host does — charset, viewport, and its small reset — and rewrites
+ * any remaining claude.ai cross-links to this server's own routes, since an
  * artifact link is private to its owner and would dead-end every visitor.
+ * A page's raw file is therefore no longer a complete artifact on its own;
+ * publish the served page instead.
  */
 
 import fs from 'node:fs';
@@ -30,12 +34,21 @@ import { harnessVersion } from '../harness/lib/version.mjs';
 
 const CONSOLE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
-/** Route → page fragment in console/. The only files this server will ever read. */
+/** Route → page fragment in console/. With PARTIALS, the only files this server will ever read. */
 export const PAGES = {
   '/': 'about.html',
+  '/how-to-run': 'how-to-run.html',
   '/console': 'mockup.html',
   '/privacy': 'privacy.html',
 };
+
+/** Markup every page shares, kept in one file each and pulled in by an include marker. Never served on its own. */
+export const PARTIALS = {
+  nav: 'partials/nav.html',
+  footer: 'partials/footer.html',
+};
+
+const INCLUDE_MARKER = /<!--\s*include:([\w-]+)\s*-->/g;
 
 /** The artifact each page is also published as, so its links can point here instead. */
 export const ARTIFACT_ROUTES = {
@@ -50,9 +63,18 @@ const SECURITY_HEADERS = {
   'x-frame-options': 'DENY',
 };
 
-/** Wrap an artifact body fragment in the artifact host's skeleton, with local links. */
-export function renderPage(fragment) {
-  const body = fragment.replace(
+/**
+ * Assemble a page: inline its partials, mark the link to `route` as the
+ * current page, wrap it in the artifact host's skeleton, and localise links.
+ * An include naming a partial that doesn't exist throws — at boot, since
+ * createConsoleServer() renders every page up front.
+ */
+export function renderPage(fragment, { route, partials = {} } = {}) {
+  const assembled = fragment.replace(INCLUDE_MARKER, (marker, name) => {
+    if (!Object.hasOwn(partials, name)) throw new Error(`page includes unknown partial "${name}"`);
+    return route ? partials[name].replaceAll(`href="${route}"`, `href="${route}" aria-current="page"`) : partials[name];
+  });
+  const body = assembled.replace(
     /https:\/\/claude\.ai\/code\/artifact\/([0-9a-f-]{36})/g,
     (url, id) => ARTIFACT_ROUTES[id] ?? url,
   );
@@ -76,8 +98,10 @@ ${body}
  * at boot rather than 500 on the first visitor.
  */
 export function createConsoleServer({ dir = CONSOLE_DIR, version = harnessVersion() } = {}) {
+  const read = (file) => fs.readFileSync(path.join(dir, file), 'utf8');
+  const partials = Object.fromEntries(Object.entries(PARTIALS).map(([name, file]) => [name, read(file)]));
   const rendered = new Map(
-    Object.entries(PAGES).map(([route, file]) => [route, renderPage(fs.readFileSync(path.join(dir, file), 'utf8'))]),
+    Object.entries(PAGES).map(([route, file]) => [route, renderPage(read(file), { route, partials })]),
   );
   const health = JSON.stringify({ ok: true, harness: version });
 

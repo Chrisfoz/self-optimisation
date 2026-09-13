@@ -6,7 +6,7 @@ who can hand-write `project-adapter.yml`.
 
 **Status: proposal, with phase 0 built.** The console itself — sign-in, the
 form, the pull request, the run view — is not built; the one service that
-will host it is (`console/server.mjs`, serving the three pages below — §11
+will host it is (`console/server.mjs`, serving the four pages below — §11
 records where it runs and what was decided about it). Everything underneath it
 is: `harness/lib/scaffold.mjs` + `harness/cli/init.mjs` generate the files,
 `harness/lib/validate.mjs` checks the answers (§2.1's `validateAnswers()`,
@@ -21,11 +21,15 @@ yet). Read §2 before §5: the console's remaining prerequisite is answer
 validation on the generator that exists, plus the phase-1 backend §8.5
 made necessary.
 
-Three pages sit beside this file, each a self-contained artifact body:
+Four pages sit beside this file, each a body fragment. None carries its own
+nav or footer: those live once in [`partials/`](partials/) and the server
+inlines them wherever a page has an `<!-- include:nav -->` or
+`<!-- include:footer -->` marker.
 
 | File | What it is |
 |---|---|
-| [`about.html`](about.html) | The public face: the objective, one run drawn end to end, and the nine setup steps. Links to the other two. |
+| [`about.html`](about.html) | The public face: the objective, one run drawn end to end, and the nine setup steps. |
+| [`how-to-run.html`](how-to-run.html) | Step-by-step local setup for someone who builds with an AI assistant: download, run the website, install the harness into their own project, where each setting lives, and troubleshooting. |
 | [`mockup.html`](mockup.html) | A clickable wireframe of §4's nine steps, with the generated `project-adapter.yml` updating live beside the form — the design's central claim rather than a garnish. |
 | [`privacy.html`](privacy.html) | A draft privacy policy, written now so §2.2's no-custody rule is a commitment rather than an intention. |
 
@@ -1006,7 +1010,7 @@ The order, each step usable on its own:
 
 | Step | Deliverable | State |
 |---|---|---|
-| 1 | The service, serving the three pages, on Railway | ✅ built (`console/server.mjs`, `tests/console/server.test.mjs`); not yet deployed |
+| 1 | The service, serving the four pages, on Railway | ✅ built (`console/server.mjs`, `tests/console/server.test.mjs`); not yet deployed |
 | 2 | GitHub App via the manifest flow; sign-in; repository and branch picker | — |
 | 3 | The reusable workflow (§3) | — |
 | 4 | The nine steps, sealed-box secrets (§2.2), the setup PR, Run, the run view (§8.4) | — |

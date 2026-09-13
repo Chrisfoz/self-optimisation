@@ -1,6 +1,6 @@
-<!-- Clickable wireframe for DESIGN.md §4. Authored as an Artifact body
-     fragment: no <html>/<head>/<body> wrapper — those are added at publish time.
-     Open it locally by pasting into a minimal HTML skeleton if needed. -->
+<!-- Clickable wireframe for DESIGN.md §4. Authored as a body fragment: no
+     <html>/<head>/<body> wrapper. The nav and footer come from console/partials/,
+     inlined by console/server.mjs — run `npm start` and open /console to view it. -->
 <title>Harness Install Console</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -400,6 +400,8 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
 
 <div class="wrap">
 
+  <!-- include:nav -->
+
   <header class="masthead">
     <h1>Self-Optimisation · Install console</h1>
     <span class="sub mono">Chrisfoz/carrot-games</span>
@@ -408,9 +410,6 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
       <button type="button" id="tabRuns" role="tab" aria-selected="false">Runs</button>
     </div>
     <span class="spacer"></span>
-    <a class="eyebrow" style="color:var(--accent);text-decoration:none" href="https://claude.ai/code/artifact/34273fb4-75b4-4e09-af44-159ccc9677e7">What it does ↗</a>
-    <a class="eyebrow" style="color:var(--accent);text-decoration:none" href="https://claude.ai/code/artifact/476e81da-9930-46fb-bfb8-08b0c5a4911d">Privacy ↗</a>
-    <a class="eyebrow" style="color:var(--accent);text-decoration:none" href="https://github.com/Chrisfoz/self-optimisation">GitHub ↗</a>
     <span class="eyebrow">Wireframe · DESIGN.md §4</span>
   </header>
 
@@ -724,6 +723,8 @@ pre.yaml .r { color: var(--reserved); font-style: italic; }
     ever disagree, your repository is right. Delete your account and none of this is lost,
     because it was never ours.</p>
   </div>
+
+  <!-- include:footer -->
 </div>
 
 <script>

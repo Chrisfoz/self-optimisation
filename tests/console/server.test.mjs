@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { createConsoleServer, renderPage, PAGES, ARTIFACT_ROUTES } from '../../console/server.mjs';
+import { createConsoleServer, renderPage, PAGES, PARTIALS, ARTIFACT_ROUTES } from '../../console/server.mjs';
 
 let server;
 let base;
@@ -40,6 +40,7 @@ test('healthz reports ok and the harness version, uncached', async () => {
 
 test('only the route table is served — console files, source and traversal are all 404', async () => {
   for (const p of ['/about.html', '/DESIGN.md', '/server.mjs', '/supabase/README.md',
+    '/partials/nav.html', '/partials/footer.html',
     '/../package.json', '/%2e%2e/package.json', '/console/', '/nope']) {
     const res = await fetch(base + p);
     assert.equal(res.status, 404, p);
@@ -75,6 +76,42 @@ test('renderPage maps known artifact ids to routes and leaves unknown ones alone
   const html = renderPage(`<a href="https://claude.ai/code/artifact/${id}">x</a><a href="${unknown}">y</a>`);
   assert.match(html, new RegExp(`href="${route}"`));
   assert.ok(html.includes(unknown));
+});
+
+test('every page gets the shared nav and footer exactly once, with no include marker left behind', async () => {
+  for (const route of Object.keys(PAGES)) {
+    const html = await (await fetch(base + route)).text();
+    assert.equal(html.match(/<nav class="sitenav"/g)?.length, 1, `${route} nav`);
+    assert.equal(html.match(/<footer class="foot"/g)?.length, 1, `${route} footer`);
+    assert.doesNotMatch(html, /<!--\s*include:/, route);
+  }
+});
+
+test('no page file carries its own nav or footer — each includes the shared partials', () => {
+  for (const [route, file] of Object.entries(PAGES)) {
+    const src = fs.readFileSync(new URL('../../console/' + file, import.meta.url), 'utf8');
+    assert.doesNotMatch(src, /<nav class="sitenav"|<footer class="foot"/, `${file} embeds its own nav or footer`);
+    assert.match(src, /<!--\s*include:nav\s*-->/, `${route} is missing the nav include`);
+    assert.match(src, /<!--\s*include:footer\s*-->/, `${route} is missing the footer include`);
+  }
+});
+
+test('the nav marks exactly the page being served as current', async () => {
+  for (const route of Object.keys(PAGES)) {
+    const html = await (await fetch(base + route)).text();
+    const nav = html.slice(html.indexOf('<nav class="sitenav"'), html.indexOf('</nav>', html.indexOf('<nav class="sitenav"')));
+    const current = [...nav.matchAll(/href="([^"]*)" aria-current="page"/g)].map((m) => m[1]);
+    assert.deepEqual(current, [route], route);
+  }
+});
+
+test('every nav link to this site points at a real route', () => {
+  const nav = fs.readFileSync(new URL('../../console/' + PARTIALS.nav, import.meta.url), 'utf8');
+  for (const [, href] of nav.matchAll(/href="(\/[^"]*)"/g)) assert.ok(href in PAGES, href);
+});
+
+test('renderPage refuses a page that includes a partial that does not exist', () => {
+  assert.throws(() => renderPage('<!-- include:sidebar -->', { route: '/', partials: { nav: '' } }), /unknown partial "sidebar"/);
 });
 
 test('every route in ARTIFACT_ROUTES is a real page route', () => {

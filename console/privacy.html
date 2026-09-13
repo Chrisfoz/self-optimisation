@@ -1,5 +1,6 @@
 <!-- Privacy policy for the proposed install console (console/DESIGN.md).
-     Authored as an Artifact body fragment: no <html>/<head>/<body> wrapper. -->
+     Authored as a body fragment: no <html>/<head>/<body> wrapper. The nav and
+     footer come from console/partials/, inlined by console/server.mjs. -->
 <title>Console Privacy Policy</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -87,38 +88,11 @@ ul.plain { margin:0 0 13px; padding-left:20px; color:var(--ink-2); display:flex;
 }
 .callout b { color:var(--accent-2); }
 
-footer.foot {
-  margin-top:44px; padding-top:18px; border-top:1px solid var(--line);
-  display:flex; flex-wrap:wrap; gap:8px 20px; align-items:baseline;
-  font-size:13.5px; color:var(--muted);
-}
-footer.foot .spacer { flex:1 1 30px; }
-
-/* ---- shared site nav (same markup on about / console / privacy) ---- */
-nav.sitenav {
-  display:flex; flex-wrap:wrap; gap:4px; align-items:center;
-  margin:0 0 26px; padding-bottom:14px; border-bottom:1px solid var(--line-soft);
-}
-nav.sitenav a {
-  font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;
-  font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.07em;
-  color:var(--muted); text-decoration:none; padding:6px 11px; border-radius:5px;
-}
-nav.sitenav a:hover { color:var(--ink); background:var(--surface-2); }
-nav.sitenav a[aria-current="page"] { color:var(--accent); background:var(--accent-wash); }
-nav.sitenav .navspace { flex:1 1 20px; }
-nav.sitenav .navrepo { font-size:12px; letter-spacing:.04em; text-transform:none; }
 </style>
 
 <div class="wrap">
 
-  <nav class="sitenav" aria-label="Site">
-    <a href="https://claude.ai/code/artifact/34273fb4-75b4-4e09-af44-159ccc9677e7">What it does</a>
-    <a href="https://claude.ai/code/artifact/00efd905-19bd-4d79-a613-e63182556742">The console</a>
-    <a href="https://claude.ai/code/artifact/476e81da-9930-46fb-bfb8-08b0c5a4911d" aria-current="page">Privacy</a>
-    <span class="navspace"></span>
-    <a class="navrepo" href="https://github.com/Chrisfoz/self-optimisation">GitHub ↗</a>
-  </nav>
+  <!-- include:nav -->
 
   <header class="top">
     <p class="eyebrow">Self-Optimisation · Install console</p>
@@ -288,12 +262,5 @@ nav.sitenav .navrepo { font-size:12px; letter-spacing:.04em; text-transform:none
   <a href="https://github.com/Chrisfoz/self-optimisation">github.com/Chrisfoz/self-optimisation</a>.
   Privacy questions in the open are useful to everyone reading later.</p>
 
-  <footer class="foot">
-    <a href="https://github.com/Chrisfoz/self-optimisation">Repository</a>
-    <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/console/DESIGN.md">Console design doc</a>
-    <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/CONTRIBUTING.md">Contributing</a>
-    <a href="https://claude.ai/code/artifact/34273fb4-75b4-4e09-af44-159ccc9677e7">What it does</a>
-    <span class="spacer"></span>
-    <span>Draft · not yet in force</span>
-  </footer>
+  <!-- include:footer -->
 </div>

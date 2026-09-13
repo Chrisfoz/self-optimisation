@@ -1,5 +1,6 @@
 <!-- About page for the proposed install console (console/DESIGN.md).
-     Authored as an Artifact body fragment: no <html>/<head>/<body> wrapper. -->
+     Authored as a body fragment: no <html>/<head>/<body> wrapper. The nav and
+     footer come from console/partials/, inlined by console/server.mjs. -->
 <title>What Self-Optimisation Does</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -145,28 +146,6 @@ table.status td:first-child { color:var(--ink); }
 .pill.part { background:var(--warn-wash); color:var(--warn); }
 .pill.no { background:var(--surface-2); color:var(--muted); border:1px dashed var(--line); }
 
-footer.foot {
-  margin-top:8px; padding-top:20px; border-top:1px solid var(--line);
-  display:flex; flex-wrap:wrap; gap:10px 22px; align-items:baseline;
-  font-size:13.5px; color:var(--muted);
-}
-footer.foot .spacer { flex:1 1 30px; }
-
-/* ---- shared site nav (same markup on about / console / privacy) ---- */
-nav.sitenav {
-  display:flex; flex-wrap:wrap; gap:4px; align-items:center;
-  margin:0 0 26px; padding-bottom:14px; border-bottom:1px solid var(--line-soft);
-}
-nav.sitenav a {
-  font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;
-  font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.07em;
-  color:var(--muted); text-decoration:none; padding:6px 11px; border-radius:5px;
-}
-nav.sitenav a:hover { color:var(--ink); background:var(--surface-2); }
-nav.sitenav a[aria-current="page"] { color:var(--accent); background:var(--accent-wash); }
-nav.sitenav .navspace { flex:1 1 20px; }
-nav.sitenav .navrepo { font-size:12px; letter-spacing:.04em; text-transform:none; }
-
 /* ---- third-party embed ---- */
 .embed { margin:22px 0 8px; }
 .embed iframe { display:block; width:100%; max-width:640px; height:460px; border:0; border-radius:12px; }
@@ -188,18 +167,12 @@ nav.sitenav .navrepo { font-size:12px; letter-spacing:.04em; text-transform:none
 
 <div class="wrap">
 
-  <nav class="sitenav" aria-label="Site">
-    <a href="https://claude.ai/code/artifact/34273fb4-75b4-4e09-af44-159ccc9677e7" aria-current="page">What it does</a>
-    <a href="https://claude.ai/code/artifact/00efd905-19bd-4d79-a613-e63182556742">The console</a>
-    <a href="https://claude.ai/code/artifact/476e81da-9930-46fb-bfb8-08b0c5a4911d">Privacy</a>
-    <span class="navspace"></span>
-    <a class="navrepo" href="https://github.com/Chrisfoz/self-optimisation">GitHub ↗</a>
-  </nav>
+  <!-- include:nav -->
 
   <header class="top">
     <p class="eyebrow">Self-Optimisation</p>
     <h1>Your repository gets a second opinion every time the field moves.</h1>
-    <p class="thesis">When a lab ships a new frontier model, it gets exactly one
+    <p class="thesis">We bet on the curve. Harness the power  of Frontier labs, we leverage their insights to continuously improve your project. Every insight is captured and acted upon systematically. This ensures that your project evolves in step with the latest advancements. When a lab ships a new frontier model, it gets exactly one
     turn to propose one improvement to your project — and <b>four independent
     gates it has to pass</b> before a single line reaches you.</p>
   </header>
@@ -207,14 +180,12 @@ nav.sitenav .navrepo { font-size:12px; letter-spacing:.04em; text-transform:none
   <section class="narrow">
     <h2>The objective</h2>
     <p>Software gets better when someone with fresh eyes reads it. Frontier
-    models now arrive every few weeks, each with genuinely different judgement
+    models now arrive every few weeks, driving benchmarks on performance, each with genuinely different judgement
     — and every one of them is a reader who has never seen your code before.
-    The problem has never been asking them. It's that acting on the answer
-    unsupervised is reckless, and reviewing every answer by hand is work you
-    won't keep doing.</p>
-    <p>So this is a governed loop rather than an assistant. The trigger is a
-    model release, not a calendar tick. The proposing seat rotates to whoever
-    shipped most recently, while the reviewing seat stays pinned to a model you
+    The problem has never been asking them.</p>
+    <p>This is a self improvement governed loop rather than an assistant. The trigger is a
+    model release. The proposing seat rotates to whoever
+    shipped most recently getting the benefit of incremental improvements, while the reviewing seat stays pinned to a model you
     already trust. Changes arrive as exact edits to files you explicitly
     allowed, applied all-or-nothing, checked by an independent reviewer, a
     guard, and your own test suite. What reaches you is a pull request and a
@@ -222,15 +193,15 @@ nav.sitenav .navrepo { font-size:12px; letter-spacing:.04em; text-transform:none
 
     <div class="cards">
       <div class="card">
-        <h3>The trigger is a release, not the calendar</h3>
-        <p>A run happens because there is a new mind to ask. Nothing new shipped this month? Then nothing runs, and nothing is spent.</p>
+        <h3>The trigger is a release, you can automate it so nothing is missed and watch over time as your project improves against your goal</h3>
+        <p>A run happens because there is a AI system to ask. Add your labs and API keys, and configure your project settings to define your goals.</p>
       </div>
       <div class="card">
-        <h3>An agent can argue with a rule, never change it</h3>
+        <h3>An agent can argue with a hard constraint and rule, but never change it unless other models agree</h3>
         <p>Protected paths are enforced against the real diff. A model that thinks a rule is wrong can say so — and it takes three models across two labs agreeing before that reaches you as a decision.</p>
       </div>
       <div class="card">
-        <h3>Every run writes down what it tried</h3>
+        <h3>Every run writes down what it tried so you have a record of success and failure</h3>
         <p>Including the ones that shipped nothing. The next run reads it back, so the same dead end doesn't get proposed twice.</p>
       </div>
     </div>
@@ -516,13 +487,5 @@ nav.sitenav .navrepo { font-size:12px; letter-spacing:.04em; text-transform:none
     </div>
   </section>
 
-  <footer class="foot">
-    <a href="https://github.com/Chrisfoz/self-optimisation">Repository</a>
-    <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/console/DESIGN.md">Console design</a>
-    <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/CONTRIBUTING.md">Contributing</a>
-    <a href="https://claude.ai/code/artifact/00efd905-19bd-4d79-a613-e63182556742">The console</a>
-    <a href="https://claude.ai/code/artifact/476e81da-9930-46fb-bfb8-08b0c5a4911d">Privacy</a>
-    <span class="spacer"></span>
-    <span>A portable harness for model-release-driven software improvement.</span>
-  </footer>
+  <!-- include:footer -->
 </div>
