@@ -56,6 +56,15 @@ which in practice is mostly a manual/forced run. This is why
 an id another lab's marketplace also reships under the same bare name — the
 guess is a fallback of a fallback, not the thing doing the real work.
 
+A pinned seat is the one place a person, rather than a catalogue, supplies
+the id — so it can say who serves it too: `roles.<seat>.provider` in
+`project-adapter.yml` is pinned onto the exact id at startup
+(`pinModelProvider()`), ahead of the pattern table. That is what keeps a
+model released under a name no pattern anticipated usable without editing a
+regex in this repository, which is the only sort of change this harness must
+never require in order to run a model that shipped this morning. Your
+`pattern` still earns its place for every id nobody named a lab for.
+
 **Any per-provider quirk gets a named hook, not a branch on provider name
 elsewhere.** If you find yourself wanting to add `if (resolved === 'yourlab')`
 to `llm-provider.mjs`, stop — that's exactly the shape of bug this split was

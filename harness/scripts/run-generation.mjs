@@ -37,7 +37,7 @@ import { nextGenerationNumber, runIdentity } from '../lib/generation-id.mjs';
 import '../providers/index.mjs';
 import { setOutput, oneLine } from '../lib/gh-output.mjs';
 import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig, goalConfig, visualCaptureConfig, evaluationConfig, snapshotPath as adapterSnapshotPath } from '../lib/adapter.mjs';
-import { getProvider, registeredProviders } from '../lib/llm-provider.mjs';
+import { getProvider, registeredProviders, pinModelProvider } from '../lib/llm-provider.mjs';
 import { runProjectTests, scrubEnv } from '../lib/test-runner.mjs';
 import { pickCrossFamilyRanker, describeSeats, promotionCandidate } from '../lib/seats.mjs';
 import { loadRecords } from '../lib/report.mjs';
@@ -159,6 +159,28 @@ const generationsDir = ctxConfig.generationsDir || 'docs/generations';
 // The implement seat: the env override, else a rotating model that EARNED
 // it (roles.promotion — a model whose own edits were approved and kept N
 // times), else the pinned model. The review seat is never promoted.
+// Seats whose adapter entry names a lab are pinned BEFORE anything resolves
+// a provider from an id — including the promotion and cross-family logic
+// just below, which both call resolveProvider() indirectly. A model released
+// under a name no provider pattern matches is unusable otherwise: this is
+// what makes "pin the model that shipped this morning" a configuration
+// change rather than a code change. An unregistered lab name fails loudly
+// here, at startup, instead of mid-run when the seat is first called.
+for (const [seat, model, named] of [
+  ['implement', roles.implementModel, roles.implementProvider],
+  ['review', roles.reviewModel, roles.reviewProvider],
+  ['rank', roles.rankModel, roles.rankProvider],
+]) {
+  if (!model || !named) continue;
+  try {
+    pinModelProvider(model, named);
+    console.error(`📌 ${seat} seat: ${model} → ${named} (named in project-adapter.yml)`);
+  } catch (error) {
+    console.error(`roles.${seat}.provider: ${error.message}`);
+    process.exit(1);
+  }
+}
+
 const pinnedImplement = roles.implementModel || 'claude-opus-5';
 const promoted = process.env.IMPLEMENT_MODEL || !roles.promotionThreshold
   ? null

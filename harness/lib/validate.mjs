@@ -162,16 +162,30 @@ export function validateAdapter(adapter, { repoRoot = process.cwd(), env = proce
   // scrutiny a freshly generated one did.
   const roles = rolesConfig(adapter);
   const neededProviders = new Set(watched.filter((name) => getProvider(name)));
-  for (const [label, model] of [
-    ['roles.implement.model', roles.implementModel],
-    ['roles.review.model', roles.reviewModel],
-    ['roles.rank.model', roles.rankModel],
+  for (const [seat, model, named] of [
+    ['implement', roles.implementModel, roles.implementProvider],
+    ['review', roles.reviewModel, roles.reviewProvider],
+    ['rank', roles.rankModel, roles.rankProvider],
   ]) {
-    if (!model) continue;
+    if (!model) {
+      // A named lab with no model beside it configures nothing and will be
+      // ignored at run time, which is worth saying out loud rather than
+      // letting someone believe the seat was set.
+      if (named) warnings.push(`roles.${seat}.provider: "${named}" is set but roles.${seat}.model is empty — this seat is not pinned.`);
+      continue;
+    }
+    // An explicitly named lab is the answer, not a hint: it exists so a
+    // model released after this harness was written can fill a seat at all.
+    // It only has to be a lab this harness can actually call.
+    if (named) {
+      if (getProvider(named)) neededProviders.add(named);
+      else errors.push(`roles.${seat}.provider: "${named}" is not a registered provider.`);
+      continue;
+    }
     try {
       neededProviders.add(resolveProvider(model));
     } catch {
-      warnings.push(`${label}: "${model}" does not resolve to a registered provider — a run will fail the moment it reaches this seat.`);
+      warnings.push(`roles.${seat}.model: "${model}" does not resolve to a registered provider — a run will fail the moment it reaches this seat. Name its lab in roles.${seat}.provider.`);
     }
   }
 

@@ -140,13 +140,19 @@ export function buildAdapterObject(a) {
       agent_brief_path: a.agentBriefPath || '.claude/agents/improve.md',
       reviewer_brief_path: a.reviewerBriefPath || '.claude/agents/review.md',
       suggest: { max_output_tokens: Number.isFinite(a.suggestMaxTokens) ? a.suggestMaxTokens : 32000 },
-      implement: { model: a.implementModel || 'claude-opus-5' },
-      review: { model: a.reviewModel || 'claude-opus-5' },
+      // `provider` is written only when someone named a lab explicitly. A
+      // model id whose lab is obvious from its name resolves by pattern and
+      // gains nothing from the extra line; one whose lab is NOT obvious —
+      // the whole point of pinning a model released after this harness was
+      // written — could not be used at all without it. See
+      // llm-provider.mjs's pinModelProvider().
+      implement: { model: a.implementModel || 'claude-opus-5', ...(a.implementProvider ? { provider: a.implementProvider } : {}) },
+      review: { model: a.reviewModel || 'claude-opus-5', ...(a.reviewProvider ? { provider: a.reviewProvider } : {}) },
       // Unset on purpose when init left it blank: run-generation.mjs then
       // picks a model from a different family than the implementer at run
       // time (harness/lib/seats.mjs). Writing the implementer here instead
       // would silently re-create the shared-family judge the blank avoids.
-      rank: { model: a.rankModel || null },
+      rank: { model: a.rankModel || null, ...(a.rankModel && a.rankProvider ? { provider: a.rankProvider } : {}) },
       refine: { max_attempts: Number.isFinite(a.maxAttempts) ? a.maxAttempts : 3 },
     },
     memory: {
@@ -306,8 +312,11 @@ export function answersFromAdapter(adapter, { providerEnvKey, modelProvider }) {
     reviewerBriefPath: roles.reviewer_brief_path,
     suggestMaxTokens: num(roles.suggest?.max_output_tokens),
     implementModel: roles.implement?.model,
+    implementProvider: roles.implement?.provider ?? '',
     reviewModel: roles.review?.model,
+    reviewProvider: roles.review?.provider ?? '',
     rankModel: roles.rank?.model ?? '',
+    rankProvider: roles.rank?.provider ?? '',
     maxAttempts: num(roles.refine?.max_attempts),
     ledgerPath: memory.escalation_ledger,
     consensusModels: num(consensus.models),

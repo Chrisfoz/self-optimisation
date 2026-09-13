@@ -1,445 +1,422 @@
 <!-- How to run: a step-by-step guide to downloading this repository and
-     running it locally, written for people who build with an AI assistant
-     rather than from memory. Served at /how-to-run by console/server.mjs,
-     which inlines the shared nav and footer from console/partials/. -->
-<title>How to Run Self-Optimisation</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Sans:wght@400;450;600;700&display=swap">
-
+     running it locally, written for people who build with an AI assistant.
+     Served at /how-to-run by console/server.mjs, which inlines the shared
+     header and footer from console/partials/. Copy buttons come from
+     how-to-run.mjs, because the content security policy blocks inline scripts. -->
+<title>How to run — Self-Optimisation</title>
+<meta
+  name="description"
+  content="Download Self-Optimisation from GitHub, run it on your own computer, and set it up for your project, step by step."
+/>
+<link rel="stylesheet" href="/assets/console.css" />
 <style>
-:root {
-  --ground:#EDEFF4; --surface:#FFFFFF; --surface-2:#F5F6FA;
-  --line:#D8DBE6; --line-soft:#E6E8F0;
-  --ink:#14161F; --ink-2:#3D4254; --muted:#6A7089;
-  --accent:#3F4E9E; --accent-2:#2E3B7D; --accent-wash:#E7E9F6;
-  --live:#1E7A4B; --live-wash:#E2F1E8;
-  --warn:#8A6100; --warn-wash:#F8EEDA;
-  --shadow:0 1px 2px rgba(20,22,31,.06), 0 8px 24px -12px rgba(20,22,31,.18);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --ground:#101219; --surface:#181B25; --surface-2:#1F222E;
-    --line:#2E3242; --line-soft:#252936;
-    --ink:#E8EAF2; --ink-2:#BFC4D6; --muted:#8990A8;
-    --accent:#8A97E8; --accent-2:#A6B0F0; --accent-wash:#232741;
-    --live:#5FC08C; --live-wash:#17301F;
-    --warn:#DFAE4B; --warn-wash:#302713;
-    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  .guide { max-width: 880px; padding-block: 56px 20px; }
+  .guide h1 { font-size: clamp(40px, 5vw, 58px); margin: 14px 0 20px; }
+  .guide h2 { font-size: clamp(26px, 3vw, 34px); margin-bottom: 12px; }
+  .guide h3 { font-size: 18px; margin-bottom: 6px; }
+  .guide > section { padding-block: 44px; border-top: 1px solid var(--line); }
+  .lead { font-size: 19px; max-width: 660px; }
+  .halves { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 22px 0 6px; }
+  .half { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
+  .half p { font-size: 15px; margin: 0; }
+  .half code { color: var(--ink); }
+  .half .tag { margin-right: 8px; }
+  .tag.backend { background: #eff9e8; color: #335d19; }
+  ul.need { padding-left: 20px; margin: 16px 0 0; }
+  ul.need li { margin: 10px 0; color: var(--muted); }
+  ul.need b { color: var(--ink); }
+  ol.walk { list-style: none; counter-reset: walk; padding: 0; margin: 26px 0 0; }
+  ol.walk > li {
+    counter-increment: walk; position: relative;
+    padding: 0 0 30px 52px; margin-left: 16px; border-left: 2px solid var(--line);
   }
-}
-:root[data-theme="dark"] {
-  --ground:#101219; --surface:#181B25; --surface-2:#1F222E;
-  --line:#2E3242; --line-soft:#252936;
-  --ink:#E8EAF2; --ink-2:#BFC4D6; --muted:#8990A8;
-  --accent:#8A97E8; --accent-2:#A6B0F0; --accent-wash:#232741;
-  --live:#5FC08C; --live-wash:#17301F;
-  --warn:#DFAE4B; --warn-wash:#302713;
-  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
-}
-
-* { box-sizing:border-box; }
-body {
-  margin:0; background:var(--ground); color:var(--ink);
-  font-family:"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
-  font-size:16px; line-height:1.62; -webkit-font-smoothing:antialiased;
-}
-.mono, code { font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.9em; }
-a { color:var(--accent); text-underline-offset:2px; }
-a:hover { color:var(--accent-2); }
-:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
-
-.wrap { max-width:800px; margin:0 auto; padding:32px 22px 72px; }
-
-.eyebrow {
-  font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif; font-weight:600;
-  text-transform:uppercase; letter-spacing:.09em; font-size:11px; color:var(--muted);
-  margin:0 0 8px;
-}
-
-header.top { padding-bottom:24px; margin-bottom:28px; border-bottom:1px solid var(--line); }
-header.top h1 {
-  margin:0 0 12px; font-size:clamp(28px,4.4vw,38px); font-weight:700;
-  letter-spacing:-.028em; line-height:1.14; text-wrap:balance;
-}
-header.top .thesis { margin:0; font-size:18px; color:var(--ink-2); max-width:60ch; }
-
-section { margin-bottom:44px; }
-h2 { margin:0 0 10px; font-size:22px; font-weight:700; letter-spacing:-.018em; text-wrap:balance; }
-h3 { margin:0 0 6px; font-size:16px; font-weight:600; letter-spacing:-.008em; }
-p { margin:0 0 14px; color:var(--ink-2); }
-section > p { max-width:66ch; }
-
-/* ---- two halves ---- */
-.halves { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; margin-top:18px; }
-.half {
-  background:var(--surface); border:1px solid var(--line); border-radius:6px;
-  padding:16px 18px; box-shadow:var(--shadow);
-}
-.half p { margin:0; font-size:14.5px; }
-.half .where { display:inline-block; margin-bottom:6px; }
-
-/* ---- checklist ---- */
-ul.need { margin:14px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:10px; }
-ul.need li {
-  display:grid; grid-template-columns:22px 1fr; gap:10px; align-items:baseline;
-  font-size:15px; color:var(--ink-2);
-}
-ul.need li::before { content:"☐"; color:var(--muted); }
-ul.need li b { color:var(--ink); }
-
-/* ---- numbered steps ---- */
-ol.walk { margin:18px 0 0; padding:0; list-style:none; counter-reset:w; }
-ol.walk > li {
-  counter-increment:w; position:relative;
-  padding:0 0 26px 48px; border-left:2px solid var(--line-soft); margin-left:15px;
-}
-ol.walk > li:last-child { border-left-color:transparent; padding-bottom:0; }
-ol.walk > li::before {
-  content:counter(w); position:absolute; left:-16px; top:-2px;
-  width:30px; height:30px; border-radius:50%; display:grid; place-items:center;
-  background:var(--accent); color:#fff; font-weight:700; font-size:14px;
-}
-:root[data-theme="dark"] ol.walk > li::before { color:#12141C; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) ol.walk > li::before { color:#12141C; } }
-ol.walk > li p { font-size:15px; }
-ol.walk > li p:last-child { margin-bottom:0; }
-
-/* ---- commands ---- */
-.cmd {
-  position:relative; margin:10px 0 14px;
-  background:var(--surface); border:1px solid var(--line); border-radius:6px;
-}
-.cmd .label {
-  display:block; padding:6px 12px 0; font-size:11px; color:var(--muted);
-  font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif; font-weight:600;
-  text-transform:uppercase; letter-spacing:.07em;
-}
-.cmd pre {
-  margin:0; padding:10px 84px 12px 12px; overflow-x:auto;
-  font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size:13.5px; line-height:1.55; color:var(--ink);
-}
-.cmd button {
-  position:absolute; top:8px; right:8px;
-  font:inherit; font-size:12px; font-weight:600; cursor:pointer;
-  padding:4px 10px; border-radius:5px;
-  border:1px solid var(--line); background:var(--surface-2); color:var(--ink-2);
-}
-.cmd button:hover { border-color:var(--muted); color:var(--ink); }
-
-.expect { font-size:14px; color:var(--muted); }
-.expect code { color:var(--ink-2); }
-
-/* ---- callouts ---- */
-.note, .warn, .good {
-  border:1px solid var(--line); border-radius:6px; padding:12px 15px;
-  margin:12px 0 14px; font-size:14.5px; color:var(--ink-2);
-}
-.note { background:var(--accent-wash); border-left:3px solid var(--accent); }
-.warn { background:var(--warn-wash); border-left:3px solid var(--warn); }
-.good { background:var(--live-wash); border-left:3px solid var(--live); }
-.note b { color:var(--accent-2); }
-.warn b { color:var(--warn); }
-.good b { color:var(--live); }
-
-/* ---- config table ---- */
-.scroll-x { overflow-x:auto; }
-table.where { width:100%; border-collapse:collapse; font-size:14.5px; margin-top:14px; }
-table.where th, table.where td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line-soft); vertical-align:top; }
-table.where th {
-  font-family:"IBM Plex Sans Condensed",sans-serif; text-transform:uppercase;
-  letter-spacing:.07em; font-size:10.5px; color:var(--muted); font-weight:600;
-}
-table.where td:first-child { color:var(--ink); }
-table.where td { color:var(--ink-2); }
-.tag {
-  display:inline-block; font-family:"IBM Plex Sans Condensed",sans-serif; font-weight:600;
-  font-size:10.5px; text-transform:uppercase; letter-spacing:.07em;
-  padding:1px 7px; border-radius:3px; margin-right:6px; white-space:nowrap;
-}
-.tag.fe { background:var(--accent-wash); color:var(--accent); }
-.tag.be { background:var(--live-wash); color:var(--live); }
-
-/* ---- prompts + troubleshooting ---- */
-.prompts { display:flex; flex-direction:column; gap:12px; margin-top:14px; }
-.prompts .cmd pre { white-space:pre-wrap; font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; font-size:14.5px; }
-
-details {
-  background:var(--surface); border:1px solid var(--line); border-radius:6px;
-  padding:0 16px; margin-bottom:8px;
-}
-details[open] { padding-bottom:12px; }
-summary { cursor:pointer; padding:12px 0; font-weight:600; font-size:15px; color:var(--ink); }
-details p { font-size:14.5px; }
+  ol.walk > li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  ol.walk > li::before {
+    content: counter(walk); position: absolute; left: -17px; top: -3px;
+    width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--blue); color: #fff; font-weight: 700; font-size: 14px;
+  }
+  ol.walk p { font-size: 15px; }
+  ol.walk p:last-child { margin-bottom: 0; }
+  .cmd { position: relative; background: #102035; border-radius: 8px; margin: 10px 0 14px; }
+  .cmd .label {
+    display: block; padding: 10px 16px 0; color: var(--lime);
+    font: 600 11px/1.4 ui-monospace, monospace; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .cmd pre {
+    margin: 0; padding: 14px 110px 14px 16px; color: #dce8fa;
+    font: 14px/1.6 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .cmd .copy {
+    position: absolute; top: 8px; right: 8px; font-size: 12px; padding: 5px 10px;
+    border-radius: 6px; border: 1px solid #ffffff30; background: #ffffff14; color: #fff;
+  }
+  .prompts .cmd pre { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; }
+  .ways { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+  .way { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .way p { font-size: 15px; margin: 6px 0 0; }
+  .guide details { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 0 18px; margin-bottom: 8px; }
+  .guide details[open] { padding-bottom: 6px; }
+  .guide details p { font-size: 15px; }
+  @media (max-width: 720px) {
+    .halves, .ways { grid-template-columns: 1fr; }
+    ol.walk > li { padding-left: 36px; }
+  }
 </style>
-
-<div class="wrap">
-
-  <!-- include:nav -->
-
-  <header class="top">
-    <p class="eyebrow">Self-Optimisation · How to run</p>
-    <h1>Download it, run it on your own computer, make it yours.</h1>
-    <p class="thesis">This project is meant to be downloaded from GitHub and run
-    locally. There's no sign-up and nothing to pay for to look around. Follow
-    the steps in order, copy each command exactly, and you'll have it running
-    in about ten minutes.</p>
-  </header>
+<a class="skip" href="#main">Skip to content</a>
+<!-- include:nav -->
+<main id="main" class="wrap guide">
+  <p class="eyebrow">HOW TO RUN</p>
+  <h1>Download it. Run it.<br />Make it yours.</h1>
+  <p class="lead">
+    This project is meant to be downloaded from GitHub and run on your own
+    computer. There's no sign-up, and nothing to pay for to look around. Do the
+    steps in order and copy each command exactly. You'll have it running in
+    about ten minutes.
+  </p>
 
   <section>
     <h2>What you're downloading</h2>
-    <p>The repository has two halves. You can run the first on its own, and
-    each half is set up in one obvious place, so you can change either without
-    touching the other.</p>
+    <p>
+      The repository has two halves. Each one is set up in one obvious place, so
+      you can change either without touching the other.
+    </p>
     <div class="halves">
       <div class="half">
-        <span class="tag fe">Frontend</span><code class="where">console/</code>
-        <h3>The website</h3>
-        <p>The pages you're reading now, served by one small file,
-        <code>console/server.mjs</code>. It needs no database and no
-        accounts. The shared menu and footer each live in their own file in
-        <code>console/partials/</code>.</p>
+        <h3><span class="tag">Frontend</span><code>console/</code></h3>
+        <p>
+          The website you're reading, including the ten-step installer on the
+          <a href="/console">Console</a> page. It's served by one small file,
+          <code>console/server.mjs</code>, and needs no database. The header and
+          footer each live in their own file in <code>console/partials/</code>.
+        </p>
       </div>
       <div class="half">
-        <span class="tag be">Backend</span><code class="where">harness/</code>
-        <h3>The harness</h3>
-        <p>The part that does the real work. When a new AI model comes out,
-        it asks that model to suggest one improvement to <em>your</em>
-        project, checks the change, and hands it to you. You set it up with
-        one file, <code>project-adapter.yml</code>, and put your keys in
-        another, <code>.env</code>.</p>
+        <h3><span class="tag backend">Backend</span><code>harness/</code></h3>
+        <p>
+          The part that does the real work. When a new AI model comes out, it
+          asks that model to improve <em>your</em> project, checks the change,
+          and hands it to you as a pull request. You set it up with one file,
+          <code>project-adapter.yml</code>.
+        </p>
       </div>
     </div>
-    <div class="note"><b>Be clear about what's real.</b> The website runs, but
-    <a href="/console">the console</a> page on it is a clickable sketch that
-    doesn't save anything yet. To make the harness actually improve a project
-    today, use the commands in Part 2.</div>
   </section>
 
   <section id="before">
     <h2>Before you start</h2>
     <p>Install these first. Each one is free.</p>
     <ul class="need">
-      <li><span><b>Node.js 22.11 or newer.</b> Go to <a href="https://nodejs.org" target="_blank" rel="noopener">nodejs.org</a>
-      and download the version labelled <b>LTS</b>. Use the default options in the installer.</span></li>
-      <li><span><b>A code editor with a built-in terminal.</b> For example
-      VS Code or Cursor. If you use an AI coding assistant, open this project in it.</span></li>
-      <li><span><b>Git</b>, from <a href="https://git-scm.com" target="_blank" rel="noopener">git-scm.com</a>.
-      This is optional: you can download a ZIP instead (Step 1 shows both).</span></li>
-      <li><span><b>For Part 2 only:</b> an API key from at least one AI lab.
-      Anthropic or OpenAI is a good first choice. You don't need one to run the website.</span></li>
+      <li>
+        <b>Node.js 22.11 or newer.</b> Go to
+        <a href="https://nodejs.org">nodejs.org</a> and download the version
+        labelled <b>LTS</b>. Use the default options in the installer.
+      </li>
+      <li>
+        <b>A code editor with a built-in terminal</b>, such as VS Code or
+        Cursor. If you use an AI coding assistant, open the project in it.
+      </li>
+      <li>
+        <b>Git</b>, from <a href="https://git-scm.com">git-scm.com</a>. Optional:
+        you can download a ZIP instead.
+      </li>
+      <li>
+        <b>For Part 2 only:</b> a GitHub account, and an API key from at least
+        one AI lab. Anthropic or OpenAI is a good first choice.
+      </li>
     </ul>
   </section>
 
   <section>
     <h2>Part 1 — Run the website</h2>
-    <p>About five minutes. At the end, this site will be running on your own
-    computer.</p>
-
+    <p>About five minutes. At the end, this site runs on your own computer.</p>
     <ol class="walk">
       <li>
         <h3>Download the project</h3>
-        <p><b>With Git:</b> open a terminal and paste this:</p>
+        <p><b>With Git:</b> open a terminal and paste this.</p>
         <div class="cmd"><pre>git clone https://github.com/Chrisfoz/self-optimisation.git</pre></div>
-        <p><b>Without Git:</b> open
-        <a href="https://github.com/Chrisfoz/self-optimisation" target="_blank" rel="noopener">the repository on GitHub</a>,
-        click the green <b>Code</b> button, choose <b>Download ZIP</b>, and unzip it
-        somewhere you'll find it again, such as your Documents folder.</p>
+        <p>
+          <b>Without Git:</b> open
+          <a href="https://github.com/Chrisfoz/self-optimisation">the repository on GitHub</a>,
+          click the green <b>Code</b> button, choose <b>Download ZIP</b>, and
+          unzip it somewhere you'll find it again, such as your Documents folder.
+        </p>
       </li>
-
       <li>
         <h3>Open the folder in your editor</h3>
-        <p>In VS Code or Cursor, choose <b>File → Open Folder…</b> and pick the
-        <code>self-optimisation</code> folder. Then open a terminal with
-        <b>Terminal → New Terminal</b>. That terminal is already inside the right
-        folder, and every command below goes there.</p>
-        <p class="expect">To check you're in the right place, the folder should
-        contain <code>package.json</code>, <code>README.md</code>,
-        <code>console</code> and <code>harness</code>.</p>
+        <p>
+          In VS Code or Cursor, choose <b>File → Open Folder…</b> and pick the
+          <code>self-optimisation</code> folder. Then choose
+          <b>Terminal → New Terminal</b>. That terminal is already in the right
+          folder, and every command below goes there.
+        </p>
+        <p>
+          To check, the folder should contain <code>package.json</code>,
+          <code>README.md</code>, <code>console</code> and <code>harness</code>.
+        </p>
       </li>
-
       <li>
         <h3>Check Node is installed</h3>
         <div class="cmd"><pre>node --version</pre></div>
-        <p class="expect">You should see <code>v22.11.0</code> or a higher number. If you see
-        "not recognized" or "command not found", install Node (see
-        <a href="#before">Before you start</a>), then close your editor completely and reopen it.</p>
+        <p>
+          You should see <code>v22.11.0</code> or a higher number. If you see
+          "not recognized" or "command not found", install Node (see
+          <a href="#before">Before you start</a>), then quit your editor
+          completely and open it again.
+        </p>
       </li>
-
       <li>
         <h3>Install the one dependency</h3>
         <div class="cmd"><pre>npm install</pre></div>
-        <p class="expect">This downloads one small library, <code>js-yaml</code>, which the harness
-        uses to read its settings file. The website doesn't need it, but Part 2 does, so it's
-        worth doing now.</p>
+        <p>
+          This downloads one small library, <code>js-yaml</code>, which the
+          harness and the installer use to read and write settings files.
+        </p>
       </li>
-
       <li>
         <h3>Start the website</h3>
         <div class="cmd"><pre>npm start</pre></div>
-        <p class="expect">You should see a line like <code>console listening on :3000</code>. Leave
-        this terminal open, because closing it stops the site.</p>
+        <p>
+          You should see a line like <code>console listening on :3000</code>.
+          Leave this terminal open, because closing it stops the site.
+        </p>
       </li>
-
       <li>
         <h3>Open it in your browser</h3>
         <div class="cmd"><pre>http://localhost:3000</pre></div>
-        <p>Paste that into your browser's address bar. You'll see this site. When you're done,
-        click in the terminal and press <b>Ctrl + C</b> to stop it.</p>
+        <p>
+          Paste that into your browser's address bar. When you're done, click in
+          the terminal and press <b>Ctrl + C</b> to stop the site.
+        </p>
       </li>
-
       <li>
         <h3>Optional: run the checks</h3>
         <div class="cmd"><pre>npm test</pre></div>
-        <p class="expect">This runs the project's own tests. They should all pass. If you change
-        something and a test fails, the output tells you what broke.</p>
+        <p>
+          This runs the project's own tests, and they should all pass. If you
+          change something and a test fails, the output tells you what broke.
+        </p>
       </li>
     </ol>
-
-    <div class="good"><b>That's Part 1.</b> The website is running locally. Next, you can
-    change how it looks (see <a href="#configure">Make it yours</a>) or point the harness
-    at a real project (Part 2).</div>
+    <p class="notice success">
+      <b>That's Part 1.</b> The website runs locally. Next, change how it looks
+      (see <a href="#configure">Make it yours</a>) or set up a real project
+      (Part 2).
+    </p>
   </section>
 
   <section>
-    <h2>Part 2 — Run the harness on your own project</h2>
-    <p>The harness doesn't improve <em>this</em> repository. You copy it into
-    another project of yours, and it improves that one. Try it on a project
-    you don't mind experimenting with. It works on a separate branch and never
-    changes your main code without you approving it.</p>
+    <h2>Part 2 — Set up your own project</h2>
+    <p>
+      The harness doesn't improve <em>this</em> repository. It goes into another
+      project of yours and improves that one. Try it on a project you don't mind
+      experimenting with. Changes arrive on a separate branch as a pull request,
+      and nothing reaches your main code unless you merge it.
+    </p>
+    <p class="notice warning">
+      <b>This uses real API credits.</b> Every suggestion is a real call to an AI
+      lab, billed to your key. Set a monthly spending limit on your lab's billing
+      page first.
+    </p>
+    <div class="ways">
+      <div class="way">
+        <h3>Way A: the installer</h3>
+        <p>Answer ten questions in your browser and download the files. Best if you'd rather not edit settings files by hand.</p>
+      </div>
+      <div class="way">
+        <h3>Way B: the terminal</h3>
+        <p>Copy the harness in and answer the same questions in the terminal. It can also do a practice run on your computer.</p>
+      </div>
+    </div>
 
-    <div class="warn"><b>This part uses real API credits.</b> Every suggestion is a real call
-    to an AI lab, billed to your key. Set a monthly spending limit on your
-    lab's billing page before you start.</div>
+    <h3 style="margin-top: 36px">Way A: the installer</h3>
+    <ol class="walk">
+      <li>
+        <h3>Open the installer</h3>
+        <p>
+          With the website running from Part 1, open
+          <a href="/console">localhost:3000/console</a>. It may say GitHub
+          sign-in isn't configured. That's expected on your own computer, and
+          every step still works.
+        </p>
+      </li>
+      <li>
+        <h3>Work through the ten steps</h3>
+        <p>
+          Choose your AI labs and models, the files that may and may never be
+          changed, your test command, and what "better" means for your project.
+          The panel on the right shows the exact files it will generate.
+        </p>
+      </li>
+      <li>
+        <h3>Download the setup files</h3>
+        <p>
+          In the last step, check the files and download
+          <code>self-optimisation-setup.tar</code>.
+        </p>
+      </li>
+      <li>
+        <h3>Unpack them on a new branch of your project</h3>
+        <p>In a terminal inside <em>your project</em>:</p>
+        <div class="cmd"><pre>git checkout -b self-optimisation-setup</pre></div>
+        <div class="cmd"><span class="label">Mac / Linux</span><pre>tar -xf ~/Downloads/self-optimisation-setup.tar</pre></div>
+        <div class="cmd"><span class="label">Windows PowerShell</span><pre>tar -xf $HOME\Downloads\self-optimisation-setup.tar</pre></div>
+        <p>Look at the files before you commit them. Change the path if your download went somewhere else.</p>
+      </li>
+      <li>
+        <h3>Follow SELF-IMPROVE-README.md</h3>
+        <p>
+          The download includes this file. It lists the API keys to add as GitHub
+          secrets (<b>Settings → Secrets and variables → Actions</b>) and how to
+          do the first run.
+        </p>
+      </li>
+    </ol>
+    <p class="notice">
+      <b>Want the installer to connect to GitHub directly?</b> Then it can read
+      your repository and open the setup pull request for you. That needs a
+      GitHub App of your own, which is more advanced; see
+      <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/console/DEPLOYMENT.md">console/DEPLOYMENT.md</a>.
+    </p>
 
+    <h3 style="margin-top: 36px">Way B: the terminal</h3>
     <ol class="walk">
       <li>
         <h3>Make sure your project uses Git</h3>
-        <p>The harness puts each attempt on its own Git branch, so your project must be a Git
-        repository. If it isn't yet, run this in your project's folder:</p>
+        <p>
+          The harness puts each attempt on its own branch. If your project isn't
+          a Git repository yet, run this in its folder:
+        </p>
         <div class="cmd"><pre>git init</pre></div>
       </li>
-
       <li>
         <h3>Copy the <code>harness</code> folder into your project</h3>
-        <p>The simplest way is to drag the <code>harness</code> folder from the download into your
-        project's top-level folder in your file explorer. Or, from a terminal inside your project:</p>
+        <p>
+          Drag the <code>harness</code> folder from the download into your
+          project's top-level folder, or from a terminal inside your project:
+        </p>
         <div class="cmd"><span class="label">Mac / Linux</span><pre>cp -r ../self-optimisation/harness ./harness</pre></div>
         <div class="cmd"><span class="label">Windows PowerShell</span><pre>Copy-Item -Recurse ..\self-optimisation\harness .\harness</pre></div>
-        <p class="expect">These commands assume both folders sit side by side. Change
-        <code>../self-optimisation</code> if you put the download somewhere else.</p>
+        <p>These assume both folders sit side by side. Change the path if yours don't.</p>
       </li>
-
       <li>
         <h3>Give your project the settings reader</h3>
-        <p>In a terminal inside <em>your project</em>, run:</p>
         <div class="cmd"><pre>npm install --no-save js-yaml@5.3.0</pre></div>
-        <p class="expect">This installs the same library as Part 1, into your project, without
-        changing its <code>package.json</code>. Make sure your project's <code>.gitignore</code>
-        includes <code>node_modules/</code>.</p>
+        <p>
+          This installs the same library as Part 1 into your project, without
+          changing its <code>package.json</code>. Make sure your project's
+          <code>.gitignore</code> includes <code>node_modules/</code>.
+        </p>
       </li>
-
       <li>
         <h3>Add your API key</h3>
-        <p>Copy the example keys file to your project's top-level folder:</p>
         <div class="cmd"><span class="label">Mac / Linux</span><pre>cp harness/.env.example .env</pre></div>
         <div class="cmd"><span class="label">Windows PowerShell</span><pre>Copy-Item harness\.env.example .env</pre></div>
-        <p>Open <code>.env</code> and paste your key after the matching name, for example
-        <code>ANTHROPIC_API_KEY=sk-ant-…</code>. Leave the other lines blank.</p>
-        <div class="warn"><b>Never commit <code>.env</code>.</b> Add a line saying
-        <code>.env</code> to your project's <code>.gitignore</code> now. Anyone who sees
-        your key can spend your money.</div>
+        <p>
+          Open <code>.env</code> and paste your key after the matching name, such
+          as <code>ANTHROPIC_API_KEY=sk-ant-…</code>. Leave the other lines blank.
+        </p>
+        <p class="notice warning">
+          <b>Never commit <code>.env</code>.</b> Add a line saying <code>.env</code>
+          to your project's <code>.gitignore</code> now. Anyone who sees your key
+          can spend your money.
+        </p>
       </li>
-
       <li>
         <h3>Answer the setup questions</h3>
         <div class="cmd"><pre>node harness/cli/init.mjs</pre></div>
-        <p>It asks about your project: which AI labs to use, which files may be changed, and how
-        to run your tests. Pressing Enter accepts the suggested answer. It then writes:</p>
-        <ul class="need">
-          <li><span><code>project-adapter.yml</code>, all of the backend's settings in one file</span></li>
-          <li><span><code>.claude/agents/improve.md</code>, where you describe what "better" means for your project</span></li>
-          <li><span><code>.claude/agents/review.md</code>, which tells the reviewer what to check</span></li>
-          <li><span><code>.github/workflows/self-improve.yml</code>, for running it on GitHub later</span></li>
-          <li><span><code>SELF-IMPROVE-README.md</code>, a summary of what was just installed</span></li>
-        </ul>
+        <p>
+          Press Enter to accept a suggested answer. It writes
+          <code>project-adapter.yml</code> (all the settings in one file),
+          <code>.claude/agents/improve.md</code> and <code>review.md</code> (the
+          two brief files), the GitHub workflow, and
+          <code>SELF-IMPROVE-README.md</code>.
+        </p>
       </li>
-
       <li>
         <h3>Fill in the two brief files</h3>
-        <p>Open <code>.claude/agents/improve.md</code> and <code>review.md</code> and replace
-        every <code>[bracketed placeholder]</code> with real answers about your project. This is
-        the most important step. The AI only knows what "better" means for your project if you
-        tell it here.</p>
-        <p class="expect">Your AI assistant can draft this. There's a ready-made prompt in
-        <a href="#ask">Ask your AI assistant</a> below, but read what it writes before you keep it.</p>
+        <p>
+          Open <code>.claude/agents/improve.md</code> and <code>review.md</code>
+          and replace every <code>[bracketed placeholder]</code> with real
+          answers about your project. This is the most important step: the AI
+          only knows what "better" means if you say so here. Your AI assistant
+          can draft it (see <a href="#ask">Ask your AI assistant</a>), but read
+          what it writes.
+        </p>
       </li>
-
       <li>
         <h3>Check your settings</h3>
         <div class="cmd"><pre>node harness/scripts/validate.mjs</pre></div>
-        <p class="expect">This catches mistakes before they cost anything, like a file path that
-        doesn't exist or a placeholder you forgot to fill in. Fix what it lists and run it again
-        until it passes.</p>
+        <p>
+          This catches mistakes before they cost anything, like a path that
+          doesn't exist or a placeholder you missed. Fix what it lists and run it
+          again until it passes.
+        </p>
       </li>
-
       <li>
         <h3>Do a practice run</h3>
         <div class="cmd"><pre>node --env-file=.env harness/scripts/rehearse.mjs</pre></div>
-        <p class="expect">This runs the whole loop on your computer, on a new local branch. Normally
-        it waits for a newly released model, so on the first run it usually finds nothing, spends
-        nothing and stops. That's expected. To try it right away with a model you choose:</p>
+        <p>
+          This runs the whole loop on your computer, on a new local branch. It
+          normally waits for a newly released model, so the first run usually
+          finds nothing and stops, which is expected. To try a model right away:
+        </p>
         <div class="cmd"><pre>node --env-file=.env harness/scripts/rehearse.mjs --models claude-opus-5</pre></div>
-        <p class="expect">It never pushes, opens a pull request or merges. You end up with a local
-        branch you can look at, keep or delete.</p>
+        <p>It never pushes, opens a pull request or merges.</p>
       </li>
-
       <li>
         <h3>Optional: run it on GitHub automatically</h3>
-        <p>When a practice run looks good, the generated workflow can run the same loop on GitHub
-        every month. That needs your keys added as GitHub secrets and one repository setting
-        turned on. The steps are in the README, under
-        <a href="https://github.com/Chrisfoz/self-optimisation#step-5--github-setup-repository-secrets" target="_blank" rel="noopener">Getting started, Steps 5–7</a>.</p>
+        <p>
+          When a practice run looks good, the generated workflow can run the
+          same loop on GitHub. The steps are in the README, under
+          <a href="https://github.com/Chrisfoz/self-optimisation#step-5--github-setup-repository-secrets">Getting started, Steps 5–7</a>.
+        </p>
       </li>
     </ol>
   </section>
 
   <section id="configure">
     <h2>Make it yours: where everything is configured</h2>
-    <p>Everything you'd want to change is in one clearly named place. Find what
-    you want in the left column and open the file on the right.</p>
-    <div class="scroll-x">
-      <table class="where">
+    <p>Find what you want to change on the left, then open the file on the right.</p>
+    <div class="table-scroll">
+      <table>
         <tr><th>I want to…</th><th>Change this</th></tr>
-        <tr><td><span class="tag fe">Frontend</span>Add, rename or remove a menu link</td><td><code>console/partials/nav.html</code></td></tr>
-        <tr><td><span class="tag fe">Frontend</span>Change the footer</td><td><code>console/partials/footer.html</code></td></tr>
-        <tr><td><span class="tag fe">Frontend</span>Edit the text on a page</td><td>That page's file in <code>console/</code>, such as <code>about.html</code> or <code>how-to-run.html</code></td></tr>
-        <tr><td><span class="tag fe">Frontend</span>Add a new page</td><td>Create <code>console/my-page.html</code>, then add one line to <code>PAGES</code> in <code>console/server.mjs</code>. Put <code>&lt;!-- include:nav --&gt;</code> and <code>&lt;!-- include:footer --&gt;</code> in the page wherever you want the menu and footer to appear.</td></tr>
-        <tr><td><span class="tag fe">Frontend</span>Use a different port than 3000</td><td>Set <code>PORT</code> when starting. Mac/Linux: <code>PORT=8080 npm start</code>. Windows PowerShell: <code>$env:PORT=8080; npm start</code></td></tr>
-        <tr><td><span class="tag fe">Frontend</span>Put it online</td><td><code>railway.json</code> is ready for Railway. Any host that runs <code>npm start</code> works, and <code>/healthz</code> is the health-check address.</td></tr>
-        <tr><td><span class="tag be">Backend</span>Choose which AI labs to use</td><td><code>project-adapter.yml</code> → <code>providers.watched</code></td></tr>
-        <tr><td><span class="tag be">Backend</span>Choose which files may and may never be changed</td><td><code>project-adapter.yml</code> → <code>constitution</code></td></tr>
-        <tr><td><span class="tag be">Backend</span>Choose how big each change may be</td><td><code>project-adapter.yml</code> → <code>context.ambition</code> (<code>focused</code>, <code>earned</code> or <code>ambitious</code>)</td></tr>
-        <tr><td><span class="tag be">Backend</span>Set a spending cap per run</td><td><code>project-adapter.yml</code> → <code>budget.max_generation_tokens</code></td></tr>
-        <tr><td><span class="tag be">Backend</span>Explain what "better" means</td><td><code>.claude/agents/improve.md</code></td></tr>
-        <tr><td><span class="tag be">Backend</span>Add or change API keys</td><td><code>.env</code> on your computer; <b>Settings → Secrets</b> on GitHub</td></tr>
+        <tr><td><span class="tag">Frontend</span> Add, rename or remove a menu link</td><td><code>console/partials/nav.html</code></td></tr>
+        <tr><td><span class="tag">Frontend</span> Change the footer</td><td><code>console/partials/footer.html</code></td></tr>
+        <tr><td><span class="tag">Frontend</span> Change colours, fonts or spacing</td><td><code>console/console.css</code></td></tr>
+        <tr><td><span class="tag">Frontend</span> Edit a page's text</td><td>That page's file in <code>console/</code>, such as <code>about.html</code> or <code>how-to-run.html</code></td></tr>
+        <tr><td><span class="tag">Frontend</span> Add a new page</td><td>Copy <code>console/how-to-run.html</code> as a starting point, then add one line to <code>PAGES</code> in <code>console/server.mjs</code>. The <code>&lt;!-- include:nav --&gt;</code> and <code>&lt;!-- include:footer --&gt;</code> lines are where the header and footer appear.</td></tr>
+        <tr><td><span class="tag">Frontend</span> Use a port other than 3000</td><td>Mac/Linux: <code>PORT=8080 npm start</code>. Windows PowerShell: <code>$env:PORT=8080; npm start</code></td></tr>
+        <tr><td><span class="tag">Frontend</span> Let the installer sign in to GitHub</td><td>The variables in <code>console/.env.example</code>, set up as described in <code>console/DEPLOYMENT.md</code></td></tr>
+        <tr><td><span class="tag">Frontend</span> Put it online</td><td><code>railway.json</code> is ready for Railway. Any host that runs <code>npm start</code> works; the health check is <code>/healthz</code>.</td></tr>
+        <tr><td><span class="tag backend">Backend</span> Choose which AI labs to use</td><td><code>project-adapter.yml</code> → <code>providers.watched</code></td></tr>
+        <tr><td><span class="tag backend">Backend</span> Choose which files may and may never change</td><td><code>project-adapter.yml</code> → <code>constitution</code></td></tr>
+        <tr><td><span class="tag backend">Backend</span> Choose how big each change may be</td><td><code>project-adapter.yml</code> → <code>context.ambition</code> (<code>focused</code>, <code>earned</code> or <code>ambitious</code>)</td></tr>
+        <tr><td><span class="tag backend">Backend</span> Cap the tokens spent per run</td><td><code>project-adapter.yml</code> → <code>budget.max_generation_tokens</code></td></tr>
+        <tr><td><span class="tag backend">Backend</span> Explain what "better" means</td><td><code>.claude/agents/improve.md</code></td></tr>
+        <tr><td><span class="tag backend">Backend</span> Add or change API keys</td><td><code>.env</code> on your computer; <b>Settings → Secrets</b> on GitHub</td></tr>
+        <tr><td><span class="tag backend">Backend</span> Update the models the installer offers</td><td><code>node --env-file=.env harness/scripts/refresh-model-catalogue.mjs</code>, which rewrites <code>harness/data/model-catalogue.json</code></td></tr>
       </table>
     </div>
-    <p style="margin-top:14px">After changing <code>project-adapter.yml</code>, run
-    <code>node harness/scripts/validate.mjs</code> again. Every setting is explained in
-    <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/harness/project-adapter.example.yml" target="_blank" rel="noopener">the example adapter file</a>.</p>
+    <p style="margin-top: 16px">
+      After changing <code>project-adapter.yml</code>, run
+      <code>node harness/scripts/validate.mjs</code> again. Every setting is
+      explained in
+      <a href="https://github.com/Chrisfoz/self-optimisation/blob/main/harness/project-adapter.example.yml">the example adapter file</a>.
+    </p>
   </section>
 
   <section id="ask">
     <h2>Ask your AI assistant</h2>
-    <p>If you build with Claude Code, Cursor or a similar tool, open the right
-    folder and paste one of these. Each one tells the assistant what to read
-    first and where to stop and check with you.</p>
+    <p>
+      If you build with Claude Code, Cursor or a similar tool, open the right
+      folder and paste one of these. Each one says what to read first and when
+      to stop and check with you.
+    </p>
     <div class="prompts">
       <div class="cmd"><span class="label">Run the website</span><pre>I've downloaded the self-optimisation repository from GitHub. Read README.md and console/how-to-run.html, then walk me through running the website locally, one step at a time. Check that my Node version is 22.11 or newer before anything else, and ask before installing anything.</pre></div>
-      <div class="cmd"><span class="label">Set up the harness on my project</span><pre>I've copied the harness/ folder from self-optimisation into this project. Following harness/project-adapter.example.yml, help me fill in project-adapter.yml and .claude/agents/improve.md from what you can actually see in this codebase. Only list file paths that really exist, use my real test command, and then run node harness/scripts/validate.mjs and fix what it reports. Don't touch .env.</pre></div>
-      <div class="cmd"><span class="label">Add a page to the website</span><pre>In the self-optimisation repository, add a new page to the console called "Changelog". Copy the structure of console/how-to-run.html, including its include:nav and include:footer markers, add the route to PAGES in console/server.mjs, and add a link in console/partials/nav.html. Then run npm test and show me the result.</pre></div>
+      <div class="cmd"><span class="label">Set up the harness on my project</span><pre>I've copied the harness/ folder from self-optimisation into this project. Following harness/project-adapter.example.yml, help me fill in project-adapter.yml and .claude/agents/improve.md from what you can actually see in this codebase. Only list file paths that really exist, use my real test command, then run node harness/scripts/validate.mjs and fix what it reports. Don't touch .env.</pre></div>
+      <div class="cmd"><span class="label">Add a page to the website</span><pre>In the self-optimisation repository, add a new page called "Changelog". Copy the structure of console/how-to-run.html, including its include:nav and include:footer markers and the console.css stylesheet link, add the route to PAGES in console/server.mjs, and add a link in console/partials/nav.html. Don't use inline scripts, because the server's security policy blocks them. Then run npm test and show me the result.</pre></div>
     </div>
   </section>
 
@@ -447,9 +424,11 @@ details p { font-size:14.5px; }
     <h2>If something goes wrong</h2>
     <details>
       <summary>"node" or "npm" is not recognized / command not found</summary>
-      <p>Node isn't installed, or your terminal was opened before you installed it. Install the
-      LTS version from <a href="https://nodejs.org" target="_blank" rel="noopener">nodejs.org</a>,
-      then quit your editor completely and open it again.</p>
+      <p>
+        Node isn't installed, or your terminal was opened before you installed
+        it. Install the LTS version from <a href="https://nodejs.org">nodejs.org</a>,
+        then quit your editor completely and open it again.
+      </p>
     </details>
     <details>
       <summary>Windows: "running scripts is disabled on this system"</summary>
@@ -459,57 +438,54 @@ details p { font-size:14.5px; }
     </details>
     <details>
       <summary>"EADDRINUSE" when running npm start</summary>
-      <p>Something else is already using port 3000, possibly an earlier copy of this site you
-      didn't stop. Close that terminal, or start on another port as shown in
-      <a href="#configure">Make it yours</a>.</p>
+      <p>
+        Something else is using port 3000, possibly an earlier copy of this site
+        you didn't stop. Close that terminal, or use another port as shown in
+        <a href="#configure">Make it yours</a>.
+      </p>
+    </details>
+    <details>
+      <summary>The installer says GitHub sign-in isn't configured</summary>
+      <p>
+        That's expected on your own computer. Every step and the download still
+        work (Way A). Connecting to GitHub needs a GitHub App of your own; see
+        <code>console/DEPLOYMENT.md</code>.
+      </p>
     </details>
     <details>
       <summary>"Cannot find package 'js-yaml'"</summary>
-      <p>Run <code>npm install</code> in this repository (Part 1, Step 4). If the error comes from
-      your own project, run the command from Part 2, Step 3 there.</p>
+      <p>
+        Run <code>npm install</code> in this repository (Part 1, step 4). If the
+        error comes from your own project, run the command from Way B, step 3
+        there.
+      </p>
     </details>
     <details>
-      <summary>The page says "Not found"</summary>
-      <p>The server only serves pages listed in <code>PAGES</code> in <code>console/server.mjs</code>,
-      so a new page needs a line there. After any change to the website's files, stop the server
-      with Ctrl + C and run <code>npm start</code> again, because pages are loaded once at startup.</p>
+      <summary>A page says "Not found", or a change doesn't show up</summary>
+      <p>
+        The server only serves pages listed in <code>PAGES</code> in
+        <code>console/server.mjs</code>, and it loads every page once at startup.
+        After changing a website file, press Ctrl + C and run
+        <code>npm start</code> again.
+      </p>
     </details>
     <details>
-      <summary>npm test fails straight away with "Could not find" or a strange file name</summary>
-      <p>Your Node version is probably too old. Run <code>node --version</code>, and if it's
-      below 22.11, install the current LTS.</p>
+      <summary>npm test fails straight away with a strange file name</summary>
+      <p>
+        Your Node version is probably too old. Run <code>node --version</code>,
+        and if it's below 22.11, install the current LTS.
+      </p>
     </details>
     <details>
       <summary>The practice run says "no new models" and stops</summary>
-      <p>That's expected. The first time it sees a lab, it records that lab's current models
-      and waits for a new one. Add <code>--models claude-opus-5</code> (or another model your
-      key can use) to try one straight away.</p>
+      <p>
+        That's expected. The first time it sees a lab, it records that lab's
+        current models and waits for a new one. Add
+        <code>--models claude-opus-5</code> (or another model your key can use)
+        to try one straight away.
+      </p>
     </details>
   </section>
-
-  <!-- include:footer -->
-</div>
-
-<script>
-(() => {
-  "use strict";
-  // Give every command box a Copy button. Plain text stays selectable either way.
-  for (const box of document.querySelectorAll(".cmd")) {
-    const pre = box.querySelector("pre");
-    if (!pre) continue;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = "Copy";
-    btn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(pre.textContent);
-        btn.textContent = "Copied";
-      } catch {
-        btn.textContent = "Select & copy";
-      }
-      setTimeout(() => { btn.textContent = "Copy"; }, 1600);
-    });
-    box.appendChild(btn);
-  }
-})();
-</script>
+</main>
+<!-- include:footer -->
+<script type="module" src="/assets/how-to-run.mjs"></script>

@@ -52,7 +52,7 @@ set up in one place:
 
 | Half | Folder | What it is | Configured in |
 |---|---|---|---|
-| **Frontend** | `console/` | The website: what the project does, how to run it, the console wireframe, the privacy policy | Page files in `console/`; the shared nav and footer in `console/partials/nav.html` and `footer.html`; routes in `PAGES` in `console/server.mjs`; the port with `PORT` |
+| **Frontend** | `console/` | The website: what the project does, how to run it, the ten-step installer, the privacy policy | Page files in `console/`; the shared header and footer in `console/partials/nav.html` and `footer.html`; routes in `PAGES` in `console/server.mjs`; styling in `console/console.css`; the port with `PORT`; GitHub sign-in (optional) with the variables in `console/.env.example` |
 | **Backend** | `harness/` | The loop that asks each new model to improve a project, gates the change, and opens a pull request | `project-adapter.yml` (labs, editable paths, ambition, budget) and `.env` (API keys) in the project you install it into |
 
 The quick version, with [Node.js 22.11+](https://nodejs.org) installed:
@@ -72,8 +72,12 @@ harness into your own project, where each setting lives, prompts you can
 paste into Claude Code or Cursor, and fixes for the usual errors. The section
 below is the same backend setup in more depth.
 
-To host the website somewhere else, `railway.json` is set up for Railway, and
-any host that runs `npm start` works, with `/healthz` as the health check.
+All ten installer steps, and downloading the files they generate, work
+locally with no further setup. Connecting the installer to GitHub, so it can
+read your repository and open the setup pull request, needs a GitHub App of
+your own; [`console/DEPLOYMENT.md`](console/DEPLOYMENT.md) covers it. To host
+the website somewhere else, `railway.json` is set up for Railway, and any
+host that runs `npm start` works, with `/healthz` as the health check.
 
 ---
 
@@ -199,6 +203,21 @@ time. Don't add `.agent/` to `.gitignore`; that's the one directory in this
 walkthrough that's the opposite of `.env` — it holds no secrets and it
 *must* travel with the repo. `examples/workflows/watch-releases.yml`
 already commits it automatically as part of the workflow (Step 6 below).
+
+The same snapshot is what the console's model picker reads when you connect
+a repository: it is the only live list of models your account can actually
+call that ever reaches a browser, because the console holds no lab key. To
+refresh the shorter list the console ships with instead — for a deploy of
+your own — run
+
+```bash
+node --env-file=.env harness/scripts/refresh-model-catalogue.mjs
+```
+
+which lists every lab you hold a key for and rewrites
+[`harness/data/model-catalogue.json`](harness/data/model-catalogue.json). A
+lab with no key keeps whatever that file already had rather than being
+emptied.
 
 **Optional but recommended once you're past trying it once:** rather than
 repeating `--providers` on every invocation, copy
@@ -485,7 +504,7 @@ what comes next and why.
 | The academic framing — the ten-component kernel, research questions, threat model, related work | [`Model-Release-Driven-Software-Improvement-Paper-Outline.md`](Model-Release-Driven-Software-Improvement-Paper-Outline.md) |
 | The research corpus this draws on (AlphaEvolve, Darwin Gödel Machine, self-rewarding/self-adapting LMs, harness engineering) | [`docs/`](docs/), indexed in [`docs/SOURCES.md`](docs/SOURCES.md) |
 | A proposal for a second longitudinal pass — one that asks what the project still doesn't understand about itself, rather than what pattern is repeating | [`docs/Curiosity-Engine-Design.md`](docs/Curiosity-Engine-Design.md), with a build spec per component in [`docs/curiosity/`](docs/curiosity/) |
-| A proposal for a browser-based install flow — connect, configure, store keys, open the PR, rehearse — instead of running `init.mjs` by hand | [`console/DESIGN.md`](console/DESIGN.md) |
+| The working browser installer, its deployment requirements and limitations | [`console/DEPLOYMENT.md`](console/DEPLOYMENT.md), [`console/IMPLEMENTATION.md`](console/IMPLEMENTATION.md) |
 | An outside review of the concept and the code, a SWOT, and the workplan additions it proposes to run this as a product | [`docs/Review-SWOT-2026-09.md`](docs/Review-SWOT-2026-09.md) |
 | Whether the models should get tools — MCP, a renderer, a physics engine — which of the three kinds is worth building, and the per-seat rules that keep a gate a gate | [`docs/Tool-Use-Design.md`](docs/Tool-Use-Design.md) |
 | A second review, two days later, and a proposed six-phase plan for a tenfold improvement against the portable-harness objective — reach, yield, magnitude, trust, each with a number to move | [`docs/Review-10x-2026-09.md`](docs/Review-10x-2026-09.md) |
@@ -497,14 +516,14 @@ This repository is really three things at three different stages, meant to
 compose into one journey — read this before the per-piece docs above so the
 status marks below don't read as contradictions:
 
-1. **Install** (🚧 proposed): a user goes to the console, connects a repo,
-   and fills in a form. `console/DESIGN.md` designs this; the front end
-   itself doesn't exist. What the console would generate — a filled
-   `project-adapter.yml` and a working `.github/workflows/` file — is
-   already real code, though: `harness/lib/scaffold.mjs`, driven today by
-   `harness/cli/init.mjs`'s terminal prompts rather than a web form. The
-   console's real remaining work is a browser front end for a generator
-   that already exists, not the generator itself.
+1. **Install** (implemented; deployment configuration required): the console
+   provides ten setup steps backed by the real generator, complete bundle
+   downloads, GitHub App sign-in, repository discovery, secret-name checks,
+   setup PR creation, rehearsal dispatch and gate-based activation PRs. Keys
+   are entered directly on GitHub, never in the console. GitHub operations
+   require the App variables in [`console/DEPLOYMENT.md`](console/DEPLOYMENT.md).
+   Automated integration tests use fake GitHub responses; a live authenticated
+   acceptance run is still required. Existing installations are not overwritten.
 2. **Run** (✅ built): the generated workflow validates the adapter, checks
    the watched labs, and once a new model appears runs the real suggest →
    implement → review → refine → guard → test → **pull request** → notify
@@ -543,15 +562,10 @@ repository controls, and if either stops being true the loop quietly stops
 proposing anything — which is the correct behaviour, not a failure. So it's
 worth checking the bet against outside data rather than asserting it.
 
-**Are they still shipping?** The console's
-[about page](console/about.html) embeds a live release-cadence chart from
-[AI Release Tracker](https://aireleasetracker.com/analytics?utm_source=embed&utm_medium=referral&utm_campaign=releases-by-lab)
-— an independent third party, not affiliated with this project. It's an
-`<iframe>`, so it renders there and not here: GitHub strips iframes from
-markdown, and a screenshot pasted into this file would be a hand-maintained
-copy that rots silently, which is exactly what
-[`learning/01-principles.md`](learning/01-principles.md) principle 23
-("generate the record; never hand-maintain it") warns against.
+**Are they still shipping?** [AI Release Tracker](https://aireleasetracker.com/analytics)
+provides an independent release-cadence view. The redesigned console explains
+its own behaviour without embedding a third-party tracker or maintaining a
+copy of its changing figures.
 
 **Are they getting better in the way that matters here?** The most useful
 public measure is METR's **50% task-completion time horizon**: how long a
@@ -610,19 +624,16 @@ self_optimisation/
 │                                     # campaigns/ — real-model runs written up with their
 │                                     # records, and curiosity/ — a second longitudinal
 │                                     # pass, 4 of its 10 components built, the rest gated on A'
-├── console/                         # the frontend, and a proposed browser-based install
-│                                     # flow — how-to-run.html is the local setup guide;
-│                                     # partials/ holds the nav and footer every page
-│                                     # includes; about/mockup/privacy.html and DESIGN.md
-│                                     # are design and wireframe, not built; server.mjs, the one
-│                                     # service that hosts it (`npm start`, railway.json),
-│                                     # is BUILT and serves those pages; its Supabase schema
-│                                     # (console/supabase/migrations/) is BUILT and live,
-│                                     # but optional — DESIGN.md §11
+├── console/                         # working ten-step installer, HTTP API,
+│                                     # GitHub App flow, pages and deployment guide;
+│                                     # how-to-run.html is the local setup guide, and
+│                                     # partials/ holds the header and footer every
+│                                     # page includes; optional legacy Supabase
+│                                     # schema, not required
 ├── tests/                           # tests for the harness's OWN code (see above)
 │   ├── lib/                         # one file per harness/lib/ module
 │   ├── scripts/                     # the CLIs, driven as real child processes
-│   ├── console/                     # the console's server, over real HTTP
+│   ├── console/                     # configuration, GitHub boundary and real HTTP tests
 │   └── e2e/                         # the whole chain, real git, real test runs
 ├── learning/                        # principles, blueprint, failure modes,
 │                                     # starter kit, diagrams — ported from the
@@ -676,3 +687,4 @@ counts: point at the command, don't hand-copy the number
 `Portable-Harness-Design.md` §10 has the build order and its revision log;
 `ARCHITECTURE.md` has the two diagrams showing how these pieces actually
 run.
+
