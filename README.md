@@ -43,6 +43,44 @@ example. See [`WORKPLAN.md`](WORKPLAN.md) Tier 6. See
 
 ---
 
+## Download and run it locally
+
+**This project is for downloading from GitHub and running on your own
+computer.** Nothing is hosted for you: you clone it (or download the ZIP),
+run it locally, and change whatever you like. It has two halves, and each is
+set up in one place:
+
+| Half | Folder | What it is | Configured in |
+|---|---|---|---|
+| **Frontend** | `console/` | The website: what the project does, how to run it, the ten-step installer, the privacy policy | Page files in `console/`; the shared header and footer in `console/partials/nav.html` and `footer.html`; routes in `PAGES` in `console/server.mjs`; styling in `console/console.css`; the port with `PORT`; GitHub sign-in (optional) with the variables in `console/.env.example` |
+| **Backend** | `harness/` | The loop that asks each new model to improve a project, gates the change, and opens a pull request | `project-adapter.yml` (labs, editable paths, ambition, budget) and `.env` (API keys) in the project you install it into |
+
+The quick version, with [Node.js 22.11+](https://nodejs.org) installed:
+
+```bash
+git clone https://github.com/Chrisfoz/self-optimisation.git
+cd self-optimisation
+npm install
+npm start          # then open http://localhost:3000
+```
+
+**New to this, or building with an AI assistant?** Open
+**http://localhost:3000/how-to-run** once it's running (the source is
+[`console/how-to-run.html`](console/how-to-run.html)). It covers every step
+in plain language: downloading the project, running the website, putting the
+harness into your own project, where each setting lives, prompts you can
+paste into Claude Code or Cursor, and fixes for the usual errors. The section
+below is the same backend setup in more depth.
+
+All ten installer steps, and downloading the files they generate, work
+locally with no further setup. Connecting the installer to GitHub, so it can
+read your repository and open the setup pull request, needs a GitHub App of
+your own; [`console/DEPLOYMENT.md`](console/DEPLOYMENT.md) covers it. To host
+the website somewhere else, `railway.json` is set up for Railway, and any
+host that runs `npm start` works, with `/healthz` as the health check.
+
+---
+
 ## Getting started
 
 This walks through installing the harness into **your own project** — not
@@ -587,8 +625,11 @@ self_optimisation/
 │                                     # records, and curiosity/ — a second longitudinal
 │                                     # pass, 4 of its 10 components built, the rest gated on A'
 ├── console/                         # working ten-step installer, HTTP API,
-│                                     # GitHub App flow, pages and deployment guide
-│                                     # optional legacy Supabase schema; not required
+│                                     # GitHub App flow, pages and deployment guide;
+│                                     # how-to-run.html is the local setup guide, and
+│                                     # partials/ holds the header and footer every
+│                                     # page includes; optional legacy Supabase
+│                                     # schema, not required
 ├── tests/                           # tests for the harness's OWN code (see above)
 │   ├── lib/                         # one file per harness/lib/ module
 │   ├── scripts/                     # the CLIs, driven as real child processes

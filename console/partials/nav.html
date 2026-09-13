@@ -1,0 +1,17 @@
+<!-- The site header, shared by every page. console/server.mjs inlines this
+     file wherever a page carries the include:nav marker, and marks the link
+     for the page being served with aria-current. To add a page to the menu,
+     add a link here and its route to PAGES in server.mjs. Styles: .topbar in
+     console.css. -->
+<header class="topbar">
+  <a class="brand" href="/" aria-label="Self-Optimisation home"
+    ><span class="brand-mark">S↗</span> Self-Optimisation</a
+  >
+  <nav aria-label="Site">
+    <a href="/">What it does</a
+    ><a href="/how-to-run">How to run</a
+    ><a href="/console">Console</a
+    ><a href="/privacy">Privacy</a
+    ><a href="https://github.com/Chrisfoz/self-optimisation">GitHub ↗</a>
+  </nav>
+</header>

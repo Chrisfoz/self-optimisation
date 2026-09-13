@@ -4,6 +4,11 @@
  * One Node service for the console, generator API and GitHub App user flow.
  * Explicit page/asset/API routes only: source, migrations and environment files
  * are never served. The console generates configuration; GitHub Actions runs it.
+ *
+ * Pages are body fragments (no <html>, no <head>). The site header and footer
+ * are not in them: each lives once in console/partials/, and a page marks where
+ * it goes with an `<!-- include:nav -->` or `<!-- include:footer -->` comment.
+ * renderPage() inlines them and marks the link to the page being served.
  */
 
 import fs from "node:fs";
@@ -15,12 +20,21 @@ import { harnessVersion } from "../harness/lib/version.mjs";
 
 const CONSOLE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
-/** Route → page fragment in console/. The only files this server will ever read. */
+/** Route → page fragment in console/. With PARTIALS, the only files this server will ever read. */
 export const PAGES = {
   "/": "about.html",
+  "/how-to-run": "how-to-run.html",
   "/console": "mockup.html",
   "/privacy": "privacy.html",
 };
+
+/** Markup every page shares, kept in one file each and pulled in by an include marker. Never served on its own. */
+export const PARTIALS = {
+  nav: "partials/nav.html",
+  footer: "partials/footer.html",
+};
+
+const INCLUDE_MARKER = /<!--\s*include:([\w-]+)\s*-->/g;
 
 /** The artifact each page is also published as, so its links can point here instead. */
 export const ARTIFACT_ROUTES = {
@@ -38,9 +52,18 @@ const SECURITY_HEADERS = {
   "permissions-policy": "camera=(), microphone=(), geolocation=()",
 };
 
-/** Wrap an artifact body fragment in the artifact host's skeleton, with local links. */
-export function renderPage(fragment) {
-  const body = fragment.replace(
+/**
+ * Assemble a page: inline its partials, mark the link to `route` as the
+ * current page, wrap it in the artifact host's skeleton, and localise links.
+ * An include naming a partial that doesn't exist throws — at boot, since
+ * createConsoleServer() renders every page up front.
+ */
+export function renderPage(fragment, { route, partials = {} } = {}) {
+  const assembled = fragment.replace(INCLUDE_MARKER, (marker, name) => {
+    if (!Object.hasOwn(partials, name)) throw new Error(`page includes unknown partial "${name}"`);
+    return route ? partials[name].replaceAll(`href="${route}"`, `href="${route}" aria-current="page"`) : partials[name];
+  });
+  const body = assembled.replace(
     /https:\/\/claude\.ai\/code\/artifact\/([0-9a-f-]{36})/g,
     (url, id) => ARTIFACT_ROUTES[id] ?? url,
   );
@@ -70,10 +93,14 @@ export function createConsoleServer({
   fetchImpl = fetch,
   sessions,
 } = {}) {
+  const read = (file) => fs.readFileSync(path.join(dir, file), "utf8");
+  const partials = Object.fromEntries(
+    Object.entries(PARTIALS).map(([name, file]) => [name, read(file)]),
+  );
   const rendered = new Map(
     Object.entries(PAGES).map(([route, file]) => [
       route,
-      renderPage(fs.readFileSync(path.join(dir, file), "utf8")),
+      renderPage(read(file), { route, partials }),
     ]),
   );
   const health = JSON.stringify({ ok: true, harness: version });
@@ -83,6 +110,7 @@ export function createConsoleServer({
     [
       ["/assets/console.css", ["text/css; charset=utf-8", "console.css"]],
       ["/assets/app.mjs", ["text/javascript; charset=utf-8", "app.mjs"]],
+      ["/assets/how-to-run.mjs", ["text/javascript; charset=utf-8", "how-to-run.mjs"]],
     ].map(([route, [type, file]]) => [
       route,
       { type, body: fs.readFileSync(path.join(dir, file), "utf8") },

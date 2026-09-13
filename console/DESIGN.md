@@ -14,9 +14,12 @@ user-token sign-in replaces the proposed Supabase/installation-token bridge.
 The full harness is included in setup; reusable workflows and App manifest
 registration remain future work. Live authenticated acceptance is outstanding.
 
-The pages are `about.html`, `mockup.html` (the retained filename now serves the
-working installer) and `privacy.html`, with shared styling in `console.css` and
-browser behaviour in `app.mjs`.
+The pages are `about.html`, `how-to-run.html` (step-by-step local setup),
+`mockup.html` (the retained filename now serves the working installer) and
+`privacy.html`, with shared styling in `console.css` and browser behaviour in
+`app.mjs`. None carries its own header or footer: each lives once in
+[`partials/`](partials/), and the server inlines it wherever a page has an
+`<!-- include:nav -->` or `<!-- include:footer -->` marker.
 
 ## 1. The idea, restated
 
@@ -993,7 +996,7 @@ The order, each step usable on its own:
 
 | Step | Deliverable | State |
 |---|---|---|
-| 1 | The service, serving the three pages, on Railway | ✅ built (`console/server.mjs`, `tests/console/server.test.mjs`); not yet deployed |
+| 1 | The service, serving the four pages, on Railway | ✅ built (`console/server.mjs`, `tests/console/server.test.mjs`); not yet deployed |
 | 2 | GitHub App via the manifest flow; sign-in; repository and branch picker | — |
 | 3 | The reusable workflow (§3) | — |
 | 4 | The nine steps, sealed-box secrets (§2.2), the setup PR, Run, the run view (§8.4) | — |

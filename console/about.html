@@ -5,16 +5,7 @@
 />
 <link rel="stylesheet" href="/assets/console.css" />
 <a class="skip" href="#main">Skip to content</a>
-<header class="topbar">
-  <a class="brand" href="/" aria-label="Self-Optimisation home"
-    ><span class="brand-mark">S↗</span> Self-Optimisation</a
-  >
-  <nav aria-label="Site">
-    <a href="/" aria-current="page">What it does</a
-    ><a href="/console">Console</a><a href="/privacy">Privacy</a
-    ><a href="https://github.com/Chrisfoz/self-optimisation">GitHub ↗</a>
-  </nav>
-</header>
+<!-- include:nav -->
 <main id="main">
   <section class="hero wrap">
     <div>
@@ -23,9 +14,10 @@
       </p>
       <h1>New models.<br />Better software.<br /><em>Your rules.</em></h1>
       <p class="hero-copy">
-        When a new AI model arrives, give it a turn to improve your project.
-        Keep the change only after independent review, protected-path checks and
-        your own tests.
+        We bet on the curve. Frontier labs ship new models every few weeks, and
+        each one is a fresh chance to improve your project. Give every new model
+        a turn, and keep a change only after independent review,
+        protected-path checks and your own tests.
       </p>
       <div class="button-row">
         <a class="button primary" href="/console"
@@ -79,16 +71,26 @@
   </section>
   <section class="principles wrap" aria-label="Core principles">
     <div>
-      <b>Release-driven</b>
-      <p>Checks on your schedule. Proposes when an unseen model is detected.</p>
+      <b>Release-driven, and automatic</b>
+      <p>
+        Checks on your schedule, so no release is missed. Watch your project
+        improve against your goal, run after run.
+      </p>
     </div>
     <div>
-      <b>Bounded by design</b>
-      <p>You define what may change, what stays protected and the test gate.</p>
+      <b>Your rules stay yours</b>
+      <p>
+        You set what may change and what stays protected. A model can argue a
+        rule is wrong, but can't change it. When models from different labs
+        agree, you decide.
+      </p>
     </div>
     <div>
-      <b>A record, every time</b>
-      <p>Failed attempts and shipped changes both inform the next run.</p>
+      <b>A record of success and failure</b>
+      <p>
+        Every run writes down what it tried, including what didn't ship, and
+        the next run reads it back.
+      </p>
     </div>
   </section>
   <section id="how" class="wrap section">
@@ -150,8 +152,8 @@
           <span class="tag">Rotating</span>
           <h3>The suggester</h3>
           <p>
-            A newly detected model offers its perspective. Your selected labs
-            determine who can propose.
+            The newest model from the labs you select proposes the change, so
+            every run benefits from the latest improvements in the field.
           </p>
         </article>
         <article>
@@ -266,8 +268,4 @@
     <a class="button primary" href="/console">Configure your repository ↗</a>
   </section>
 </main>
-<footer class="wrap footer">
-  <span>Self-Optimisation · MIT licensed</span
-  ><a href="https://github.com/Chrisfoz/self-optimisation">Source</a
-  ><a href="/privacy">Privacy</a>
-</footer>
+<!-- include:footer -->
