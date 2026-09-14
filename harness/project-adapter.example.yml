@@ -427,6 +427,12 @@ deployment:
 #     repository: Chrisfoz/self-optimisation
 #     ref: <full 40-character commit sha>
 #     label: <v0.1.0>                # optional, shown beside the pin
+#
+# One limit to know: a module path in evaluation.evaluators is resolved from
+# your project's root, and a shared installation has no harness/ there, so
+# the shipped example (harness/plugins/evaluators/...) cannot be named by that
+# path. Copy the plugin into your project and point at the copy. Evaluators
+# never gate, so a plugin that fails to load is recorded, not fatal.
 
 # --- LIVE: the same test_commands, run INSIDE the generation -------------
 # After each attempt's edits apply and before the independent review, the

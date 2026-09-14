@@ -4,12 +4,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { shellTestOptions, findBash } from '../helpers/gha-shell.mjs';
 
 // The shared workflow's two project steps, driven as real child processes:
 // read the adapter once and save it, then run the saved commands.
 
 const root = path.join(import.meta.dirname, '../..');
 const script = (name) => path.join(root, 'harness/scripts', name);
+// Running the saved commands needs bash, as the workflow step does; skipped
+// where it is missing, unless REQUIRE_SHELL_TESTS says it must not be.
+const shellOpts = shellTestOptions();
+const bashEnv = shellOpts.skip ? {} : { RUN_PROJECT_COMMANDS_BASH: findBash() };
 
 function sandbox(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'workflow-config-'));
@@ -69,27 +74,46 @@ function savedConfig(dir, config) {
   return file;
 }
 
-test('run-project-commands.mjs runs each command in order from the project root, and stops at the first failure', (t) => {
+test('run-project-commands.mjs runs the commands in order from the project root, and stops at the first failure', shellOpts, (t) => {
   const dir = sandbox(t);
-  const config = savedConfig(dir, {
-    testCommands: [
-      'node -e "require(\'fs\').writeFileSync(\'first\', \'1\')"',
-      'node -e "process.exit(3)"',
-      'node -e "require(\'fs\').writeFileSync(\'third\', \'1\')"',
-    ],
-  });
-  const r = run(dir, 'run-project-commands.mjs', ['test', '--config', config]);
+  const config = savedConfig(dir, { testCommands: ['echo 1 > first', 'exit 3', 'echo 1 > third'] });
+  const r = run(dir, 'run-project-commands.mjs', ['test', '--config', config], bashEnv);
   assert.equal(r.status, 3);
   assert.ok(fs.existsSync(path.join(dir, 'first')));
   assert.ok(!fs.existsSync(path.join(dir, 'third')), 'nothing ran after the failure');
   assert.match(r.stderr, /exited 3/);
 });
 
-test('run-project-commands.mjs: every command passing exits 0', (t) => {
+test('run-project-commands.mjs: a failing command piped into tee fails the gate, as pipefail does in a copied-in workflow', shellOpts, (t) => {
   const dir = sandbox(t);
-  const config = savedConfig(dir, { setupCommands: ['node -e "process.exit(0)"'], testCommands: ['node -e "process.exit(0)"'] });
-  assert.equal(run(dir, 'run-project-commands.mjs', ['setup', '--config', config]).status, 0);
-  assert.equal(run(dir, 'run-project-commands.mjs', ['test', '--config', config]).status, 0);
+  const config = savedConfig(dir, { testCommands: ['(echo "not ok 1"; exit 1) | tee tests.tap'] });
+  const r = run(dir, 'run-project-commands.mjs', ['test', '--config', config], bashEnv);
+  assert.equal(r.status, 1, 'tee exiting 0 must not pass failing tests');
+  assert.match(fs.readFileSync(path.join(dir, 'tests.tap'), 'utf8'), /not ok 1/);
+});
+
+test('run-project-commands.mjs: the commands share one shell, so a cd or export carries to the next line', shellOpts, (t) => {
+  const dir = sandbox(t);
+  fs.mkdirSync(path.join(dir, 'app'));
+  const config = savedConfig(dir, { testCommands: ['cd app', 'export MARK=shared', 'echo "$MARK" > marker'] });
+  const r = run(dir, 'run-project-commands.mjs', ['test', '--config', config], bashEnv);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(fs.readFileSync(path.join(dir, 'app', 'marker'), 'utf8').trim(), 'shared');
+});
+
+test('run-project-commands.mjs: every command passing exits 0', shellOpts, (t) => {
+  const dir = sandbox(t);
+  const config = savedConfig(dir, { setupCommands: ['true'], testCommands: ['true', 'true'] });
+  assert.equal(run(dir, 'run-project-commands.mjs', ['setup', '--config', config], bashEnv).status, 0);
+  assert.equal(run(dir, 'run-project-commands.mjs', ['test', '--config', config], bashEnv).status, 0);
+});
+
+test('run-project-commands.mjs: a saved command spanning lines is refused rather than run as two', (t) => {
+  const dir = sandbox(t);
+  const config = savedConfig(dir, { testCommands: ['true\nrm -rf app'] });
+  const r = run(dir, 'run-project-commands.mjs', ['test', '--config', config], bashEnv);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /no valid test command list/);
 });
 
 test('run-project-commands.mjs: no test commands fails the gate, no setup commands is nothing to do', (t) => {
