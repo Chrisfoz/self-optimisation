@@ -170,7 +170,7 @@ function changed() {
   $("#secret-status").replaceChildren();
   $("#generated").hidden = true;
   $("#validation").replaceChildren();
-  $("#deployment-field").hidden =
+  $("#deployment-field").hidden = $("#auto-merge-notice").hidden =
     $("input[name=approvalClass]:checked").value !== "autonomous-merge";
   if (repo && repo.name !== $("#repository").value) {
     clearRepository();
@@ -272,7 +272,13 @@ function summary() {
     ["Test commands", String(data.testCommands.length)],
     ["Editable patterns", String(data.allowedPaths.length)],
     ["Check cadence", data.cadence],
-    ["Initial mode", "Manual · pull request"],
+    ["First run", "Manual · pull request"],
+    [
+      "After activation",
+      data.approvalClass === "autonomous-merge"
+        ? "Automatic merge (opt-in)"
+        : "Pull request (default)",
+    ],
     ["Token cap", data.maxGenerationTokens.toLocaleString()],
   ];
   $("#summary").replaceChildren(
@@ -803,7 +809,7 @@ async function init() {
   show(0, false);
   await loadModels();
   summary();
-  $("#deployment-field").hidden =
+  $("#deployment-field").hidden = $("#auto-merge-notice").hidden =
     $("input[name=approvalClass]:checked").value !== "autonomous-merge";
   renderConnection();
   const githubResult = new URLSearchParams(location.search).get("github");

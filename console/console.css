@@ -228,51 +228,120 @@ small {
   font-size: 12px;
   white-space: nowrap;
 }
-.run-trigger {
-  display: flex;
-  gap: 16px;
-  padding: 28px 26px 4px;
-  align-items: center;
-}
-.run-trigger h2 {
-  font-size: 23px;
-  margin: 3px 0;
-}
-.signal {
-  display: grid;
-  place-items: center;
-  background: var(--lime);
-  border-radius: 10px;
-  font-size: 30px;
-  width: 55px;
-  height: 55px;
-}
-.run-track {
+/* The hero's run card: one run as a vertical flow, starting from the header's
+   logo, ending in the merge choice. The switch is two radio buttons; :has()
+   shows the outcome that matches, so it needs no script. */
+.flow {
   list-style: none;
   margin: 0;
-  padding: 22px 28px;
+  padding: 24px 26px 8px;
 }
-.run-track li {
-  display: flex;
-  gap: 18px;
-  padding: 18px 0;
+.flow > li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 16px;
+  padding-bottom: 18px;
 }
-.run-track li + li {
-  border-top: 1px solid var(--line);
+.flow > li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 42px;
+  bottom: 2px;
+  width: 2px;
+  background: var(--line);
 }
-.run-track li > span {
-  font:
-    14px ui-monospace,
-    monospace;
+.flow-dot {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--blue);
+  background: #fff;
   color: var(--blue);
-  padding-top: 4px;
+  font:
+    600 14px ui-monospace,
+    monospace;
 }
-.run-track strong {
+.flow small {
+  display: block;
+  letter-spacing: 0.08em;
+}
+.flow strong {
+  display: block;
   font-size: 16px;
+  line-height: 1.35;
 }
-.run-track p {
+.flow p {
   font-size: 14px;
-  margin: 4px 0 0;
+  margin: 2px 0 0;
+}
+.gate-chips {
+  list-style: none;
+  padding: 0;
+  margin: 7px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.gate-chips li {
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 5px;
+  background: #eff9e8;
+  border: 1px solid #c7dfb5;
+  color: #335d19;
+}
+.switch-label {
+  margin: 0 26px 8px;
+}
+.merge-switch {
+  margin: 0 26px 22px;
+  padding: 4px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.merge-switch label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--muted);
+  text-align: center;
+  cursor: pointer;
+}
+.merge-switch label small {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.merge-switch input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.merge-switch label:has(input:checked) {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 1px 3px #12223822;
+}
+.merge-switch label:has(input:focus-visible) {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
 }
 .run-result {
   display: flex;
@@ -281,12 +350,26 @@ small {
   padding: 23px 28px;
   color: white;
 }
+.run-result .outcome {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  color: white;
+}
 .run-result span {
   font:
     12px ui-monospace,
     monospace;
   color: var(--lime);
   margin-bottom: 8px;
+}
+.run-result small {
+  color: #b8c9dc;
+  margin-top: 10px;
+}
+.run-card:has(input[value="review"]:checked) .outcome.auto,
+.run-card:has(input[value="auto"]:checked) .outcome.review {
+  display: none;
 }
 .principles {
   display: grid;
@@ -558,6 +641,10 @@ textarea {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
+}
+.choice-card .tag {
+  margin-left: 8px;
+  vertical-align: 1px;
 }
 .choice-card small {
   display: block;

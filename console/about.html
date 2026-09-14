@@ -1,7 +1,7 @@
 <title>Self-Optimisation — New models. Better software. Your rules.</title>
 <meta
   name="description"
-  content="Give new AI models a turn to improve your repository, with independent review, protected paths and your own tests before a pull request."
+  content="Give new AI models a turn to improve your repository. Changes that pass independent review, protected paths and your own tests wait for you as a pull request, or merge automatically if you opt in."
 />
 <link rel="stylesheet" href="/assets/console.css" />
 <a class="skip" href="#main">Skip to content</a>
@@ -26,46 +26,77 @@
       </div>
       <p class="caption">
         Runs in your GitHub Actions · Uses your model API keys · Pull requests
-        by default
+        by default, automatic merge when you opt in
       </p>
     </div>
-    <div class="run-card" aria-label="Illustrative improvement run">
+    <div class="run-card" aria-label="One improvement run, simplified">
       <div class="card-top">
-        <span class="eyebrow">One release. One opportunity.</span
-        ><span class="tag">Illustration</span>
+        <span class="eyebrow">One release. One run.</span
+        ><span class="tag">Simplified</span>
       </div>
-      <div class="run-trigger">
-        <span class="signal">↗</span>
-        <div>
-          <small>THE TRIGGER</small>
-          <h2>A lab ships a new model</h2>
-        </div>
-      </div>
-      <ol class="run-track">
+      <ol class="flow">
         <li>
-          <span>01</span>
+          <span class="brand-mark" aria-hidden="true">S↗</span>
           <div>
-            <strong>Ask for a useful change</strong>
-            <p>Your goal, permitted files and past attempts give it context.</p>
+            <small>THE TRIGGER</small>
+            <strong>A lab ships a new model</strong>
           </div>
         </li>
         <li>
-          <span>02</span>
+          <span class="flow-dot">1</span>
           <div>
-            <strong>Make it earn its place</strong>
-            <p>Exact edits. Independent review. Guard checks. Your tests.</p>
+            <strong>Propose</strong>
+            <p>
+              The new model suggests one change: small by default, bigger once
+              the project has earned it.
+            </p>
           </div>
         </li>
         <li>
-          <span>03</span>
+          <span class="flow-dot">2</span>
           <div>
-            <strong>Bring you the evidence</strong>
-            <p>A reviewable pull request and a record of what happened.</p>
+            <strong>Implement</strong>
+            <p>Exact edits, only to files you allowed.</p>
+          </div>
+        </li>
+        <li>
+          <span class="flow-dot">3</span>
+          <div>
+            <strong>Pass every gate</strong>
+            <ul class="gate-chips">
+              <li>Independent review</li>
+              <li>Protected-path guard</li>
+              <li>Your tests</li>
+            </ul>
           </div>
         </li>
       </ol>
+      <p class="eyebrow switch-label" id="merge-choice">When every gate passes</p>
+      <div class="merge-switch" role="radiogroup" aria-labelledby="merge-choice">
+        <label
+          ><input type="radio" name="merge-choice" value="review" checked /><span
+            >I review first<small>Default</small></span
+          ></label
+        ><label
+          ><input type="radio" name="merge-choice" value="auto" /><span
+            >Merge automatically<small>Opt-in</small></span
+          ></label
+        >
+      </div>
       <div class="run-result">
-        <span>YOUR DEFAULT BRANCH</span><strong>You decide what merges.</strong>
+        <p class="outcome review">
+          <span>YOU REVIEW · DEFAULT</span
+          ><strong>A pull request waits for your decision.</strong>
+        </p>
+        <p class="outcome auto">
+          <span>AUTOMATIC · OPT-IN</span
+          ><strong>Merged into your default branch, then checked.</strong>
+          <small
+            >Off until you switch it on, after a practice run passes and you
+            approve the change that enables it.</small
+          >
+        </p>
+        <small>Either way, the run is recorded and the next one reads it.</small>
       </div>
     </div>
   </section>
@@ -116,9 +147,10 @@
         <span class="step-label">02 / PROPOSE</span>
         <h3>Give fresh eyes a clear goal</h3>
         <p>
-          New models propose changes using your brief and run history. When
-          there are several proposals, the harness ranks them before
-          implementation.
+          New models propose changes using your brief and run history. Small,
+          steady improvements by default; after a clean streak, a run may try
+          something bigger. When there are several proposals, the harness ranks
+          them before implementation.
         </p>
       </article>
       <article>
@@ -132,11 +164,13 @@
       </article>
       <article>
         <span class="step-label">04 / DECIDE & LEARN</span>
-        <h3>Review the pull request</h3>
+        <h3>Merge it, or review it first</h3>
         <p>
-          Read what changed and why. The run keeps its outcome in your
-          repository, including when nothing ships. The next model starts with
-          that history.
+          A change that passes every gate waits for you as a pull request. Once
+          you're confident in the runs, you can opt in to merging automatically
+          instead. Every outcome is recorded, including
+          when nothing ships, and periodic reviews name open questions you may
+          not have thought to ask. The next model starts with that history.
         </p>
       </article>
     </div>
@@ -144,7 +178,7 @@
   <section class="dark-section">
     <div class="wrap section">
       <div class="section-intro">
-        <p class="eyebrow">THE CONTROL STAYS WITH YOU</p>
+        <p class="eyebrow">YOU CHOOSE HOW MUCH TO HAND OVER</p>
         <h2>Different roles.<br />One quality bar.</h2>
       </div>
       <div class="role-grid">
@@ -222,7 +256,8 @@
         <b>Cadence</b><span>Choose how often to check for releases.</span>
       </li>
       <li>
-        <b>Approval</b><span>Decide how a successful change reaches you.</span>
+        <b>Approval</b
+        ><span>Review each change by default, or opt in to automatic merge.</span>
       </li>
       <li>
         <b>Budget</b><span>Bound proposal fan-out and token consumption.</span>
