@@ -236,7 +236,10 @@ test('the chain, three generations, every lab, with the curiosity mechanisms cha
   esc1.status = 'accepted';
   esc1.decision = { date: '2026-09-14', by: 'owner', note: 'Yes — add the test file.' };
   fs.writeFileSync(path.join(dir, 'docs/escalations/ledger.json'), JSON.stringify(ledger1, null, 2) + '\n');
-  const tap = await run(['--test', 'tests/page.test.mjs']);
+  // The reporter is named explicitly: from Node 24 `node --test` no longer
+  // emits TAP by default when its output is a pipe, and a spec-format stream
+  // parses as zero tests. The generated workflow's comment says the same.
+  const tap = await run(['--test', '--test-reporter=tap', 'tests/page.test.mjs']);
   fs.writeFileSync(path.join(dir, 'tests.tap'), tap.stdout);
   const evidence = await run(['harness/scripts/record-runtime-evidence.mjs', '--tap', 'tests.tap', '--tap-name', 'page tests', '--timing', 'tests=200'], { GEN_NUMBER: '001' });
   assert.equal(evidence.status, 0, evidence.stderr);

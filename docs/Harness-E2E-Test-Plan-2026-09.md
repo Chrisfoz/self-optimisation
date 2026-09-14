@@ -156,6 +156,12 @@ logs read in full), then encoded as the test. All of the following pass.
   from 2026-09-11; now visible in the test as the difference between the
   first manual drive (no snapshot: rank on anthropic) and the test (snapshot
   first: rank on deepseek). Run the detector once before a first campaign.
+- **From Node 24, `node --test` does not emit TAP into a pipe by default.**
+  CI's Node 24 job recorded zero passed tests in the runtime evidence while
+  Node 22.11 recorded three, because the spec-format stream parses as
+  nothing. The generated workflow's own comment already tells a project to
+  pass `--test-reporter=tap`; the test now does the same, and the script's
+  usage note says so.
 - **A nested `node --test` refuses to run** when `NODE_TEST_CONTEXT` is in
   its environment, so a harness test that spawns the project's own
   `node --test` suite must strip it or every in-loop test passes
