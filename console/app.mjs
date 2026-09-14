@@ -443,6 +443,12 @@ function summary() {
         : "Pull request (default)",
     ],
     ["Token cap", data.maxGenerationTokens.toLocaleString()],
+    [
+      "Harness",
+      session.install?.mode === "shared"
+        ? `Shared · ${session.install.label || session.install.ref.slice(0, 7)}`
+        : "Copied into the repository",
+    ],
   ];
   $("#summary").replaceChildren(
     ...rows.map(([label, value]) => {

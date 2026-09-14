@@ -250,6 +250,22 @@ Two consequences for the console:
 
 ## 3. One structural recommendation that changes the install
 
+**Built 2026-09-14 (the reusable workflow; the npm package is not).**
+`.github/workflows/self-improve.yml` in this repository is the shared workflow,
+rendered from the same template as a copied-in one
+(`renderSharedWorkflow()`, kept in step by a test). A project's own workflow
+is a short caller pinned to a full commit SHA (`renderCallerWorkflow()`,
+`init --shared <sha>`, or a console deployment with
+`SELF_OPTIMISATION_SHARED_REF`), and the setup pull request shrinks to the
+adapter, two briefs, the caller and a README. The shared workflow fetches the
+harness at the commit it was called at and reads each project's adapter once
+per run, from the default branch, before any agent change. Two differences
+from the sketch below: pinning is by SHA rather than `@v1`, because a movable
+tag would run whatever it was moved to in every project at once; and none of
+this is usable by other people until this repository is public, which is why
+the console keeps the copied install unless the variable is set. See
+`console/DEPLOYMENT.md`, "Shared harness".
+
 Right now, "install" means vendoring ~40 files of `harness/` into the user's
 repo. For a console-driven install that's a bad foundation: the console
 would have to write 40 files through the GitHub API, and every one of them

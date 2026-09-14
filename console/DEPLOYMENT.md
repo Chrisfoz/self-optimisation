@@ -62,9 +62,8 @@ work. A download does not claim to verify repository contents or secrets.
    cannot silently remove `js-yaml` halfway through the run.
    Configure all ten steps and inspect the generated files. Existing installations
    are refused rather than overwritten; use `harness/cli/init.mjs --from-adapter`
-   for upgrades. The first install copies `harness/` into the target: the proposed
-   reusable remote workflow is not implemented, and this private source repository
-   is not assumed to be readable by other repositories' Actions runners.
+   for upgrades. By default the install copies `harness/` into the target. A
+   deployment can install the shared harness instead; see **Shared harness** below.
 5. Open and inspect the setup PR. In GitHub's Actions settings enable **Allow
    GitHub Actions to create and approve pull requests**. Merge setup yourself.
 6. Refresh setup status and explicitly request the rehearsal. It dispatches a
@@ -76,6 +75,39 @@ work. A download does not claim to verify repository contents or secrets.
 8. Inspect the improvement PR. Open and review the separate activation PR for the
    chosen cadence and eventual approval mode. Automatic merge requires an HTTPS
    deployment verification URL. Manual/PR mode needs no activation change.
+
+## Shared harness
+
+Instead of copying `harness/` into every repository, a deployment can give each
+one a short workflow that calls this repository's shared workflow,
+`.github/workflows/self-improve.yml`, at one pinned commit. Upgrading a project
+is then a one-line change to that commit, and a fix to the harness reaches a
+project the moment it moves its pin.
+
+Set, in Railway Variables:
+
+- `SELF_OPTIMISATION_SHARED_REF` — the full 40-character commit SHA to pin. A
+  branch, tag or short SHA stops the service at startup rather than opening pull
+  requests that could never run.
+- `SELF_OPTIMISATION_SHARED_LABEL` — optional, a version such as `v0.1.0`, shown
+  as a comment beside the pin and in the console.
+- `SELF_OPTIMISATION_SHARED_REPOSITORY` — optional, `owner/repo` of a fork.
+  Defaults to `Chrisfoz/self-optimisation`.
+
+**Leave these unset while the harness repository is private.** GitHub lets a
+private repository's reusable workflows be called only from private repositories
+owned by the same account, and even then the calling run cannot read the harness
+code the shared workflow fetches. Once the repository is public, any project can
+call it.
+
+What changes in a shared install: the setup pull request carries no `harness/`
+directory; the project's test and dependency setup commands live in
+`project-adapter.yml` (`evaluation.test_commands`, `evaluation.setup_commands`)
+and are read once per run from the default branch, before any agent change; the
+adapter records the pin under `harness.shared`. The same gates run in the same
+order. Pinning is by SHA, never a tag, for the reason the workflow pins its actions
+by SHA: a movable ref would run whatever it was moved to, in every project at once.
+From a terminal, `node harness/cli/init.mjs --shared <sha>` does the same.
 
 ## Several projects
 

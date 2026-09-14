@@ -51,30 +51,12 @@
 name: Self-improvement loop
 
 on:
-{{SCHEDULE_BLOCK}}
-  workflow_dispatch:
-    inputs:
-      scope:
-        description: 'Force focused or ambitious (blank lets the harness decide)'
-        required: false
-        type: choice
-        options: ['', focused, ambitious]
-      models:
-        description: 'Campaign mode: comma-separated model ids to run a generation on NOW, instead of waiting for a release. Recorded as campaign: true.'
-        required: false
-        type: string
+{{TRIGGERS}}
 
 permissions:
 {{PERMISSION_LINES}}
 
-# One run at a time, per repository. Two overlapping runs would compute the
-# same next generation number, race for the same branch and both push to
-# the default branch. Queued rather than cancelled: a run that is already
-# spending should finish and record what it spent. (The numbering step also
-# claims its branch atomically, so even without this nothing is overwritten.)
-concurrency:
-  group: self-improvement-${{ github.repository }}
-  cancel-in-progress: false
+{{CONCURRENCY_BLOCK}}
 
 jobs:
   self-improve:
@@ -95,9 +77,7 @@ jobs:
         with:
           node-version: '{{NODE_VERSION}}'
 
-      - name: Install harness dependencies
-        shell: bash
-        run: npm install --no-save --ignore-scripts js-yaml@{{JS_YAML_VERSION}}
+      {{HARNESS_SETUP_STEPS}}
 
       # Once, for every step that commits. It used to be set only by the
       # snapshot step, which campaign runs skip — so on a campaign run the
@@ -144,7 +124,7 @@ jobs:
         continue-on-error: true
         env:
 {{PROVIDER_ENV_LINES}}
-        run: node harness/scripts/validate.mjs
+        run: {{VALIDATE_RUN}}
 
       # Campaign mode (harness/lib/campaign.mjs): the owner named models from
       # the Actions tab, so the release check is skipped and the same
@@ -153,12 +133,12 @@ jobs:
       # campaign: true so release-driven history stays distinguishable.
       - name: Use the models named by hand (campaign mode)
         id: campaign
-        if: steps.pause.outputs.paused != 'true' && steps.validate.outcome == 'success' && github.event.inputs.models
+        if: steps.pause.outputs.paused != 'true' && steps.validate.outcome == 'success' && {{INPUTS}}.models
         shell: bash
         env:
-          CAMPAIGN_MODELS: ${{ github.event.inputs.models }}
+          CAMPAIGN_MODELS: ${{ {{INPUTS}}.models }}
         run: |
-          node harness/scripts/campaign-models.mjs > "$RUNNER_TEMP/release-check.json"
+          node {{HARNESS}}/scripts/campaign-models.mjs > "$RUNNER_TEMP/release-check.json"
           echo "has-new=true" >> "$GITHUB_OUTPUT"
 
       # continue-on-error so a crashed release check cannot kill the job
@@ -168,13 +148,13 @@ jobs:
       # and found nothing", and a broken cycle reports as a calm one.
       - name: Check for new model releases
         id: check
-        if: steps.pause.outputs.paused != 'true' && steps.validate.outcome == 'success' && !github.event.inputs.models
+        if: steps.pause.outputs.paused != 'true' && steps.validate.outcome == 'success' && !{{INPUTS}}.models
         shell: bash
         continue-on-error: true
         env:
 {{PROVIDER_ENV_LINES}}
         run: |
-          node harness/scripts/check-model-releases.mjs \
+          node {{HARNESS}}/scripts/check-model-releases.mjs \
             --providers {{PROVIDERS_CSV}} \
             > "$RUNNER_TEMP/release-check.json"
           echo "has-new=$(jq -r '.hasNewReleases' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
@@ -184,7 +164,7 @@ jobs:
           echo "release-detected=$(jq -r '.releaseDetected' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
 
       - name: Commit the updated model snapshot
-        if: steps.pause.outputs.paused != 'true' && steps.validate.outcome == 'success' && !github.event.inputs.models
+        if: steps.pause.outputs.paused != 'true' && steps.validate.outcome == 'success' && !{{INPUTS}}.models
         shell: bash
         run: |
           git config user.email "self-improvement-bot@github-actions.local"
@@ -207,12 +187,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          node harness/scripts/sync-pull-request-outcomes.mjs --generations-dir {{GENERATIONS_DIR}}
+          node {{HARNESS}}/scripts/sync-pull-request-outcomes.mjs --generations-dir {{GENERATIONS_DIR}}
           # The operational report — the paper's §7 metrics, generated from
           # the records and never hand-edited. Regenerated here, after the
           # read-back, so it reflects every fate known at the start of this
           # cycle. See harness/lib/report.mjs.
-          node harness/scripts/report.mjs --generations-dir {{GENERATIONS_DIR}}
+          node {{HARNESS}}/scripts/report.mjs --generations-dir {{GENERATIONS_DIR}}
           git add -A -- {{GENERATIONS_DIR}}
           git commit -m "Record pull request outcomes and regenerate the report" || echo "Nothing to record"
           git push
@@ -228,7 +208,7 @@ jobs:
         env:
 {{PROVIDER_ENV_LINES}}
         run: |
-          node harness/scripts/probe-models.mjs "$RUNNER_TEMP/release-check.json"
+          node {{HARNESS}}/scripts/probe-models.mjs "$RUNNER_TEMP/release-check.json"
           echo "has-new=$(jq -r '.hasNewReleases' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
           # Which candidates were dropped, and why — the difference between
           # "nothing shipped" and "something shipped that we could not call".
@@ -243,11 +223,11 @@ jobs:
         shell: bash
         continue-on-error: true
         run: |
-{{TEST_COMMAND_LINES}}
+{{PREFLIGHT_COMMAND_LINES}}
 
       # The next number is one past the highest in any trace a generation
       # leaves — a gen-NNN tag, an agent/gen-NNN branch, a gen-NNN record
-      # on {{DEFAULT_BRANCH}} — and the branch is claimed on the remote with
+      # on {{DEFAULT_BRANCH_LABEL}} — and the branch is claimed on the remote with
       # a lease that fails if it already exists, before anything is spent.
       # It used to read tags alone, which only autonomous merge creates, so
       # on the pull-request path every run was generation 001 and each
@@ -259,7 +239,7 @@ jobs:
         run: |
           git config user.email "self-improvement-bot@github-actions.local"
           git config user.name "Self-Improvement Bot"
-          node harness/scripts/next-generation.mjs --base {{DEFAULT_BRANCH}} --remote origin --generations-dir {{GENERATIONS_DIR}}
+          node {{HARNESS}}/scripts/next-generation.mjs --base {{DEFAULT_BRANCH}} --remote origin --generations-dir {{GENERATIONS_DIR}}
 
       # The same evaluators as the step after the loop, on the tree as it is
       # BEFORE any change — so the numbers measured afterwards have something
@@ -274,7 +254,7 @@ jobs:
         continue-on-error: true
         env:
           GEN_NUMBER: ${{ steps.gen.outputs.number }}
-        run: node harness/scripts/run-evaluators.mjs --baseline
+        run: node {{HARNESS}}/scripts/run-evaluators.mjs --baseline
 
       - name: Run the improvement loop
         id: improve
@@ -287,9 +267,9 @@ jobs:
           RUN_ID: ${{ steps.gen.outputs.run-id }}
           RUN_URL: ${{ steps.gen.outputs.run-url }}
           SUGGEST_MODELS: ${{ steps.probe.outputs.models }}
-          SCOPE: ${{ github.event.inputs.scope }}
+          SCOPE: ${{ {{INPUTS}}.scope }}
           CAMPAIGN: ${{ steps.campaign.outputs.has-new }}
-        run: node harness/scripts/run-generation.mjs
+        run: node {{HARNESS}}/scripts/run-generation.mjs
 
       # The measurements that are NOT gates — quality dimensions beyond
       # pass/fail, run against the tree this generation produced. A plugin
@@ -305,7 +285,7 @@ jobs:
         continue-on-error: true
         env:
           GEN_NUMBER: ${{ steps.gen.outputs.number }}
-        run: node harness/scripts/run-evaluators.mjs
+        run: node {{HARNESS}}/scripts/run-evaluators.mjs
 
       # Every {{THEMES_CADENCE}} generations, one model reads the same
       # history window every suggesting model reads and is asked what
@@ -331,7 +311,7 @@ jobs:
         env:
 {{PROVIDER_ENV_LINES}}
           GEN_NUMBER: ${{ steps.gen.outputs.number }}
-        run: node harness/scripts/generate-themes-review.mjs
+        run: node {{HARNESS}}/scripts/generate-themes-review.mjs
 
       - name: Commit and push the agent branch, if it has changes
         if: steps.improve.outputs.has-changes == 'true'
@@ -342,8 +322,8 @@ jobs:
           SUMMARY: ${{ steps.improve.outputs.summary }}
         # The code change and nothing else. The harness's own record of this
         # run (attempts.json, the proposal, the ledger, a themes review) is
-        # committed to {{DEFAULT_BRANCH}} by the persist step below, on every
-        # outcome — not here, where it would reach {{DEFAULT_BRANCH}} only if
+        # committed to {{DEFAULT_BRANCH_LABEL}} by the persist step below, on every
+        # outcome — not here, where it would reach {{DEFAULT_BRANCH_LABEL}} only if
         # the pull request merged, and would conflict with the pull-request
         # read-back writing into the same file while the PR is open.
         #
@@ -353,7 +333,7 @@ jobs:
         # without it. One pathspec at a time, because `git add` on a glob
         # that matches nothing is fatal under bash -e.
         run: |
-          for p in {{EDITABLE_PATHS_GIT_ADD}}; do
+          {{EDITABLE_PATHS_PREAMBLE}}for p in {{EDITABLE_PATHS_GIT_ADD}}; do
             if [ -n "$(git status --porcelain -- "$p")" ]; then git add -A -- "$p"; fi
           done
           git commit -m "Generation $GEN_NUMBER: $SUMMARY"
@@ -364,7 +344,7 @@ jobs:
         if: steps.improve.outputs.has-changes == 'true'
         shell: bash
         continue-on-error: true
-        run: node harness/scripts/check-guarded-paths.mjs "origin/{{DEFAULT_BRANCH}}"
+        run: node {{HARNESS}}/scripts/check-guarded-paths.mjs "origin/{{DEFAULT_BRANCH}}"
 
       - name: Run this project's own tests, against the agent branch
         id: tests
@@ -386,7 +366,7 @@ jobs:
       #
       # Runs last, and `always()`, because the observations arrive at
       # different points: the tests early, the deployment check at the very
-      # end. It commits to {{DEFAULT_BRANCH}} rather than to the agent
+      # end. It commits to {{DEFAULT_BRANCH_LABEL}} rather than to the agent
       # branch, for the same reason the model snapshot does — this is the
       # harness's own bookkeeping, and it has to be readable by the next run
       # whether or not this generation's pull request is ever merged.
@@ -409,10 +389,10 @@ jobs:
           args=()
           if [ -f "$RUNNER_TEMP/tests.tap" ]; then args+=(--tap "$RUNNER_TEMP/tests.tap" --tap-name "this project's own tests"); fi
           if [ -f "$RUNNER_TEMP/deploy-evidence.json" ]; then args+=(--fragment "$RUNNER_TEMP/deploy-evidence.json"); fi
-          node harness/scripts/record-runtime-evidence.mjs "${args[@]}"
+          node {{HARNESS}}/scripts/record-runtime-evidence.mjs "${args[@]}"
 
       # Every outcome — approved, abandoned, crashed, no proposal, over
-      # budget — commits its record to {{DEFAULT_BRANCH}}: the generation's
+      # budget — commits its record to {{DEFAULT_BRANCH_LABEL}}: the generation's
       # directory, the escalation ledger, a themes review, the runtime
       # evidence above. Done in a temporary worktree, so this job's own
       # checkout is never switched; only files this run changed are copied;
@@ -420,14 +400,14 @@ jobs:
       # existed, a failed generation's record was deleted with the runner,
       # and the failures were exactly what the next run could not see. Its
       # outcome is reported to the digest as the `records` gate.
-      - name: Persist this generation's record to {{DEFAULT_BRANCH}}
+      - name: Persist this generation's record to {{DEFAULT_BRANCH_LABEL}}
         id: persist
         if: always() && steps.gen.outputs.number
         shell: bash
         continue-on-error: true
         env:
           GEN_NUMBER: ${{ steps.gen.outputs.number }}
-        run: node harness/scripts/persist-records.mjs --base {{DEFAULT_BRANCH}} --remote origin
+        run: node {{HARNESS}}/scripts/persist-records.mjs --base {{DEFAULT_BRANCH}} --remote origin
 
       # Gate results only exist when a generation was actually attempted.
       # The digest step below is NOT gated on that — see its own comment.

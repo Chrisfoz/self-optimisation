@@ -6,6 +6,7 @@ import {
   harnessFiles,
   modelCatalogue,
   requiredSecretNames,
+  sharedHarnessFromEnv,
 } from "./configuration.mjs";
 import {
   githubClient,
@@ -49,6 +50,8 @@ export function createApi({
   const cookie = (value, age) =>
     `${cookieName}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secure ? "; Secure" : ""}`;
   const pending = new Map();
+  // Null unless this deployment installs the shared harness. Thrown at boot if set wrongly.
+  const shared = sharedHarnessFromEnv(env);
   return async function api(req, res, url, send) {
     const path = url.pathname;
     if (!path.startsWith("/api/") && !path.startsWith("/auth/")) return false;
@@ -82,6 +85,9 @@ export function createApi({
           installUrl: ready
             ? `https://github.com/apps/${encodeURIComponent(env.GITHUB_APP_SLUG)}/installations/new`
             : null,
+          install: shared
+            ? { mode: "shared", repository: shared.repository, ref: shared.ref, label: shared.label || null }
+            : { mode: "copied" },
         });
         return true;
       }
@@ -219,11 +225,11 @@ export function createApi({
         ["/api/preview", "/api/bundle"].includes(path)
       ) {
         const data = await readJson(req);
-        const generated = configure(data);
+        const generated = configure(data, { shared });
         json(200, {
           files:
             path === "/api/bundle"
-              ? { ...harnessFiles(), ...generated.files }
+              ? { ...(shared ? {} : harnessFiles()), ...generated.files }
               : generated.files,
           requiredSecrets: generated.requiredSecrets,
           warnings: generated.warnings,
@@ -337,7 +343,7 @@ export function createApi({
               409,
               `This session has opened ${MAX_SETUPS_PER_SESSION} setup pull requests. Sign out and in again to set up more repositories.`,
             );
-          const created = await openSetup(gh, repo, data);
+          const created = await openSetup(gh, repo, data, { shared });
           session.setups.set(repo.name, created);
           json(201, { setup: created });
         } else {

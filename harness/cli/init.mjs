@@ -34,6 +34,12 @@
  *                regenerate after editing the adapter or upgrading harness/
  *                (`--from-adapter --force`); the adapter and briefs are
  *                never touched.
+ *   --shared <sha>  install shared instead of copied: the workflow calls the
+ *                harness repository's shared workflow at that full commit
+ *                SHA (--shared-repository owner/repo for a fork, and
+ *                --shared-label v0.1.0 as a comment beside it), so no copy
+ *                of harness/ has to live in the project. With
+ *                --from-adapter, it replaces the pin the adapter recorded.
  *
  * Interactive mode needs a real terminal (a TTY) on stdin — `rl.question()`
  * in a loop over piped/redirected input is unreliable in Node generally
@@ -50,7 +56,7 @@ import { execFileSync } from 'node:child_process';
 import readline from 'node:readline/promises';
 import '../providers/index.mjs';
 import { getProvider, registeredProviders, resolveProvider } from '../lib/llm-provider.mjs';
-import { renderAdapterYaml, renderWorkflowTemplate, renderReadme, buildAdapterObject, answersFromAdapter } from '../lib/scaffold.mjs';
+import { renderAdapterYaml, renderWorkflowTemplate, renderCallerWorkflow, renderReadme, buildAdapterObject, answersFromAdapter } from '../lib/scaffold.mjs';
 import { harnessVersion, checkUpgrade } from '../lib/version.mjs';
 import { describeSeats } from '../lib/seats.mjs';
 import { normalizeAmbition, loadAdapter } from '../lib/adapter.mjs';
@@ -67,6 +73,36 @@ const AUTO_YES = process.argv.includes('--yes') || process.argv.includes('-y');
 // already-filled-in brief or adapter is exactly the kind of thing that
 // should need its own explicit flag, not fall out of "accept defaults."
 const FORCE = process.argv.includes('--force');
+
+// A shared installation (renderCallerWorkflow()). Validated when the workflow
+// is rendered, before anything is written.
+const flagValue = (name) => {
+  const i = process.argv.indexOf(name);
+  return i > -1 ? process.argv[i + 1] : undefined;
+};
+const SHARED = process.argv.includes('--shared')
+  ? {
+      ref: flagValue('--shared'),
+      ...(flagValue('--shared-repository') ? { repository: flagValue('--shared-repository') } : {}),
+      ...(flagValue('--shared-label') ? { label: flagValue('--shared-label') } : {}),
+    }
+  : null;
+
+/** The workflow this installation gets: a call to the shared one, or a copied-in one. Throws on a bad pin. */
+function installedWorkflow(answers) {
+  if (answers.sharedHarness) return renderCallerWorkflow(answers);
+  const template = fs.readFileSync(path.join(harnessDir, '../templates/workflow.yml.tmpl'), 'utf8');
+  return renderWorkflowTemplate(template, answers);
+}
+
+function renderOrExit(answers) {
+  try {
+    return installedWorkflow(answers);
+  } catch (err) {
+    console.error(`❌ ${err.message}`);
+    process.exit(1);
+  }
+}
 
 // Two informational flags that never write anything. `--version` says which
 // harness this vendored copy is; `--check-upgrade` fetches upstream's
@@ -323,6 +359,7 @@ async function main() {
       agentBriefPath, reviewerBriefPath,
       deploymentStrategy, deploymentUrl, deploymentRegistry, deploymentArtifact,
       notify,
+      ...(SHARED ? { sharedHarness: SHARED } : {}),
     };
 
     writeFiles(answers);
@@ -345,13 +382,12 @@ function writeIfAbsentOrForced(targetPath, content, label) {
 }
 
 function writeFiles(answers) {
+  // Rendered first, so a bad shared pin stops init before any file is written.
+  const workflow = renderOrExit(answers);
   console.log('\nWriting files...\n');
 
   writeIfAbsentOrForced('project-adapter.yml', renderAdapterYaml(answers), 'project-adapter.yml');
-
-  const templatePath = path.join(harnessDir, '../templates/workflow.yml.tmpl');
-  const template = fs.readFileSync(templatePath, 'utf8');
-  writeIfAbsentOrForced('.github/workflows/self-improve.yml', renderWorkflowTemplate(template, answers), 'the generated workflow');
+  writeIfAbsentOrForced('.github/workflows/self-improve.yml', workflow, 'the generated workflow');
 
   const agentBriefTemplate = fs.readFileSync(path.join(harnessDir, '../templates/agent-brief.md.tmpl'), 'utf8');
   writeIfAbsentOrForced(answers.agentBriefPath, agentBriefTemplate, 'the agent brief');
@@ -390,9 +426,15 @@ async function fromAdapter() {
     providerEnvKey: (name) => getProvider(name)?.envKey ?? `${String(name).toUpperCase()}_API_KEY`,
     modelProvider: (model) => { try { return resolveProvider(model); } catch { return null; } },
   });
+  const recorded = answers.sharedHarness?.ref;
+  if (SHARED) answers.sharedHarness = SHARED;
+  const workflow = renderOrExit(answers);
   console.log('Rendering from project-adapter.yml — the adapter and the briefs are not touched.\n');
-  const template = fs.readFileSync(path.join(harnessDir, '../templates/workflow.yml.tmpl'), 'utf8');
-  writeIfAbsentOrForced('.github/workflows/self-improve.yml', renderWorkflowTemplate(template, answers), 'the generated workflow');
+  if (SHARED && recorded !== SHARED.ref) {
+    console.log(`   ⚠️  project-adapter.yml records ${recorded ? `harness.shared.ref ${recorded}` : 'no shared harness'}; the workflow now pins ${SHARED.ref}.`);
+    console.log('      Update harness.shared in the adapter to match, so the record says what runs.\n');
+  }
+  writeIfAbsentOrForced('.github/workflows/self-improve.yml', workflow, 'the generated workflow');
   writeIfAbsentOrForced('SELF-IMPROVE-README.md', renderReadme(answers), 'the install README');
 
   const { errors, warnings } = validateAdapter(adapter, { repoRoot, env: process.env });
