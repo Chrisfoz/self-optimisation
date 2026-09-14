@@ -328,6 +328,89 @@ test("the model list is public before a repository, and live once there is one",
   assert.equal((await fetch(base + "/api/models?repository=owner/project")).status, 401);
 });
 
+test("one session opens a setup pull request per repository, not one in total", async (t) => {
+  const sessions = new Map([
+    ["active", { token: "secret", login: "owner", csrf: "csrf", expires: Date.now() + 60000 }],
+  ]);
+  const names = ["owner/alpha", "owner/beta"];
+  const opened = [];
+  const base = await server(t, {
+    sessions,
+    fetchImpl: async (url, options = {}) => {
+      const route = url.replace("https://api.github.com", "");
+      const method = options.method || "GET";
+      if (route.startsWith("/user/installations?"))
+        return Response.json({ installations: [{ id: 10 }] });
+      if (route.startsWith("/user/installations/10/repositories?"))
+        return Response.json({
+          repositories: names.map((full_name) => ({
+            full_name,
+            default_branch: "main",
+            permissions: { push: true },
+          })),
+        });
+      const [, repo, rest] = route.match(/^\/repos\/(owner\/[a-z]+)(.*)$/) || [];
+      if (!repo) throw new Error("Unexpected request: " + route);
+      const short = repo.split("/")[1];
+      if (rest === "") return Response.json({ default_branch: "main", size: 40 });
+      if (rest.startsWith("/branches/")) return Response.json({ commit: { sha: `head-${short}` } });
+      if (rest === `/git/commits/head-${short}`) return Response.json({ tree: { sha: `tree-${short}` } });
+      if (rest.startsWith(`/git/trees/tree-${short}?`))
+        return Response.json({ tree: [{ type: "blob", path: "src/app.js", size: 10 }] });
+      if (rest.startsWith("/actions/secrets?"))
+        return Response.json({ secrets: [{ name: "OPENAI_API_KEY" }] });
+      if (method === "POST" && rest === "/git/trees") return Response.json({ sha: `new-tree-${short}` });
+      if (method === "POST" && rest === "/git/commits") return Response.json({ sha: `setup-${short}` });
+      if (method === "POST" && rest === "/git/refs") return Response.json({});
+      if (method === "POST" && rest === "/pulls") {
+        opened.push(repo);
+        return Response.json({
+          number: opened.length,
+          html_url: `https://github.com/${repo}/pull/${opened.length}`,
+        });
+      }
+      if (rest.startsWith("/pulls/"))
+        return Response.json({ head: { sha: `setup-${short}` }, merged: false, state: "open" });
+      throw new Error("Unexpected request: " + route);
+    },
+  });
+  const signedIn = { cookie: "__Host-console=active", "x-csrf-token": "csrf" };
+  const send = async (path, body) => {
+    const response = await fetch(base + path, post(body, "https://console.example", signedIn));
+    return { status: response.status, body: await response.json() };
+  };
+
+  // Before any setup, a repository has nothing to rehearse.
+  const early = await send("/api/rehearse", { repository: "owner/beta" });
+  assert.equal(early.status, 409);
+  assert.match(early.body.error, /Create a setup pull request for this repository/);
+
+  const alpha = await send("/api/setup", { ...valid, repository: "owner/alpha" });
+  assert.equal(alpha.status, 201, alpha.body.error);
+  const beta = await send("/api/setup", { ...valid, repository: "owner/beta" });
+  assert.equal(beta.status, 201, beta.body.error);
+  assert.deepEqual(opened, ["owner/alpha", "owner/beta"]);
+
+  // The same repository twice is still refused, and opens nothing.
+  const again = await send("/api/setup", { ...valid, repository: "owner/beta" });
+  assert.equal(again.status, 409);
+  assert.match(again.body.error, /already opened setup pull request #2 for owner\/beta/);
+  assert.equal(opened.length, 2);
+
+  // Each repository's actions reach its own setup, not the most recent one.
+  const rehearse = await send("/api/rehearse", { repository: "owner/beta" });
+  assert.equal(rehearse.status, 409);
+  assert.match(rehearse.body.error, /Merge the unchanged setup/);
+  const status = await (
+    await fetch(base + "/api/setup?repository=owner/alpha", {
+      headers: { cookie: "__Host-console=active" },
+    })
+  ).json();
+  assert.equal(status.setup.number, 1);
+  assert.equal(status.setup.repository, "owner/alpha");
+  assert.equal(status.state, "open");
+});
+
 test("a repository with no snapshot still returns the bundled list, and says why", async (t) => {
   const sessions = new Map([
     ["active", { token: "secret", login: "owner", csrf: "csrf", expires: Date.now() + 60000 }],

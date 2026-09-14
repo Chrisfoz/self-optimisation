@@ -305,6 +305,16 @@ node harness/cli/init.mjs                              # asks, then writes proje
 node harness/cli/init.mjs --from-adapter --force       # later: regenerate the workflow from the adapter you edited
 ```
 
+**Or install it shared, once this repository is public.** Instead of keeping a
+copy of `harness/` in your project, `node <path-to>/harness/cli/init.mjs
+--shared <commit-sha>` writes a short workflow that calls this repository's
+shared workflow at that commit. Upgrading is then a one-line change to the
+commit. Test and dependency setup commands live in `project-adapter.yml`
+(`evaluation.test_commands`, `evaluation.setup_commands`) and are read once per
+run, from your default branch. While this repository is private, other
+repositories cannot read it, so use the copied install above. See
+[`console/DEPLOYMENT.md`](console/DEPLOYMENT.md), "Shared harness".
+
 Two things the generated workflow needs that are easy to miss:
 
 - **The pull-request path needs one repository setting GitHub turns off by

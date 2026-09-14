@@ -31,6 +31,129 @@ export const JS_YAML_VERSION = '5.3.0';
  */
 export const NODE_VERSION = '22';
 
+/**
+ * The parts of `harness/templates/workflow.yml.tmpl` a copied-in workflow and
+ * the shared workflow (renderSharedWorkflow()) disagree on, kept here as the
+ * copied-in text. The template holds a {{TOKEN}} for each, so one file stays
+ * the source of both and neither can drift from the other.
+ */
+const DISPATCH_TRIGGER = `  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'Force focused or ambitious (blank lets the harness decide)'
+        required: false
+        type: choice
+        options: ['', focused, ambitious]
+      models:
+        description: 'Campaign mode: comma-separated model ids to run a generation on NOW, instead of waiting for a release. Recorded as campaign: true.'
+        required: false
+        type: string`;
+
+const CONCURRENCY_BLOCK = `# One run at a time, per repository. Two overlapping runs would compute the
+# same next generation number, race for the same branch and both push to
+# the default branch. Queued rather than cancelled: a run that is already
+# spending should finish and record what it spent. (The numbering step also
+# claims its branch atomically, so even without this nothing is overwritten.)
+concurrency:
+  group: self-improvement-\${{ github.repository }}
+  cancel-in-progress: false`;
+
+// First line unindented: the template supplies the six spaces before the token.
+const COPIED_HARNESS_SETUP = `- name: Install harness dependencies
+        shell: bash
+        run: npm install --no-save --ignore-scripts js-yaml@{{JS_YAML_VERSION}}`;
+
+/** The repository path of the shared workflow, in the harness's own repository. */
+export const SHARED_WORKFLOW_PATH = '.github/workflows/self-improve.yml';
+
+/** Where a shared installation calls the harness from, unless told otherwise (a fork, say). */
+export const SHARED_HARNESS_REPOSITORY = 'Chrisfoz/self-optimisation';
+
+const SHARED_HEADER = `# THE SHARED WORKFLOW. Rendered from harness/templates/workflow.yml.tmpl by
+# harness/scripts/render-shared-workflow.mjs. Never edit this file by hand:
+# tests/lib/shared-workflow.test.mjs fails when it and the template disagree.
+#
+# Projects call this file at one pinned commit instead of carrying their own
+# copy of harness/ (renderCallerWorkflow() in harness/lib/scaffold.mjs writes
+# that caller). It fetches the harness from the repository and commit it was
+# called at, reads each project's project-adapter.yml once from the default
+# branch, and then runs the same steps a copied-in workflow runs. The notes
+# below were written for the copied-in file and hold here too, with that
+# difference.
+#
+`;
+
+const SHARED_TRIGGER = `  # Called by each project's own short workflow, which pins this file to one
+  # commit, holds the schedule and the concurrency group, and passes its
+  # secrets with \`secrets: inherit\`.
+  workflow_call:
+    inputs:
+      scope:
+        description: 'Force focused or ambitious (blank lets the harness decide)'
+        required: false
+        type: string
+        default: ''
+      models:
+        description: 'Campaign mode: comma-separated model ids to run a generation on NOW, instead of waiting for a release. Recorded as campaign: true.'
+        required: false
+        type: string
+        default: ''
+      runner:
+        description: 'The runner image the loop runs on.'
+        required: false
+        type: string
+        default: ubuntu-latest`;
+
+const SHARED_CONCURRENCY = `# No concurrency group here: the calling workflow holds it. A called
+# workflow in the same group as its caller would wait for itself forever.`;
+
+// First line unindented, like COPIED_HARNESS_SETUP.
+const SHARED_HARNESS_SETUP = `# The harness comes from the repository and commit this workflow file was
+      # called at (job.workflow_repository, job.workflow_sha), fetched by SHA
+      # and checked after checkout, so a project runs exactly the code it
+      # pinned and nothing a tag or branch could move under it. It lives under
+      # RUNNER_TEMP, outside the project, where the project's own tests,
+      # linters and commits never see it.
+      - name: Fetch the harness this workflow was called at
+        shell: bash
+        env:
+          HARNESS_REPOSITORY: \${{ job.workflow_repository }}
+          HARNESS_SHA: \${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$HARNESS_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::Could not tell which harness commit this workflow was called at."
+            exit 1
+          fi
+          if ! printf '%s' "$HARNESS_REPOSITORY" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'; then
+            echo "::error::Could not tell which repository this workflow was called from."
+            exit 1
+          fi
+          dir="$RUNNER_TEMP/self-optimisation"
+          git init -q "$dir"
+          git -C "$dir" fetch -q --depth 1 "https://github.com/$HARNESS_REPOSITORY" "$HARNESS_SHA"
+          git -C "$dir" -c advice.detachedHead=false checkout -q FETCH_HEAD
+          if [ "$(git -C "$dir" rev-parse HEAD)" != "$HARNESS_SHA" ]; then
+            echo "::error::The fetched harness is not the commit this workflow was called at."
+            exit 1
+          fi
+          echo "HARNESS_DIR=$dir/harness" >> "$GITHUB_ENV"
+
+      - name: Install harness dependencies
+        shell: bash
+        run: npm install --prefix "$RUNNER_TEMP/self-optimisation" --no-save --ignore-scripts js-yaml@{{JS_YAML_VERSION}}
+
+      # Read once, here, from the default branch this job checked out, before
+      # any agent change exists; every later step uses what this saves
+      # (harness/lib/workflow-config.mjs). Before the pause check, so a paused
+      # run still knows whether to send its digest. continue-on-error: an
+      # unreadable adapter stops the run at the validate step below, and
+      # reaches the digest the same way an invalid one does.
+      - name: Read this project's configuration
+        id: config
+        shell: bash
+        continue-on-error: true
+        run: node "$HARNESS_DIR"/scripts/workflow-config.mjs`;
+
 /** Single-quote a path/command for safe use in a bash argument list — the same escaping bash itself expects. */
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -112,6 +235,12 @@ export function buildAdapterObject(a) {
     // init.mjs supplies it from harness/VERSION via harness/lib/version.mjs.
     harness: {
       version: a.harnessVersion || 'unknown',
+      // A shared installation: which harness commit the project's workflow
+      // calls, instead of a copy of harness/ in the repository. Read back by
+      // `init --from-adapter` to regenerate that workflow at the same pin.
+      ...(a.sharedHarness
+        ? { shared: { repository: a.sharedHarness.repository || SHARED_HARNESS_REPOSITORY, ref: a.sharedHarness.ref, ...(a.sharedHarness.label ? { label: a.sharedHarness.label } : {}) } }
+        : {}),
     },
     providers: {
       watched: a.providers.map((p) => p.name),
@@ -208,9 +337,14 @@ export function buildAdapterObject(a) {
       // nothing has run.
       scheduled: a.includeSchedule !== false,
     },
+    // In a SHARED installation both lists are LIVE instead: the shared
+    // workflow reads them once per run, from the default branch, before any
+    // agent change (harness/lib/workflow-config.mjs), because it has no
+    // generated steps of its own to bake them into.
     evaluation: {
       test_commands: a.testCommands || [],
       preflight_required: true,
+      ...(a.setupCommands?.length ? { setup_commands: a.setupCommands } : {}),
     },
   };
 
@@ -340,7 +474,12 @@ export function answersFromAdapter(adapter, { providerEnvKey, modelProvider }) {
     // buildAdapterObject() would have written it.
     includeSchedule: a.cadence?.scheduled !== false,
     testCommands: a.evaluation?.test_commands ?? [],
+    setupCommands: a.evaluation?.setup_commands ?? [],
   };
+  if (a.harness?.shared) {
+    const s = a.harness.shared;
+    answers.sharedHarness = { repository: s.repository, ref: s.ref, ...(s.label ? { label: s.label } : {}) };
+  }
 
   if (deployment.verify_strategy === 'url' && deployment.production_url) {
     answers.deploymentUrl = { productionUrl: deployment.production_url, watchedFiles: deployment.watched_files ?? [] };
@@ -444,38 +583,42 @@ function scheduleBlock(answers) {
  * `autonomous-merge` is the original path — promote.mjs merges and tags,
  * then verify-deployment.mjs checks what that shipped.
  */
-function mergeSteps(answers) {
+function mergeSteps(answers, { shared = false } = {}) {
   const approvalClass = normalizeApprovalClass(answers.approvalClass);
-  const defaultBranch = answers.defaultBranch || 'main';
-  const generationsDir = answers.generationsDir || 'docs/generations';
+  // The shared workflow renders both paths, each gated on the approval class
+  // the run read from the project's adapter. Anything but autonomous-merge
+  // takes the pull-request path, as normalizeApprovalClass() already made sure.
+  const defaultBranch = shared ? '${{ env.DEFAULT_BRANCH }}' : answers.defaultBranch || 'main';
+  const branchLabel = shared ? 'the default branch' : defaultBranch;
+  const generationsDir = shared ? '${{ env.GENERATIONS_DIR }}' : answers.generationsDir || 'docs/generations';
+  const harness = shared ? '"$HARNESS_DIR"' : 'harness';
+  const onlyWhen = (merges) => (shared ? ` && env.APPROVAL_CLASS ${merges ? '==' : '!='} 'autonomous-merge'` : '');
 
-  if (approvalClass === 'autonomous-merge') {
-    return `- name: Merge and tag, if every gate passed
+  const merge = `- name: Merge and tag, if every gate passed
         id: promote
-        if: steps.tests.outcome == 'success'
+        if: steps.tests.outcome == 'success'${onlyWhen(true)}
         shell: bash
         continue-on-error: true
         env:
           GEN_NUMBER: \${{ steps.gen.outputs.number }}
           BASE_BRANCH: ${defaultBranch}
-        run: node harness/scripts/promote.mjs
+        run: node ${harness}/scripts/promote.mjs
 
       - name: Verify the deployment
         id: verify
         if: steps.promote.outcome == 'success'
         shell: bash
         continue-on-error: true
-        run: node harness/scripts/verify-deployment.mjs --evidence "$RUNNER_TEMP/deploy-evidence.json"`;
-  }
+        run: node ${harness}/scripts/verify-deployment.mjs --evidence "$RUNNER_TEMP/deploy-evidence.json"`;
 
   // `gh` is pre-installed on GitHub-hosted runners and authenticates from
   // GH_TOKEN, which is why this path needs no third-party action and no
   // credential beyond the job's own token. The title and body are built
   // from env: values inside the script — SUMMARY is model-generated text
   // and must never reach a `run:` block through `${{ }}` interpolation.
-  return `- name: Open a pull request, if every gate passed
+  const pr = `- name: Open a pull request, if every gate passed
         id: pr
-        if: steps.tests.outcome == 'success'
+        if: steps.tests.outcome == 'success'${onlyWhen(false)}
         shell: bash
         continue-on-error: true
         env:
@@ -509,7 +652,7 @@ function mergeSteps(answers) {
       # one above, so a failure to record is visibly a failure to record
       # rather than a pull request that looks like it was never opened.
       # Written into the working tree only: the persist step commits the
-      # whole record to ${defaultBranch}, URL included, after this.
+      # whole record to ${branchLabel}, URL included, after this.
       - name: Record the pull request URL in this generation's attempt record
         if: steps.pr.outputs.url
         shell: bash
@@ -518,7 +661,10 @@ function mergeSteps(answers) {
           GEN_NUMBER: \${{ steps.gen.outputs.number }}
           PR_URL: \${{ steps.pr.outputs.url }}
           GENERATIONS_DIR: ${generationsDir}
-        run: node harness/scripts/record-pull-request.mjs "$GEN_NUMBER" "$PR_URL" --generations-dir "$GENERATIONS_DIR"`;
+        run: node ${harness}/scripts/record-pull-request.mjs "$GEN_NUMBER" "$PR_URL" --generations-dir "$GENERATIONS_DIR"`;
+
+  if (shared) return `${pr}\n\n      ${merge}`;
+  return approvalClass === 'autonomous-merge' ? merge : pr;
 }
 
 /**
@@ -527,7 +673,7 @@ function mergeSteps(answers) {
  * don't collide as substrings, so a literal `.replaceAll` per token is
  * enough; no template engine needed).
  */
-export function renderWorkflowTemplate(template, answers) {
+function renderWorkflow(template, answers, shared) {
   // The union, not just the watched labs — see requiredProviders()'s own
   // doc for why a pinned reviewer on an unwatched lab used to fail at
   // runtime, after the suggest call had already been paid for.
@@ -535,11 +681,19 @@ export function renderWorkflowTemplate(template, answers) {
     requiredProviders(answers).map((p) => `${p.envKey}: \${{ secrets.${p.envKey} }}`).join('\n'),
     10
   );
-  const testCommandLines = indentBlock((answers.testCommands || []).join('\n'), 10);
+  // The shared workflow runs the commands the config step saved from the
+  // default branch; preflight installs the project's dependencies first.
+  const projectCommands = (kind) => `node "$HARNESS_DIR"/scripts/run-project-commands.mjs ${kind}`;
+  const testCommandLines = indentBlock(shared ? projectCommands('test') : (answers.testCommands || []).join('\n'), 10);
+  const preflightCommandLines = shared
+    ? indentBlock(`${projectCommands('setup')}\n${projectCommands('test')}`, 10)
+    : testCommandLines;
+  const harnessDir = shared ? '"$HARNESS_DIR"' : 'harness';
+  const notifyGate = shared ? " && env.NOTIFY_CONFIGURED == 'true'" : '';
   // Everything the agent may change — edited in place or newly created. The
   // harness's own records are not in this list on purpose: they go to the
   // default branch via persist-records.mjs, on every outcome.
-  const editablePathsGitAdd = [...new Set([...(answers.allowedPaths || []), ...(answers.createOnlyPaths || [])])]
+  const editablePathsGitAdd = shared ? '"${editable_paths[@]}"' : [...new Set([...(answers.allowedPaths || []), ...(answers.createOnlyPaths || [])])]
     .map(shellQuote).join(' ');
 
   // The template places {{NOTIFY_STEPS}} after a literal 6-space prefix on
@@ -566,7 +720,7 @@ export function renderWorkflowTemplate(template, answers) {
     // is not a substitute — nobody is watching the Actions tab, which is
     // why the digest exists at all.
     notifySteps = `- name: Send the generation digest
-        if: always()
+        if: always()${notifyGate}
         shell: bash
         env:
           ${notifyEnvLine}
@@ -577,7 +731,7 @@ export function renderWorkflowTemplate(template, answers) {
           PREFLIGHT_RESULT: \${{ steps.preflight.outcome }}
           RELEASE_DETECTED: \${{ steps.check.outputs.release-detected }}
           NO_GENERATION_DETAIL: \${{ steps.probe.outputs.dropped }}
-          LABS_WATCHED: ${answers.providers.map((p) => p.name).join(',')}
+          LABS_WATCHED: ${shared ? '${{ env.PROVIDERS_CSV }}' : answers.providers.map((p) => p.name).join(',')}
           RUN_URL: \${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}
           GATES: \${{ steps.gates.outputs.json }}
           MERGED: \${{ steps.gates.outputs.merged }}
@@ -590,16 +744,16 @@ export function renderWorkflowTemplate(template, answers) {
           ESC_OPENED: \${{ steps.improve.outputs.escalations-opened }}
           ESC_FLAGGED: \${{ steps.improve.outputs.escalations-flagged }}
           SPEND_TOKENS: \${{ steps.improve.outputs.spend-tokens }}
-        run: node harness/scripts/send-digest.mjs
+        run: node ${harnessDir}/scripts/send-digest.mjs
 
       - name: Send an escalation notice, if anything was flagged
-        if: always() && steps.improve.outputs.escalations-flagged != '0'
+        if: always()${notifyGate} && steps.improve.outputs.escalations-flagged != '0'
         shell: bash
         env:
           ${notifyEnvLine}
           GEN_NUMBER: \${{ steps.gen.outputs.number }}
           FLAGGED: \${{ steps.improve.outputs.escalations-flagged-json }}
-        run: node harness/scripts/send-escalation-notice.mjs`;
+        run: node ${harnessDir}/scripts/send-escalation-notice.mjs`;
   }
 
   // Replacement VALUES here contain literal `${{ ... }}` GitHub Actions
@@ -613,7 +767,7 @@ export function renderWorkflowTemplate(template, answers) {
   // Only the pull-request path needs to create one, and a workflow should
   // not hold a permission its own steps never use.
   const permissionLines =
-    normalizeApprovalClass(answers.approvalClass) === 'autonomous-merge'
+    !shared && normalizeApprovalClass(answers.approvalClass) === 'autonomous-merge'
       ? '  contents: write'
       : ['  contents: write', '  pull-requests: write'].join('\n');
 
@@ -622,25 +776,129 @@ export function renderWorkflowTemplate(template, answers) {
   // file with mixed line endings that a reader cannot see and a diff tool
   // reports as a rewrite of every line.
   let out = template.replace(/\r\n/g, '\n');
-  out = sub(out, '{{SCHEDULE_BLOCK}}', scheduleBlock(answers));
+  // The structural blocks first: the harness setup step carries a token of
+  // its own ({{JS_YAML_VERSION}}) for the substitutions below to fill.
+  // A value the shared workflow's config step should have exported. Unset
+  // means that step failed, and the command stops rather than guessing.
+  const configured = (name) => `\${${name}:?the project configuration was not read}`;
+  out = out.replace('{{TRIGGERS}}', () => (shared ? SHARED_TRIGGER : `${scheduleBlock(answers)}\n${DISPATCH_TRIGGER}`));
+  out = out.replace('{{CONCURRENCY_BLOCK}}', () => (shared ? SHARED_CONCURRENCY : CONCURRENCY_BLOCK));
+  out = out.replace('{{HARNESS_SETUP_STEPS}}', () => (shared ? SHARED_HARNESS_SETUP : COPIED_HARNESS_SETUP));
+  // The configuration step writes project-config.json only when it read the
+  // adapter cleanly, so a project whose adapter could not be read stops at
+  // this gate, and reaches the digest the same way, as one that is invalid.
+  out = sub(out, '{{VALIDATE_RUN}}', shared
+    ? 'test -s "$RUNNER_TEMP/project-config.json" && node "$HARNESS_DIR"/scripts/validate.mjs'
+    : 'node harness/scripts/validate.mjs');
+  out = sub(out, '{{HARNESS}}', harnessDir);
+  out = sub(out, '{{INPUTS}}', shared ? 'inputs' : 'github.event.inputs');
+  out = sub(out, '{{DEFAULT_BRANCH_LABEL}}', shared ? 'the default branch' : answers.defaultBranch || 'main');
+  out = sub(out, '{{EDITABLE_PATHS_PREAMBLE}}', shared ? 'mapfile -t editable_paths < "$RUNNER_TEMP/editable-paths"\n          ' : '');
+  out = sub(out, '{{PREFLIGHT_COMMAND_LINES}}', preflightCommandLines);
   out = sub(out, '{{NODE_VERSION}}', NODE_VERSION);
   out = sub(out, '{{PERMISSION_LINES}}', permissionLines);
-  out = sub(out, '{{RUNNER}}', answers.runner || 'ubuntu-latest');
+  out = sub(out, '{{RUNNER}}', shared ? '${{ inputs.runner }}' : answers.runner || 'ubuntu-latest');
   out = sub(out, '{{PROVIDER_ENV_LINES}}', providerEnvLines);
-  out = sub(out, '{{PROVIDERS_CSV}}', answers.providers.map((p) => p.name).join(','));
-  out = sub(out, '{{SNAPSHOT_PATH}}', answers.snapshotPath || '.agent/model-snapshot.json');
+  out = sub(out, '{{PROVIDERS_CSV}}', shared ? '"$PROVIDERS_CSV"' : answers.providers.map((p) => p.name).join(','));
+  out = sub(out, '{{SNAPSHOT_PATH}}', shared ? `"${configured('SNAPSHOT_PATH')}"` : answers.snapshotPath || '.agent/model-snapshot.json');
   out = sub(out, '{{TEST_COMMAND_LINES}}', testCommandLines);
   out = sub(out, '{{EDITABLE_PATHS_GIT_ADD}}', editablePathsGitAdd);
-  out = sub(out, '{{THEMES_CADENCE}}', String(Number.isFinite(answers.themesCadence) ? answers.themesCadence : 10));
+  out = sub(out, '{{THEMES_CADENCE}}', shared
+    ? 'N (memory.themes_review.cadence_generations)'
+    : String(Number.isFinite(answers.themesCadence) ? answers.themesCadence : 10));
   out = sub(out, '{{JS_YAML_VERSION}}', JS_YAML_VERSION);
-  out = sub(out, '{{GENERATIONS_DIR}}', shellQuote(answers.generationsDir || 'docs/generations'));
-  out = sub(out, '{{DEFAULT_BRANCH}}', answers.defaultBranch || 'main');
+  out = sub(out, '{{GENERATIONS_DIR}}', shared ? `"${configured('GENERATIONS_DIR')}"` : shellQuote(answers.generationsDir || 'docs/generations'));
+  out = sub(out, '{{DEFAULT_BRANCH}}', shared ? configured('DEFAULT_BRANCH') : answers.defaultBranch || 'main');
   // Same first-line-unindented convention as {{NOTIFY_STEPS}} below: the
   // template supplies the 6 spaces before the token, so this block's own
   // first line must not.
-  out = out.replace('{{MERGE_STEPS}}', () => mergeSteps(answers));
+  out = out.replace('{{MERGE_STEPS}}', () => mergeSteps(answers, { shared }));
   out = out.replace('{{NOTIFY_STEPS}}', () => notifySteps);
-  return out;
+  return shared ? SHARED_HEADER + out : out;
+}
+
+/** A copied-in installation's `.github/workflows/self-improve.yml`, with every project value baked in. */
+export function renderWorkflowTemplate(template, answers) {
+  return renderWorkflow(template, answers, false);
+}
+
+/**
+ * The shared workflow the harness's own repository serves at
+ * SHARED_WORKFLOW_PATH, from the same template. Nothing project-specific is
+ * baked in: it is read per run from the calling project's adapter by
+ * harness/scripts/workflow-config.mjs. Every registered lab's key is wired,
+ * because which labs a project watches is only known at run time; a secret
+ * a project never set resolves to an empty string.
+ *
+ * @param {string} template
+ * @param {{providers: Array<{name: string, envKey: string}>}} opts  Every registered lab.
+ */
+export function renderSharedWorkflow(template, { providers }) {
+  return renderWorkflow(template, {
+    providers,
+    roleProviders: [],
+    notify: { provider: 'sendgrid', envKey: 'SENDGRID_API_KEY' },
+  }, true);
+}
+
+/**
+ * A shared installation's `.github/workflows/self-improve.yml`: the schedule,
+ * the Run workflow button and the concurrency group, calling the shared
+ * workflow at one commit. Pinned by full SHA, never a tag or branch, for the
+ * reason the generated workflow pins its actions by SHA: a ref that can be
+ * moved would run whatever it was moved to, inside every gate, in every
+ * project at once. `sharedHarness.label` (a release name, say) is only a
+ * comment beside the SHA, so a reader can tell what they pinned.
+ *
+ * Both write permissions are granted whichever merge model the adapter
+ * names: a called workflow may not hold more than its caller, and the
+ * shared one serves both paths.
+ *
+ * @param {object} answers  init.mjs's answers, with `sharedHarness: {ref, repository?, label?}`.
+ */
+export function renderCallerWorkflow(answers) {
+  const shared = answers.sharedHarness ?? {};
+  if (!/^[0-9a-f]{40}$/.test(shared.ref || '')) {
+    throw new Error('A shared installation pins the harness by its full 40-character commit SHA, not a branch, tag or short SHA.');
+  }
+  const repository = shared.repository || SHARED_HARNESS_REPOSITORY;
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
+    throw new Error(`"${repository}" is not an owner/repository name.`);
+  }
+  if (shared.label !== undefined && !/^[A-Za-z0-9._+-]{1,40}$/.test(shared.label)) {
+    throw new Error('The version label must be a short name like v0.1.0.');
+  }
+  const runner = answers.runner || 'ubuntu-latest';
+  if (!/^[A-Za-z0-9._-]+$/.test(runner)) throw new Error(`"${runner}" is not a runner name.`);
+
+  return `# Calls the shared self-improvement workflow at one pinned harness commit,
+# instead of carrying a copy of harness/ in this repository. Everything else
+# the loop needs is read from project-adapter.yml at the start of each run.
+#
+# To upgrade, change the commit below (and the version beside it) to a newer
+# harness release, and review the change like any other. See
+# SELF-IMPROVE-README.md for what this installed.
+
+name: Self-improvement loop
+
+on:
+${scheduleBlock(answers)}
+${DISPATCH_TRIGGER}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+${CONCURRENCY_BLOCK}
+
+jobs:
+  self-improve:
+    uses: ${repository}/${SHARED_WORKFLOW_PATH}@${shared.ref}${shared.label ? ` # ${shared.label}` : ''}
+    secrets: inherit
+    with:
+      scope: \${{ github.event.inputs.scope }}
+      models: \${{ github.event.inputs.models }}${runner === 'ubuntu-latest' ? '' : `\n      runner: ${runner}`}
+`;
 }
 
 /**
@@ -664,6 +922,23 @@ export function renderReadme(answers) {
   const secretLines = [providerLines, notifyLine].filter(Boolean).join('\n');
 
   const approvalClass = normalizeApprovalClass(answers.approvalClass);
+  // A copied-in workflow has the merge model baked in, so a change to the
+  // adapter needs the workflow regenerated; the shared one reads it per run.
+  const shared = answers.sharedHarness;
+  const regenerate = shared
+    ? 'leave the workflow alone — the shared workflow reads the\nadapter at the start of every run, so the change takes effect on the next one.'
+    : 'regenerate the workflow from it with\n`node harness/cli/init.mjs --from-adapter --force` — the merge model is baked\ninto the workflow file, not read from the adapter at run time.';
+  const workflowBullet = shared
+    ? `- \`.github/workflows/self-improve.yml\` — a short workflow that calls the shared
+  self-improvement workflow at harness commit \`${shared.ref}\`${shared.label ? ` (${shared.label})` : ''}.
+  No copy of \`harness/\` lives in this repository; upgrade by changing that
+  commit. Runs on the schedule below, and on demand via the Actions tab's
+  "Run workflow" button.`
+    : `- \`.github/workflows/self-improve.yml\` — the generated workflow. Runs on the
+  schedule below, and on demand via the Actions tab's "Run workflow" button.`;
+  const revertCommand = shared
+    ? 'node /path/to/self-optimisation/harness/scripts/revert-generation.mjs NNN --reason "why"'
+    : 'node harness/scripts/revert-generation.mjs NNN --reason "why"';
   const approvalSection =
     approvalClass === 'autonomous-merge'
       ? `**\`autonomous-merge\`** — when every gate passes (preflight, the independent
@@ -674,9 +949,7 @@ this stays reversible: \`git revert gen-NNN\`, or bisect between two of them.
 
 This is the advanced setting. If you did not mean to choose it, set
 \`constitution.approval_class: human-approval-required\` in
-\`project-adapter.yml\` and regenerate the workflow from it with
-\`node harness/cli/init.mjs --from-adapter --force\` — the merge model is baked
-into the workflow file, not read from the adapter at run time.`
+\`project-adapter.yml\` and ${regenerate}`
       : `**\`human-approval-required\`** (the default) — when every gate passes
 (preflight, the independent review, the guarded-path check, your own tests),
 the workflow opens a **pull request** and stops. You merge it, or you don't.
@@ -695,9 +968,7 @@ permissions it needs itself.)
 
 To switch to autonomous merge later, set
 \`constitution.approval_class: autonomous-merge\` in \`project-adapter.yml\`
-and regenerate the workflow from it with
-\`node harness/cli/init.mjs --from-adapter --force\` — the merge model is baked
-into the workflow file, not read from the adapter at run time.`;
+and ${regenerate}`;
 
   const cadenceSection =
     answers.includeSchedule === false
@@ -730,8 +1001,7 @@ for themselves.
 - \`project-adapter.yml\` — this project's own configuration. Review it before
   your first real run; every field is documented in
   \`harness/project-adapter.example.yml\`.
-- \`.github/workflows/self-improve.yml\` — the generated workflow. Runs on the
-  schedule below, and on demand via the Actions tab's "Run workflow" button.
+${workflowBullet}
 - \`${answers.agentBriefPath}\` / \`${answers.reviewerBriefPath}\` — the agent and
   reviewer briefs, copied from \`harness/templates/\`. **These still have
   [bracketed] placeholders you must fill in by hand** — what "better" means
@@ -756,7 +1026,7 @@ Every gate is a prediction; this is the correction. From a checkout with
 push access to \`${answers.defaultBranch || 'main'}\`:
 
 \`\`\`bash
-node harness/scripts/revert-generation.mjs NNN --reason "why"
+${revertCommand}
 \`\`\`
 
 It reverts the merge that shipped generation NNN (the \`gen-NNN\` tag on the

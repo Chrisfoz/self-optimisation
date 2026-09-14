@@ -47,6 +47,29 @@ let step = 0,
   catalogue = { labs: [], counts: { bundled: 0, repository: 0, unseen: 0 }, fetchedAt: null },
   modelsRequest = 0;
 const SEATS = ["implement", "review", "rank"];
+// One project per repository, kept in this tab the way the single draft was.
+const PROJECTS_KEY = "self-optimisation-projects";
+const LEGACY_DRAFT_KEY = "self-optimisation-draft";
+// What "copy settings from another project" carries: how you like to run the
+// loop. Everything else describes one repository (its files, tests, goal and
+// deployment), and automatic merge is deliberately absent: each project opts
+// in on its own.
+const SHARED_FIELDS = [
+  "labs",
+  "implementModel",
+  "implementProvider",
+  "reviewModel",
+  "reviewProvider",
+  "rankModel",
+  "rankProvider",
+  "cadence",
+  "maxAttempts",
+  "maxFanout",
+  "maxGenerationTokens",
+];
+let projects = [],
+  currentProject = null,
+  blankDraft = null;
 const lineList = (value) =>
   value
     .split("\n")
@@ -81,34 +104,169 @@ function draft() {
   if (data.approvalClass !== "autonomous-merge") data.deploymentUrl = "";
   return data;
 }
-function save() {
-  try {
-    sessionStorage.setItem("self-optimisation-draft", JSON.stringify(draft()));
-  } catch {
-    status("This browser cannot remember the draft. Keep this tab open.");
-  }
+const newId = () =>
+  globalThis.crypto?.randomUUID?.() ||
+  `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+function project(id = currentProject) {
+  return projects.find((p) => p.id === id);
 }
-function restore() {
+const projectLabel = (p) => p.draft.repository || "New project";
+const projectStatus = (p) =>
+  p.setupStatus || `Draft · step ${(p.step || 0) + 1} of 10`;
+function persist() {
   try {
-    const data = JSON.parse(
-      sessionStorage.getItem("self-optimisation-draft") || "null",
+    sessionStorage.setItem(
+      PROJECTS_KEY,
+      JSON.stringify({ current: currentProject, projects }),
     );
-    if (!data) return;
-    for (const id of inputs)
-      if (data[id] !== undefined)
-        $("#" + id).value = Array.isArray(data[id])
-          ? data[id].join("\n")
-          : data[id];
-    for (const n of $$("input[name=lab]"))
-      n.checked = (data.labs || []).includes(n.value);
-    for (const id of ["cadence", "approvalClass"])
-      for (const n of $$(`input[name=${id}]`)) n.checked = n.value === data[id];
+  } catch {
+    status("This browser cannot remember your projects. Keep this tab open.");
+  }
+  renderProjects();
+}
+function save() {
+  const p = project();
+  if (p) p.draft = draft();
+  persist();
+}
+function setProjectStatus(text) {
+  const p = project();
+  if (!p || p.setupStatus === text) return;
+  p.setupStatus = text;
+  persist();
+}
+function loadProjects() {
+  let stored = null;
+  try {
+    stored = JSON.parse(sessionStorage.getItem(PROJECTS_KEY) || "null");
+    if (!stored) {
+      // A draft saved before projects existed becomes the first project.
+      const legacy = JSON.parse(
+        sessionStorage.getItem(LEGACY_DRAFT_KEY) || "null",
+      );
+      if (legacy)
+        stored = { projects: [{ id: newId(), draft: legacy, step: 0 }] };
+      sessionStorage.removeItem(LEGACY_DRAFT_KEY);
+    }
   } catch {
     status(
-      "Saved draft could not be restored. Start a new configuration.",
+      "Saved projects could not be restored. Start a new configuration.",
       true,
     );
   }
+  projects = (Array.isArray(stored?.projects) ? stored.projects : []).filter(
+    (p) =>
+      p && typeof p.id === "string" && p.draft && typeof p.draft === "object",
+  );
+  if (!projects.length)
+    projects = [{ id: newId(), draft: { ...blankDraft }, step: 0 }];
+  currentProject = project(stored?.current) ? stored.current : projects[0].id;
+}
+function applyDraft(data) {
+  const values = { ...blankDraft, ...data };
+  for (const id of inputs)
+    $("#" + id).value = Array.isArray(values[id])
+      ? values[id].join("\n")
+      : (values[id] ?? "");
+  for (const n of $$("input[name=lab]"))
+    n.checked = (values.labs || []).includes(n.value);
+  for (const id of ["cadence", "approvalClass"]) {
+    for (const n of $$(`input[name=${id}]`)) n.checked = n.value === values[id];
+    if (!$(`input[name=${id}]:checked`))
+      for (const n of $$(`input[name=${id}]`))
+        n.checked = n.value === blankDraft[id];
+  }
+}
+function renderProjects() {
+  $("#project-list").replaceChildren(
+    ...projects.map((p) => {
+      const item = node("li");
+      const open = node("button", undefined, "project");
+      open.type = "button";
+      open.title = projectLabel(p);
+      if (p.id === currentProject) open.setAttribute("aria-current", "true");
+      open.append(
+        node("span", projectLabel(p), "project-name"),
+        node("span", projectStatus(p), "project-status"),
+      );
+      open.addEventListener("click", () =>
+        switchProject(p.id).catch((e) => status(e.message, true)),
+      );
+      item.append(open);
+      if (projects.length > 1) {
+        const remove = node("button", "×", "project-remove");
+        remove.type = "button";
+        remove.setAttribute("aria-label", `Remove ${projectLabel(p)} from this list`);
+        remove.addEventListener("click", () =>
+          removeProject(p.id).catch((e) => status(e.message, true)),
+        );
+        item.append(remove);
+      }
+      return item;
+    }),
+  );
+}
+function closeNewProject() {
+  $("#new-project-form").hidden = true;
+  $("#new-project").setAttribute("aria-expanded", "false");
+}
+async function switchProject(id) {
+  if (id === currentProject || !project(id)) return;
+  save();
+  currentProject = id;
+  const p = project();
+  clearRepository();
+  applyDraft(p.draft);
+  closeNewProject();
+  $("#runs-view").hidden = true;
+  $("#setup-view").hidden = false;
+  show(p.step || 0, false);
+  changed();
+  if (session.connected && repositories.length) {
+    $("#repo-search").value = "";
+    $("#repo-owner").value = "";
+    filterRepositories();
+    if (repositories.some((r) => r.name === p.draft.repository)) {
+      await connectRepository();
+      return;
+    }
+  }
+  await loadModels();
+}
+async function createProject(sourceId) {
+  save();
+  const source = project(sourceId);
+  const fresh = { ...blankDraft };
+  if (source)
+    for (const field of SHARED_FIELDS)
+      if (source.draft[field] !== undefined)
+        fresh[field] = Array.isArray(source.draft[field])
+          ? [...source.draft[field]]
+          : source.draft[field];
+  const created = { id: newId(), draft: fresh, step: 0 };
+  projects.push(created);
+  await switchProject(created.id);
+  status(
+    source
+      ? `New project started with ${projectLabel(source)}'s labs, models, cadence and budget. Choose its repository, tests, files and goal. Automatic merge starts off.`
+      : "New project started. Choose its repository to begin.",
+  );
+  ($("#repo-picker-field").hidden ? $("#repository") : $("#repo-picker")).focus();
+}
+async function removeProject(id) {
+  const p = project(id);
+  if (!p || projects.length < 2) return;
+  if (
+    !confirm(
+      `Remove ${projectLabel(p)} from this list? Its draft is discarded. Nothing on GitHub changes.`,
+    )
+  )
+    return;
+  if (id === currentProject)
+    await switchProject(projects.find((other) => other.id !== id).id);
+  projects = projects.filter((other) => other.id !== id);
+  persist();
+  status(`Removed ${projectLabel(p)} from this list. Nothing on GitHub changed.`);
 }
 async function api(path, body) {
   const response = await fetch(path, {
@@ -162,6 +320,11 @@ function show(index, focus = true) {
   $("#back").disabled = step === 0;
   $("#next").hidden = step === 9;
   $("#progress").textContent = `Step ${step + 1} of 10`;
+  const p = project();
+  if (p && p.step !== step) {
+    p.step = step;
+    persist();
+  }
   if (focus) $("#step-content").focus();
 }
 function changed() {
@@ -280,6 +443,12 @@ function summary() {
         : "Pull request (default)",
     ],
     ["Token cap", data.maxGenerationTokens.toLocaleString()],
+    [
+      "Harness",
+      session.install?.mode === "shared"
+        ? `Shared · ${session.install.label || session.install.ref.slice(0, 7)}`
+        : "Copied into the repository",
+    ],
   ];
   $("#summary").replaceChildren(
     ...rows.map(([label, value]) => {
@@ -423,6 +592,8 @@ async function connectRepository() {
   clearRepository();
   const request = repoRequest;
   if (!name) return;
+  const current = project();
+  if (current && current.draft.repository !== name) current.setupStatus = null;
   $("#repository").value = name;
   changed();
   status("Reading repository and default branch…");
@@ -441,6 +612,7 @@ async function connectRepository() {
   $("#repo-state").textContent =
     `Connected to ${data.name} · ${data.defaultBranch} · ${data.tree.filter((f) => f.type === "blob").length} files${data.existingSetup ? " · Existing installation detected: use the CLI to upgrade." : ""}`;
   renderTree();
+  if (data.existingSetup) setProjectStatus("Already installed · upgrade with the CLI");
   changed();
   status("Repository connected.");
   // Its own snapshot is the live model list — read it now rather than making
@@ -537,10 +709,16 @@ async function refreshSetup() {
     external(`Open pull request #${state.setup.number} ↗`, state.setup.url),
   );
   if (state.changed) {
+    setProjectStatus("Setup pull request changed on GitHub");
     $("#setup-state").append(node("p", state.message, "notice warning"));
     return;
   }
   if (!state.merged) {
+    setProjectStatus(
+      state.state === "closed"
+        ? "Setup closed without merging"
+        : `Setup PR #${state.setup.number} open`,
+    );
     $("#setup-state").append(
       node(
         "p",
@@ -553,6 +731,11 @@ async function refreshSetup() {
     return;
   }
   if (!state.run) {
+    setProjectStatus(
+      state.setup.dispatchedAt
+        ? "Rehearsal requested"
+        : "Setup merged · ready to rehearse",
+    );
     $("#setup-state").append(
       node(
         "p",
@@ -575,6 +758,15 @@ async function refreshSetup() {
   for (const gate of state.gates)
     list.append(node("li", `${gate.name}: ${gate.result}`));
   $("#setup-state").append(list);
+  setProjectStatus(
+    state.passed
+      ? state.setup.activation
+        ? `Activation PR #${state.setup.activation.number} open`
+        : "Rehearsal passed"
+      : state.run.status === "completed"
+        ? "Rehearsal needs attention"
+        : "Rehearsal running",
+  );
   if (state.passed) {
     $("#setup-state").append(
       node(
@@ -692,12 +884,24 @@ window.addEventListener("focus", () => {
     loadRepositories().catch((e) => status(e.message, true));
   }
 });
-$("#repo-picker").addEventListener("change", () =>
-  connectRepository().catch((e) => status(e.message, true)),
-);
+$("#repo-picker").addEventListener("change", () => {
+  // A repository that already has a project opens that project, rather than
+  // a second draft for the same repository.
+  const name = $("#repo-picker").value;
+  const existing = projects.find(
+    (p) => p.id !== currentProject && name && p.draft.repository === name,
+  );
+  const next = existing
+    ? switchProject(existing.id).then(() =>
+        status(`${name} already has a project. Switched to it.`),
+      )
+    : connectRepository();
+  next.catch((e) => status(e.message, true));
+});
 action("#sign-out", async () => {
   await api("/auth/logout", {});
-  sessionStorage.removeItem("self-optimisation-draft");
+  sessionStorage.removeItem(PROJECTS_KEY);
+  sessionStorage.removeItem(LEGACY_DRAFT_KEY);
   location.reload();
 });
 action("#check-secrets", async () => {
@@ -742,9 +946,27 @@ action("#download", async () => {
   );
 });
 action("#reset-button", () => {
-  sessionStorage.removeItem("self-optimisation-draft");
+  if (!confirm("Reset this project's draft? Nothing on GitHub changes."))
+    return;
+  const p = project();
+  Object.assign(p, { draft: { ...blankDraft }, step: 0, setupStatus: null });
+  persist();
   location.reload();
 });
+$("#new-project").addEventListener("click", () => {
+  if (!$("#new-project-form").hidden) return closeNewProject();
+  $("#new-project-form").hidden = false;
+  $("#new-project").setAttribute("aria-expanded", "true");
+  const source = $("#new-project-source");
+  source.replaceChildren(
+    new Option("Blank project", ""),
+    ...projects.map((p) => new Option(`Copy settings from ${projectLabel(p)}`, p.id)),
+  );
+  source.value = project()?.draft.labs?.length ? currentProject : "";
+  source.focus();
+});
+action("#create-project", () => createProject($("#new-project-source").value));
+$("#cancel-project").addEventListener("click", closeNewProject);
 action("#runs-button", showRuns);
 action("#refresh-runs", showRuns);
 action("#back-setup", () => {
@@ -753,7 +975,11 @@ action("#back-setup", () => {
 });
 $("#setup-form").addEventListener("submit", (e) => e.preventDefault());
 $("#setup-form").addEventListener("input", (event) => {
-  if (event.target.id === "repository") clearRepository();
+  if (event.target.id === "repository") {
+    clearRepository();
+    const p = project();
+    if (p) p.setupStatus = null;
+  }
   changed();
 });
 $("#setup-form").addEventListener("change", changed);
@@ -805,8 +1031,13 @@ async function init() {
     li.append(b);
     $("#steps").append(li);
   });
-  restore();
-  show(0, false);
+  // The form's own defaults, read before any saved draft is applied: a new
+  // project starts from these, and a reset returns to them.
+  blankDraft = draft();
+  loadProjects();
+  applyDraft(project().draft);
+  renderProjects();
+  show(project().step || 0, false);
   await loadModels();
   summary();
   $("#deployment-field").hidden = $("#auto-merge-notice").hidden =

@@ -392,6 +392,16 @@ deployment:
 # of these and re-run `node harness/cli/init.mjs --force` to regenerate the
 # workflow; editing this file alone changes nothing.
 #
+# THE ONE EXCEPTION, a shared installation (`init --shared <sha>`, or a
+# console deployment with SELF_OPTIMISATION_SHARED_REF set). Its workflow is
+# a short call to the harness repository's shared workflow and has no test
+# steps of its own to bake anything into, so there test_commands, and the
+# setup_commands below, are LIVE: read once per run, from the default branch,
+# before any agent change exists, and saved for both test gates to use
+# (harness/lib/workflow-config.mjs). One source of truth per run still holds;
+# a change here takes effect on the next run. The cron is still baked into
+# that short workflow, and still only recorded here.
+#
 # cadence.trigger is documentation of intent with no mechanism behind it at
 # all: the real trigger is a model release (learning/01-principles.md,
 # principle 1), and the cron is only how often the harness goes looking.
@@ -403,6 +413,26 @@ deployment:
 # evaluation:
 #   test_commands: []
 #   preflight_required: true
+#   setup_commands: []               # shared installations only: installs the project's
+#                                    # dependencies before preflight, e.g. [npm ci --ignore-scripts]
+
+# --- SHARED installations only: which harness commit the workflow calls ---
+# Written by init --shared and by the console; read back by
+# `init --from-adapter` to regenerate the workflow at the same pin. The run
+# itself uses whatever commit the workflow file names, so keep the two in
+# step when you upgrade. A full commit SHA, never a branch or tag.
+#
+# harness:
+#   shared:
+#     repository: Chrisfoz/self-optimisation
+#     ref: <full 40-character commit sha>
+#     label: <v0.1.0>                # optional, shown beside the pin
+#
+# One limit to know: a module path in evaluation.evaluators is resolved from
+# your project's root, and a shared installation has no harness/ there, so
+# the shipped example (harness/plugins/evaluators/...) cannot be named by that
+# path. Copy the plugin into your project and point at the copy. Evaluators
+# never gate, so a plugin that fails to load is recorded, not fatal.
 
 # --- LIVE: the same test_commands, run INSIDE the generation -------------
 # After each attempt's edits apply and before the independent review, the
