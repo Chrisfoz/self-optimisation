@@ -499,6 +499,10 @@ export function notifyConfig(adapter) {
  * here is the ONLY way it can know what to run at all, and it reads the
  * base branch's copy for both its preflight and post-change runs within
  * one invocation, so the risk that rule guards against doesn't apply.
+ * The shared workflow is the other exception, for the same reason: it has
+ * no generated steps to bake the commands into, so
+ * harness/lib/workflow-config.mjs reads them once per run, from the default
+ * branch before any agent change, and both test gates use that saved copy.
  * Nothing else may treat this as authoritative for what CI executes.
  */
 export function evaluationConfig(adapter) {

@@ -250,6 +250,22 @@ Two consequences for the console:
 
 ## 3. One structural recommendation that changes the install
 
+**Built 2026-09-14 (the reusable workflow; the npm package is not).**
+`.github/workflows/self-improve.yml` in this repository is the shared workflow,
+rendered from the same template as a copied-in one
+(`renderSharedWorkflow()`, kept in step by a test). A project's own workflow
+is a short caller pinned to a full commit SHA (`renderCallerWorkflow()`,
+`init --shared <sha>`, or a console deployment with
+`SELF_OPTIMISATION_SHARED_REF`), and the setup pull request shrinks to the
+adapter, two briefs, the caller and a README. The shared workflow fetches the
+harness at the commit it was called at and reads each project's adapter once
+per run, from the default branch, before any agent change. Two differences
+from the sketch below: pinning is by SHA rather than `@v1`, because a movable
+tag would run whatever it was moved to in every project at once; and none of
+this is usable by other people until this repository is public, which is why
+the console keeps the copied install unless the variable is set. See
+`console/DEPLOYMENT.md`, "Shared harness".
+
 Right now, "install" means vendoring ~40 files of `harness/` into the user's
 repo. For a console-driven install that's a bad foundation: the console
 would have to write 40 files through the GitHub API, and every one of them
@@ -896,6 +912,14 @@ section documents the shape so that step is informed, not blind.
    installed repos are you configuring right now" step the day multi-repo
    grants become possible, or step 1 gets ambiguous the first time someone
    installs on three repos and only means to set up one.
+   **Partly answered 2026-09-14:** many, one at a time. The console keeps a
+   list of projects in the browser tab, one per repository, and a new project
+   can copy another's labs, models, cadence and budget (never its repository,
+   tests, paths, goal or automatic merge). The server tracks setup per
+   repository within a sign-in, so one session can take several repositories
+   through setup, rehearsal and activation. Still open: a view of every
+   configured repository's runs at once (§5 phase 4), which needs state that
+   outlives a browser tab.
 5. **Who does the GitHub App belong to?** A personal GitHub account or an
    organisation — this decides who can rotate the private key, who GitHub
    shows as the App's publisher on every install screen, and what happens to

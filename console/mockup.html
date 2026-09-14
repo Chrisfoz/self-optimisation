@@ -9,18 +9,56 @@
 <div class="workspace">
   <div class="workspace-heading">
     <div>
-      <p class="eyebrow">YOUR REPOSITORY. YOUR RULES.</p>
-      <h1>Set up your improvement loop</h1>
-      <p>Configure, review, rehearse. Then choose when it runs.</p>
+      <p class="eyebrow">YOUR REPOSITORIES. YOUR RULES.</p>
+      <h1>Set up your improvement loops</h1>
+      <p>
+        One project per repository: configure, review, rehearse. Start the next
+        from settings you've already chosen.
+      </p>
     </div>
     <div class="button-row">
       <button class="button" id="runs-button">View runs</button
-      ><button class="button" id="reset-button">Clear draft</button>
+      ><button class="button" id="reset-button">Reset project</button>
     </div>
   </div>
   <p id="global-status" class="status" role="status" aria-live="polite"></p>
   <div id="setup-view" class="wizard-grid">
-    <nav class="rail" aria-label="Setup steps"><ol id="steps"></ol></nav>
+    <div class="sidebar">
+      <section class="projects" aria-labelledby="projects-heading">
+        <div class="projects-head">
+          <h2 id="projects-heading" class="eyebrow">Projects</h2>
+          <button
+            type="button"
+            class="button small"
+            id="new-project"
+            aria-expanded="false"
+            aria-controls="new-project-form"
+          >
+            + New
+          </button>
+        </div>
+        <div id="new-project-form" class="new-project" hidden>
+          <label class="field"
+            ><span>Start from</span><select id="new-project-source"></select
+            ><small
+              >Copies labs, models, cadence, attempts, fan-out and token
+              budget. Repository, tests, files, goal and automatic merge are
+              set for each project.</small
+            ></label
+          >
+          <div class="button-row">
+            <button type="button" class="button primary small" id="create-project">
+              Create</button
+            ><button type="button" class="button quiet small" id="cancel-project">
+              Cancel
+            </button>
+          </div>
+        </div>
+        <ul id="project-list" class="project-list"></ul>
+        <p class="caption">One project per repository, kept in this tab.</p>
+      </section>
+      <nav class="rail" aria-label="Setup steps"><ol id="steps"></ol></nav>
+    </div>
     <main id="step-content" class="panel" tabindex="-1">
       <form id="setup-form" novalidate>
         <section data-step="0">
@@ -427,9 +465,9 @@
           <p class="eyebrow">10 / REVIEW & REHEARSE</p>
           <h2>Inspect it before it runs</h2>
           <p class="lede">
-            Generate the actual adapter, workflow and briefs. A setup pull
-            request also includes the harness files needed to run in your
-            repository.
+            Generate the actual adapter, workflow and briefs. The summary
+            shows how the harness is installed: copied into your repository,
+            or called at a pinned commit of the shared harness.
           </p>
           <button type="button" class="button primary" id="generate">
             Validate & generate files
@@ -484,8 +522,9 @@
         until you merge setup and request a rehearsal.
       </div>
       <p>
-        This tab remembers your draft for sign-in and refresh. Clear it when
-        using a shared computer. Never paste API keys into these fields.
+        This tab remembers your projects for sign-in and refresh. Remove them,
+        or sign out, when using a shared computer. Never paste API keys into
+        these fields.
       </p>
     </aside>
   </div>

@@ -174,12 +174,17 @@ export async function secretsStatus(api, repo, required) {
   const names = new Set(secrets.map((s) => s.name));
   return required.map((name) => ({ name, present: names.has(name) }));
 }
-export async function openSetup(api, repo, input) {
+export async function openSetup(api, repo, input, { shared = null } = {}) {
   const generated = configure(input, {
     tree: repo.tree,
     defaultBranch: repo.defaultBranch,
+    shared,
   });
-  const files = { ...harnessFiles(), ...generated.files };
+  // A shared installation calls the harness at a pinned commit; only a
+  // copied one carries harness/ into the repository.
+  const files = shared
+    ? { ...generated.files }
+    : { ...harnessFiles(), ...generated.files };
   const existing = new Set(repo.tree.map((f) => f.path));
   const collisions = Object.keys(files).filter((p) => existing.has(p));
   if (collisions.length)
@@ -229,7 +234,7 @@ export async function openSetup(api, repo, input) {
         title: "Set up Self-Optimisation (manual rehearsal first)",
         head: branch,
         base: repo.defaultBranch,
-        body: `Adds the harness, project goal, protected paths and test commands.\n\nThe initial workflow is dispatch-only and opens pull requests. It does not automatically merge or enable a schedule.\n\nReview the generated configuration and test commands before merging. Required secrets: ${generated.requiredSecrets.join(", ")}.\n\nAfter merging, return to the console to run a focused campaign on the selected implementer. Model API usage is billed to your configured keys.\n\nRequested later: ${input.cadence} checks; ${input.approvalClass}.`,
+        body: `${shared ? `Adds a workflow that calls the shared harness at ${shared.label || shared.ref}, plus the project goal, protected paths and test commands.` : "Adds the harness, project goal, protected paths and test commands."}\n\nThe initial workflow is dispatch-only and opens pull requests. It does not automatically merge or enable a schedule.\n\nReview the generated configuration and test commands before merging. Required secrets: ${generated.requiredSecrets.join(", ")}.\n\nAfter merging, return to the console to run a focused campaign on the selected implementer. Model API usage is billed to your configured keys.\n\nRequested later: ${input.cadence} checks; ${input.approvalClass}.`,
       },
     });
   } catch (error) {
@@ -249,6 +254,8 @@ export async function openSetup(api, repo, input) {
     requestedCadence: input.cadence,
     requestedApproval: input.approvalClass,
     input: { ...input, defaultBranch: repo.defaultBranch },
+    // Activation re-renders in the same mode, whatever the deployment says later.
+    shared,
   };
 }
 export async function rehearsalStatus(api, repo, setup) {
@@ -345,7 +352,7 @@ export async function activateSchedule(api, repo, setup) {
       409,
       "A rehearsal must pass review, guard, tests and pull-request creation before activation.",
     );
-  const initial = configure(setup.input).files;
+  const initial = configure(setup.input, { shared: setup.shared ?? null }).files;
   for (const p of ["project-adapter.yml", WORKFLOW]) {
     const file = await api(
       `${repo.base}/contents/${p}?ref=${encodeURIComponent(repo.head)}`,
@@ -364,7 +371,7 @@ export async function activateSchedule(api, repo, setup) {
       409,
       "Manual mode is already active. No activation change is needed.",
     );
-  const files = activationFiles(setup.input);
+  const files = activationFiles(setup.input, { shared: setup.shared ?? null });
   const branch = `self-optimisation/activate-${randomBytes(6).toString("hex")}`;
   const tree = await api(`${repo.base}/git/trees`, {
     method: "POST",

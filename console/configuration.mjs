@@ -10,8 +10,10 @@ import {
 import {
   renderAdapterYaml,
   renderWorkflowTemplate,
+  renderCallerWorkflow,
   renderReadme,
   requiredProviders,
+  SHARED_HARNESS_REPOSITORY,
 } from "../harness/lib/scaffold.mjs";
 import { harnessVersion } from "../harness/lib/version.mjs";
 import { globToRegExp } from "../harness/lib/glob.mjs";
@@ -121,7 +123,7 @@ const prose = (v, name) => {
     fail(`Enter ${name} (up to 16,000 characters).`);
   return v.trim();
 };
-export function configure(input, { tree = null, defaultBranch = null } = {}) {
+export function configure(input, { tree = null, defaultBranch = null, shared = null } = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input))
     fail("Configuration must be an object.");
   const keys = new Set([
@@ -319,19 +321,28 @@ export function configure(input, { tree = null, defaultBranch = null } = {}) {
       ? { productionUrl: input.deploymentUrl, watchedFiles: allowedPaths }
       : undefined,
     ambition: "focused",
+    // A shared installation records its pin, and keeps the setup commands in
+    // the adapter, where the shared workflow reads them each run.
+    ...(shared ? { sharedHarness: shared, setupCommands } : {}),
   };
   const bullet = (items) => items.map((x) => `- ${x}`).join("\n") || "- None";
   const agentBrief = `# ${answers.projectId}: improvement brief\n\n## Objective\n${goal}\n\n## Constraints\n${constraints}\n\n## Quality bar\n${hints || "Preserve existing behaviour and explain the benefit of each change."}\n\nMake one focused, reviewable improvement. Respect the committed goal and all protected paths. Use exact edits. Never change tests to hide a failure.\n\n## Editable paths\n${bullet(allowedPaths)}\n\n## Create-only paths\n${bullet(createOnlyPaths)}\n\n## Protected paths\n${bullet(frozenPaths)}\n\n## Tests that must pass\n${bullet(testCommands)}\n\nEnd every proposal with BRIEF FEEDBACK: describing what helped or constrained you. You may argue for changing a rule using ESCALATION:, ESCALATION TARGET:, and ESCALATION CASE:, but may never edit the rule yourself.\n`;
   const reviewerBrief = `# Independent review\n\nReview the actual changes against this objective:\n${goal}\n\nConstraints:\n${constraints}\n\nReject broken behaviour, weak or bypassed tests, changes outside allowed paths, goal drift and unresolved required fixes. Test commands:\n${bullet(testCommands)}\n\nReturn exactly one verdict, either VERDICT: APPROVED or VERDICT: REJECTED, followed by REASON: and any REQUIRED FIXES:. An approval must have no required fixes. End with END OF REVIEW.\n`;
   const files = {
     "project-adapter.yml": renderAdapterYaml(answers),
-    [WORKFLOW]: workflowFor(answers, setupCommands),
+    [WORKFLOW]: shared
+      ? renderCallerWorkflow(answers)
+      : workflowFor(answers, setupCommands),
     ".claude/agents/improve.md": agentBrief,
     ".claude/agents/review.md": reviewerBrief,
     "SELF-IMPROVE-README.md":
       renderReadme(answers) +
       (setupCommands.length
-        ? "\n## Project dependency setup\n\nRuns before harness dependencies are installed:\n\n```sh\n" +
+        ? "\n## Project dependency setup\n\n" +
+          (shared
+            ? "Runs before this project's tests, from `evaluation.setup_commands`:"
+            : "Runs before harness dependencies are installed:") +
+          "\n\n```sh\n" +
           setupCommands.join("\n") +
           "\n```\n"
         : ""),
@@ -344,6 +355,11 @@ export function configure(input, { tree = null, defaultBranch = null } = {}) {
     requestedCadence: input.cadence,
     warnings: [
       "The setup workflow is manual and opens pull requests. Scheduling and automatic merge remain off during rehearsal.",
+      ...(shared
+        ? [
+            `The workflow calls the shared harness at ${shared.label || shared.ref} from ${shared.repository}. That repository must be readable by this repository's Actions runs.`,
+          ]
+        : []),
       "Test commands execute in your GitHub Actions runner. Include any dependency installation your tests need.",
       ...(implementSeat.provider === reviewSeat.provider
         ? [
@@ -380,8 +396,8 @@ export function harnessFiles(sourceRoot = root) {
   return files;
 }
 
-export function activationFiles(input) {
-  const generated = configure(input);
+export function activationFiles(input, { shared = null } = {}) {
+  const generated = configure(input, { shared });
   const answers = {
     ...generated.answers,
     includeSchedule: input.cadence !== "manual",
@@ -389,8 +405,35 @@ export function activationFiles(input) {
   };
   return {
     "project-adapter.yml": renderAdapterYaml(answers),
-    [WORKFLOW]: workflowFor(answers, input.setupCommands || []),
+    [WORKFLOW]: shared
+      ? renderCallerWorkflow(answers)
+      : workflowFor(answers, input.setupCommands || []),
   };
+}
+
+/**
+ * Whether this deployment installs the shared harness instead of copying
+ * harness/ into each repository, from SELF_OPTIMISATION_SHARED_REF (a full
+ * commit SHA), SELF_OPTIMISATION_SHARED_REPOSITORY and
+ * SELF_OPTIMISATION_SHARED_LABEL. Unset is the copied install. A value that
+ * would not render is thrown at boot, so a deployment never opens pull
+ * requests carrying a workflow that cannot run.
+ */
+export function sharedHarnessFromEnv(env = process.env) {
+  if (!env.SELF_OPTIMISATION_SHARED_REF) return null;
+  const shared = {
+    repository: env.SELF_OPTIMISATION_SHARED_REPOSITORY || SHARED_HARNESS_REPOSITORY,
+    ref: env.SELF_OPTIMISATION_SHARED_REF,
+    ...(env.SELF_OPTIMISATION_SHARED_LABEL
+      ? { label: env.SELF_OPTIMISATION_SHARED_LABEL }
+      : {}),
+  };
+  try {
+    renderCallerWorkflow({ sharedHarness: shared });
+  } catch (error) {
+    throw new Error(`SELF_OPTIMISATION_SHARED_*: ${error.message}`);
+  }
+  return shared;
 }
 
 export function requiredSecretNames(input) {

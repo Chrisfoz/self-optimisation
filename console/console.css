@@ -489,13 +489,116 @@ small {
 }
 .wizard-grid {
   display: grid;
-  grid-template-columns: 205px minmax(0, 1fr) 340px;
+  grid-template-columns: 230px minmax(0, 1fr) 340px;
   gap: 22px;
   align-items: start;
 }
-.rail {
+/* The left column: the projects list above the steps of the one open, the
+   way Claude Code lists projects beside the work in each. */
+.sidebar {
   position: sticky;
   top: 24px;
+  display: grid;
+  gap: 14px;
+}
+.projects {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+.projects-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.projects-head h2 {
+  margin: 0;
+}
+.projects .caption {
+  margin: 8px 4px 0;
+}
+.button.small {
+  min-height: 32px;
+  padding: 5px 11px;
+  gap: 6px;
+  font-size: 13px;
+}
+.new-project {
+  border-block: 1px solid var(--line);
+  padding-bottom: 10px;
+  margin-bottom: 8px;
+}
+.new-project .field {
+  margin: 10px 0;
+}
+.new-project select {
+  font-size: 13px;
+  padding: 8px;
+}
+.new-project .button-row {
+  margin: 8px 0 0;
+}
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  max-height: 320px;
+  overflow: auto;
+}
+.project-list li {
+  display: flex;
+  gap: 2px;
+}
+.project {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--ink);
+}
+.project:hover {
+  background: var(--paper);
+}
+.project[aria-current="true"] {
+  background: #e4ebff;
+}
+.project-name,
+.project-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-name {
+  font-size: 14px;
+  font-weight: 650;
+}
+.project-status {
+  font-size: 12px;
+  color: var(--muted);
+}
+.project-remove {
+  width: 30px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+}
+.project-remove:hover {
+  background: var(--paper);
+  color: var(--ink);
 }
 .rail ol {
   padding: 0;
@@ -794,7 +897,7 @@ details summary {
 }
 @media (max-width: 1150px) {
   .wizard-grid {
-    grid-template-columns: 170px minmax(0, 1fr);
+    grid-template-columns: 210px minmax(0, 1fr);
   }
   .preview {
     grid-column: 2;
@@ -869,6 +972,9 @@ details summary {
   .wizard-grid {
     grid-template-columns: 1fr;
     gap: 14px;
+  }
+  .sidebar {
+    position: static;
   }
   .rail {
     position: static;
