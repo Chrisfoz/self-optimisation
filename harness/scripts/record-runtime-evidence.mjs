@@ -19,7 +19,8 @@
  *     --fragment "$RUNNER_TEMP/deploy-evidence.json"
  *
  * Arguments (all repeatable, all optional):
- *   --tap <file>        a TAP 13 stream (what `node --test` emits) to read
+ *   --tap <file>        a TAP 13 stream (`node --test --test-reporter=tap`;
+ *                       from Node 24 the default reporter is not TAP) to read
  *                       suite counts and, more importantly, SKIPPED TEST
  *                       NAMES out of.
  *   --tap-name <name>   what to call the --tap file beside it. Either order:

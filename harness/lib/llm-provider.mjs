@@ -24,8 +24,8 @@
  * see callModel().
  */
 
-import https from 'https';
 import { ApiError, classifyStatusCode } from './api-errors.mjs';
+import { resolveLabEndpoint } from './lab-endpoint.mjs';
 import { estimateRequestTokens } from './spend.mjs';
 
 // ---------------------------------------------------------------------------
@@ -237,18 +237,22 @@ export function isTransientNetworkError(err) {
 // ---------------------------------------------------------------------------
 
 function postJson({ hostname, path, headers, body, timeoutMs }) {
+  // The lab's own host, or the loopback stand-in HARNESS_LAB_ENDPOINT names
+  // (see lab-endpoint.mjs — loopback only, fails closed on anything else).
+  const endpoint = resolveLabEndpoint(hostname);
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
-    const req = https.request(
+    const req = endpoint.request(
       {
-        hostname,
-        port: 443,
+        hostname: endpoint.hostname,
+        port: endpoint.port,
         path,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(payload),
           ...headers,
+          ...endpoint.headers,
         },
       },
       (res) => {

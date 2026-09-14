@@ -22,8 +22,8 @@
  * a bad week never triggers anything, and nobody would know why.
  */
 
-import https from 'https';
 import { getProvider } from './llm-provider.mjs';
+import { resolveLabEndpoint } from './lab-endpoint.mjs';
 import { isKnownAlias, dedupeAliases, aliasDuplicates } from './model-aliases.mjs';
 import { isUnfixable } from './unfixable-models.mjs';
 
@@ -74,9 +74,17 @@ export function isChatModel(id, { nonChatSubstrings = DEFAULT_NON_CHAT_SUBSTRING
 // ---------------------------------------------------------------------------
 
 function getJson({ hostname, path, headers }) {
+  // Same loopback stand-in rule as llm-provider.mjs's postJson(): a
+  // catalogue listing carries the key too, so it goes where the calls go.
+  let endpoint;
+  try {
+    endpoint = resolveLabEndpoint(hostname);
+  } catch (e) {
+    return Promise.resolve({ status: 'error', models: [], reason: e.message });
+  }
   return new Promise((resolve) => {
-    https
-      .get({ hostname, path, headers }, (res) => {
+    endpoint
+      .get({ hostname: endpoint.hostname, port: endpoint.port, path, headers: { ...headers, ...endpoint.headers } }, (res) => {
         let data = '';
         res.on('data', (chunk) => (data += chunk));
         res.on('end', () => {

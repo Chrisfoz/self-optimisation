@@ -420,6 +420,24 @@ structurally can't: two pieces individually correct but disagreeing at the
 seam (a field name, a branch/tag convention, what a gate result string
 actually says once it reaches the digest).
 
+`tests/e2e/mock-labs.test.mjs` is the third layer, and the one that
+crosses the boundary the other two stop at. It runs the **scripts** — the
+detector, the probe, `rehearse.mjs` (validate → preflight → campaign →
+probe → baseline measurement → suggest → rank → implement → in-loop tests →
+review → refine → persist → guard → tests), runtime evidence, the themes
+review and the report — as child processes on a scratch project, with
+`HARNESS_LAB_ENDPOINT` pointing every lab at
+[`tests/helpers/mock-labs.mjs`](tests/helpers/mock-labs.mjs): one loopback
+server that answers in all nine labs' dialects, checks each lab's own auth
+header, serves each lab's catalogue listing and reports usage. Only the
+labs' *answers* are scripted; each provider file's real request reaches a
+server and comes back through that provider's real parser. Three
+generations run across all nine labs, with an in-loop test failure
+repaired, a review rejection refined, an escalation reaching consensus,
+another resurfaced and retired, a work order carried, and a themes review
+whose open question lands in the next prompt. The override is honoured only
+for a loopback address, because the request carries the key.
+
 ```bash
 npm test
 ```
@@ -519,6 +537,7 @@ what comes next and why.
 | Whether the models should get tools — MCP, a renderer, a physics engine — which of the three kinds is worth building, and the per-seat rules that keep a gate a gate | [`docs/Tool-Use-Design.md`](docs/Tool-Use-Design.md) |
 | A second review, two days later, and a proposed six-phase plan for a tenfold improvement against the portable-harness objective — reach, yield, magnitude, trust, each with a number to move | [`docs/Review-10x-2026-09.md`](docs/Review-10x-2026-09.md) |
 | What happened when the model calls were real — four generations on two projects, the records as written, and the seven harness defects they found | [`docs/campaigns/`](docs/campaigns/) |
+| The end-to-end test plan and its results — project selection, all nine labs, a nine-model generation, repair and refine, the curiosity mechanisms — run against a loopback stand-in for the labs, and what still needs real keys | [`docs/Harness-E2E-Test-Plan-2026-09.md`](docs/Harness-E2E-Test-Plan-2026-09.md) |
 
 ## How the three pieces fit together
 

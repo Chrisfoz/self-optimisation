@@ -74,7 +74,10 @@ if (args.help) {
 }
 
 const repoRoot = process.cwd();
-const git = (...gitArgs) => execFileSync('git', gitArgs, { cwd: repoRoot, encoding: 'utf8' }).trim();
+// stderr piped, not inherited: the numbering and cleanup steps below probe
+// git for paths that do not exist yet on a first run, and every one of
+// those is an expected, handled outcome — not something to print as `fatal:`.
+const git = (...gitArgs) => execFileSync('git', gitArgs, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 
 function fail(message) {
   console.error(`\n❌ ${message}`);
