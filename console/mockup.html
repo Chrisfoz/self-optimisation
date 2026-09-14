@@ -329,9 +329,11 @@
           <p class="eyebrow">08 / APPROVAL</p>
           <h2>Decide what happens after the gates</h2>
           <p class="lede">
-            Your initial rehearsal always opens a pull request. Any automatic
-            merge choice takes effect only through a separate activation pull
-            request.
+            By default, every change that passes the gates opens a pull request
+            for you to review and merge. Automatic merge is
+            <strong>opt-in</strong>: it stays off unless you choose it here, and
+            even then it starts only after your first rehearsal passes and you
+            merge a separate activation pull request.
           </p>
           <fieldset>
             <legend>After activation</legend>
@@ -342,10 +344,10 @@
                 value="human-approval-required"
                 checked
               /><span
-                ><b>Open a pull request</b
+                ><b>Open a pull request<span class="tag">Default</span></b
                 ><small
-                  >You review and merge each successful change.
-                  Recommended.</small
+                  >You review and merge each successful change. Recommended
+                  while you build confidence in the runs.</small
                 ></span
               ></label
             ><label class="choice-card"
@@ -354,14 +356,27 @@
                 name="approvalClass"
                 value="autonomous-merge"
               /><span
-                ><b>Merge automatically</b
+                ><b>Merge automatically<span class="tag">Opt-in</span></b
                 ><small
-                  >After review, guard and tests pass, the harness may merge
+                  >After review, guard and tests pass, the harness merges
                   without asking you. Requires deployment verification.</small
                 ></span
               ></label
             >
           </fieldset>
+          <div class="notice warning" id="auto-merge-notice" hidden>
+            <strong>You're opting in to automatic merge.</strong> Changes that
+            pass every gate will reach your default branch without a person
+            reviewing them first. It takes effect only after your first rehearsal
+            passes as a pull request and you review and merge the activation pull
+            request. To switch back later, set
+            <code>constitution.approval_class</code> to
+            <code>human-approval-required</code> in
+            <code>project-adapter.yml</code> and regenerate the workflow with
+            <code>node harness/cli/init.mjs --from-adapter --force</code>.
+            <code>harness/scripts/revert-generation.mjs</code> undoes a change
+            that already merged.
+          </div>
           <label class="field" id="deployment-field" hidden
             ><span>HTTPS deployment verification URL</span
             ><input
