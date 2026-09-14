@@ -77,6 +77,21 @@ work. A download does not claim to verify repository contents or secrets.
    chosen cadence and eventual approval mode. Automatic merge requires an HTTPS
    deployment verification URL. Manual/PR mode needs no activation change.
 
+## Several projects
+
+The console keeps a **Projects** list: one project per repository, each with its
+own draft, step and status, held in the browser tab's session storage. **+ New**
+starts another project, blank or copying an existing project's labs, models,
+cadence, attempts, fan-out and token budget. The repository, branch, tests,
+paths, goal, deployment URL and automatic merge are never copied: each project
+opts in to automatic merge on its own. Choosing a repository that already has a
+project opens that project instead of a second draft.
+
+One sign-in can open a setup pull request for each repository, and track each
+one's rehearsal and activation separately (up to 25 per session). Opening a
+second setup for the same repository is still refused. Signing out clears the
+tab's projects, as it cleared the single draft before.
+
 A rehearsal can legitimately fail or produce no proposal. Inspect the Actions
 logs and generation record; do not treat that as a passed activation gate. If
 setup files/default branch changed, a session expired, or a server restart lost

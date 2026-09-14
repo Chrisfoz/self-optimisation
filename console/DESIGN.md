@@ -896,6 +896,14 @@ section documents the shape so that step is informed, not blind.
    installed repos are you configuring right now" step the day multi-repo
    grants become possible, or step 1 gets ambiguous the first time someone
    installs on three repos and only means to set up one.
+   **Partly answered 2026-09-14:** many, one at a time. The console keeps a
+   list of projects in the browser tab, one per repository, and a new project
+   can copy another's labs, models, cadence and budget (never its repository,
+   tests, paths, goal or automatic merge). The server tracks setup per
+   repository within a sign-in, so one session can take several repositories
+   through setup, rehearsal and activation. Still open: a view of every
+   configured repository's runs at once (§5 phase 4), which needs state that
+   outlives a browser tab.
 5. **Who does the GitHub App belong to?** A personal GitHub account or an
    organisation — this decides who can rotate the private key, who GitHub
    shows as the App's publisher on every install screen, and what happens to

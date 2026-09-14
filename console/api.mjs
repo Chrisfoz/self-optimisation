@@ -189,7 +189,7 @@ export function createApi({
           login: user.login,
           csrf: id(),
           expires: now() + Math.min(token.expires_in || 3600, 3600) * 1000,
-          setup: null,
+          setups: new Map(),
           busy: false,
         });
         redirect("/console", { "set-cookie": cookie(sessionId, 3600) });
@@ -308,14 +308,16 @@ export function createApi({
         });
         return true;
       }
+      // Setups are tracked per repository, so one sign-in can take several
+      // projects through setup, rehearsal and activation side by side. Each
+      // action only ever reaches the setup for the repository it names.
+      session.setups ??= new Map();
+      const setup = session.setups.get(repo.name);
       if (req.method === "GET" && path === "/api/setup") {
         json(
           200,
-          session.setup?.repository === repo.name
-            ? {
-                setup: session.setup,
-                ...(await rehearsalStatus(gh, repo, session.setup)),
-              }
+          setup
+            ? { setup, ...(await rehearsalStatus(gh, repo, setup)) }
             : { setup: null },
         );
         return true;
@@ -325,29 +327,31 @@ export function createApi({
       session.busy = true;
       try {
         if (path === "/api/setup") {
-          if (session.setup)
+          if (setup)
             throw problem(
               409,
-              "This session already created a setup pull request. Refresh its status before starting another.",
+              `This session already opened setup pull request #${setup.number} for ${repo.name}. Refresh its status instead.`,
             );
-          session.setup = await openSetup(gh, repo, data);
-          json(201, { setup: session.setup });
-        } else {
-          if (!session.setup || session.setup.repository !== repo.name)
+          if (session.setups.size >= MAX_SETUPS_PER_SESSION)
             throw problem(
               409,
-              "Create a setup pull request in this session first.",
+              `This session has opened ${MAX_SETUPS_PER_SESSION} setup pull requests. Sign out and in again to set up more repositories.`,
+            );
+          const created = await openSetup(gh, repo, data);
+          session.setups.set(repo.name, created);
+          json(201, { setup: created });
+        } else {
+          if (!setup)
+            throw problem(
+              409,
+              "Create a setup pull request for this repository in this session first.",
             );
           if (path === "/api/activate") {
-            if (session.setup.activation)
+            if (setup.activation)
               throw problem(409, "An activation pull request already exists.");
-            session.setup.activation = await activateSchedule(
-              gh,
-              repo,
-              session.setup,
-            );
-            json(201, { activation: session.setup.activation });
-          } else json(200, await dispatchRehearsal(gh, repo, session.setup));
+            setup.activation = await activateSchedule(gh, repo, setup);
+            json(201, { activation: setup.activation });
+          } else json(200, await dispatchRehearsal(gh, repo, setup));
         }
       } finally {
         session.busy = false;
@@ -369,6 +373,8 @@ export function createApi({
   };
 }
 const WORKFLOW_PATH = ".github/workflows/self-improve.yml";
+// Sessions live in server memory; this bounds what one of them can hold.
+const MAX_SETUPS_PER_SESSION = 25;
 export async function readJson(req) {
   let size = 0;
   const parts = [];

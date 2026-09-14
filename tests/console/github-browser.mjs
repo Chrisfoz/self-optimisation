@@ -37,6 +37,13 @@ try {
     } });
   });
   await page.route('**/api/setup?*', (route) => route.fulfill({ json: { setup: null } }));
+  // Connecting a repository also reads its live model list. Unmocked, that
+  // request reaches the real server with no session cookie, gets a 401, and
+  // signs this simulated session out a moment after it connects.
+  await page.route('**/api/models*', (route) => route.fulfill({ json: {
+    labs: [], counts: { bundled: 0, repository: 0, unseen: 0 }, fetchedAt: null,
+    repository: null, snapshotPath: null, snapshotReason: null,
+  } }));
   await page.goto(base + '/console');
   await page.waitForFunction(() => document.querySelector('#repo-count').textContent.includes('3 of 3'));
   await page.locator('#repo-search').fill('Calculator');
