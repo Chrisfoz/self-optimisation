@@ -432,34 +432,6 @@ small {
   max-width: 850px;
   font-size: 14px;
 }
-.setup {
-  display: grid;
-  grid-template-columns: 1fr 1.2fr;
-  gap: 100px;
-}
-.setup-list {
-  padding: 0;
-  margin: 0;
-  list-style: none;
-  counter-reset: setup;
-}
-.setup-list li {
-  counter-increment: setup;
-  display: grid;
-  grid-template-columns: 32px 170px 1fr;
-  gap: 12px;
-  padding: 15px 0;
-  border-bottom: 1px solid var(--line);
-  font-size: 14px;
-}
-.setup-list li::before {
-  content: counter(setup, decimal-leading-zero);
-  color: var(--blue);
-  font-family: ui-monospace, monospace;
-}
-.setup-list span {
-  color: var(--muted);
-}
 .evidence {
   border-top: 1px solid var(--line);
   display: grid;
@@ -835,15 +807,8 @@ details summary {
   .role-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  .setup,
   .evidence {
     gap: 45px;
-  }
-  .setup-list li {
-    grid-template-columns: 30px 1fr;
-  }
-  .setup-list span {
-    grid-column: 2;
   }
 }
 @media (max-width: 720px) {
@@ -878,7 +843,6 @@ details summary {
   .section {
     padding-block: 52px;
   }
-  .setup,
   .evidence {
     grid-template-columns: 1fr;
     gap: 20px;
