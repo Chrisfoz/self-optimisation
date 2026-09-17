@@ -96,11 +96,18 @@ and the owner merged it.
 
 ## Found, not fixed
 
-- **The budget cap is not a ceiling within one fan-out.** It is checked as a
-  projection of input tokens before the fan-out, and against actual spend
-  between refine attempts. Output tokens and headroom retries inside the
-  fan-out are uncounted until afterwards. Here it went 1% over. With more
-  truncating models it could go further.
+- **The budget cap reserves on an estimate that undercounts code.** *(This
+  bullet first said the cap was not enforced inside a fan-out. That was
+  wrong, and was corrected after reading `spend.mjs`.)* Every request,
+  headroom retries included, is admitted only if its reservation fits:
+  estimated input plus its full output allowance. The estimate is characters
+  ÷ 4, about 258k tokens for this prompt. The real counts were 247k
+  (`gpt-6-astra`), 281k (`gemini-3.8-flash`) and **383k (`claude-fable-5-1`)**.
+  Anthropic's tokenizer counts this code-heavy HTML at about 1.5× the
+  estimate, and that gap is the 1% overshoot. On a larger fan-out of
+  Anthropic models it would be bigger. Every record already carries both the
+  estimate's input (the prompt) and the provider's real count, so a
+  per-provider ratio learnt from past records would close most of the gap.
 - **A truncating model pays twice for nothing.** `deepseek-flash` spent
   610k tokens on two truncated calls. The headroom retry doubles the output
   allowance, but it also resends the whole input, here 257k. On a repository
