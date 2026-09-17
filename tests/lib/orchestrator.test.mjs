@@ -336,6 +336,50 @@ test('writeProposal: writes a real markdown file with the expected sections', (t
   assert.match(content, /was helpful/);
 });
 
+test('writeProposal: a suggester whose own edits shipped fills the record from its suggestion fields', (t) => {
+  // A suggester's edits parse with no RATIONALE or PILLAR of their own, since
+  // the suggestion format has neither under those names. The record must not
+  // come out blank.
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  const proposal = 'SUMMARY: Let phones turn\nPILLAR: Mobile comfort\nPROBLEM: a phone cannot change heading\nCHANGE: drag to look\nWHY THIS ONE: it blocks the first minute\nVERIFICATION: drag on a phone';
+  const relative = writeProposal({
+    repoRoot, genNumber: '001', proposal,
+    parsed: { summary: 'Let phones turn', rationale: '', edits: [], creates: [] },
+    suggestResult: { model: 'model-x', provider: 'anthropic' },
+    applied: [{ file: 'venue.html', removedLines: 0, addedLines: 5 }],
+    review: { raw: 'VERDICT: APPROVED\n\nEND OF REVIEW' },
+    attempts: 1, implementedBy: 'model-x', implementModel: 'claude-opus-5', reviewModel: 'claude-opus-5',
+    scope: { scope: 'focused', reason: 'x' }, briefFeedback: 'fine',
+  });
+  const content = fs.readFileSync(path.join(repoRoot, relative), 'utf8');
+  assert.match(content, /\*\*Pillar:\*\* Mobile comfort/);
+  assert.match(content, /## Rationale\n\nit blocks the first minute/);
+});
+
+test('suggestion prompts ask for exactly one response structure', () => {
+  // The system prompt used to carry edit-format.mjs's "Respond in EXACTLY
+  // this format. No other structure is accepted." with SUMMARY/RATIONALE,
+  // while the user prompt asked for PILLAR/PROBLEM/CHANGE/... A suggesting
+  // model escalated the contradiction in the first external install.
+  const system = buildSuggestSystemPrompt({
+    agentBrief: 'BRIEF', scopeText: DEFAULT_SCOPE_TEXT.focused, editableFiles: ['index.html'],
+    createOnlyDescription: 'new tests/*.test.js files',
+  });
+  const user = buildSuggestUserPrompt({ genLabel: 'G', context: { manifest: 'M' } });
+  const both = `${system}\n${user}`;
+
+  assert.doesNotMatch(system, /Respond in EXACTLY/);
+  assert.doesNotMatch(both, /No other structure is accepted/);
+  assert.doesNotMatch(both, /^RATIONALE:/m);
+  assert.equal((both.match(/Respond in /g) ?? []).length, 1, 'one instruction names the structure');
+  // The edit-block contract is still there, CREATE included.
+  assert.match(system, /<<<EDIT>>>/);
+  assert.match(system, /<<<CREATE>>>/);
+  // SUMMARY moved into the one structure, first, so a shipped suggester still titles its commit.
+  assert.match(user, /structure\. It is the only one[\s\S]*\n\nSUMMARY: [^\n]+\nPILLAR:/);
+});
+
 // --- recordEscalations ----------------------------------------------------------
 
 test('recordEscalations: folds proposals into a fresh ledger and reports what changed', (t) => {

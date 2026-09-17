@@ -44,6 +44,17 @@ test('buildEditFormatSpec: extra field and CREATE section are opt-in', () => {
   assert.doesNotMatch(bare, /<<<CREATE>>>/);
 });
 
+test('buildEditFormatSpec: blocksOnly drops the response header and keeps the block contract', () => {
+  const full = buildEditFormatSpec();
+  const blocks = buildEditFormatSpec({ blocksOnly: true });
+  assert.match(full, /^Respond in EXACTLY this format/);
+  assert.match(full, /^SUMMARY:/m);
+  assert.doesNotMatch(blocks, /Respond in EXACTLY|No other structure|^SUMMARY:|^RATIONALE:/m);
+  // Everything from the first edit block on is identical: the parser's contract did not move.
+  const from = (s) => s.slice(s.indexOf('<<<EDIT>>>'));
+  assert.equal(from(blocks), from(full));
+});
+
 const SAMPLE_RESPONSE = `SUMMARY: Add pause button to maze
 PILLAR: Feedback Loops
 RATIONALE: Players had no way to pause. This adds a button and keyboard shortcut, safe for ages 3-8.

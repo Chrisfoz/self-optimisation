@@ -16,7 +16,7 @@
  *
  * All the actual rendering is pure and unit-tested in
  * harness/lib/scaffold.mjs; this file owns only prompting, defaults
- * inferred from the target repo (git remote, current branch), and writing
+ * inferred from the target repo (git remote, default branch), and writing
  * files. Two independent flags:
  *
  *   --yes / -y   accepts every default without prompting at all — a fast
@@ -61,6 +61,7 @@ import { harnessVersion, checkUpgrade } from '../lib/version.mjs';
 import { describeSeats } from '../lib/seats.mjs';
 import { normalizeAmbition, loadAdapter } from '../lib/adapter.mjs';
 import { validateAdapter } from '../lib/validate.mjs';
+import { detectDefaultBranch, gitRunner, remoteDefaultBranch } from '../lib/git-default-branch.mjs';
 
 // path.join(..., '../x'), not import.meta.dirname — kept as the one idiom every
 // file here uses, from when package.json promised Node 20.6.
@@ -169,7 +170,9 @@ async function main() {
   try {
     const projectId = await ask(rl, 'Project id', { default: path.basename(repoRoot) });
     const repository = await ask(rl, 'Repository URL', { default: detectGitRemote() });
-    const defaultBranch = await ask(rl, 'Default branch', { default: detectGitBranch() || 'main' });
+    // The repository's default branch, not the one you're on: the
+    // walkthrough has you on a setup branch by now. See git-default-branch.mjs.
+    const defaultBranch = await ask(rl, 'Default branch', { default: detectDefaultBranch(gitRunner(repoRoot)) || detectGitBranch() || 'main' });
 
     // The committed goal (docs/curiosity/C1). Optional, strongly
     // recommended, and the one thing every stage is judged against once it
@@ -398,7 +401,7 @@ function writeFiles(answers) {
   writeIfAbsentOrForced('SELF-IMPROVE-README.md', renderReadme(answers), 'the install README');
 
   console.log('\nChecking what was just written...');
-  const { errors, warnings } = validateAdapter(buildAdapterObject(answers), { repoRoot, env: process.env });
+  const { errors, warnings } = validateAdapter(buildAdapterObject(answers), { repoRoot, env: process.env, remoteDefaultBranch: remoteDefaultBranch(gitRunner(repoRoot)) });
   for (const e of errors) console.log(`   ❌ ${e}`);
   for (const w of warnings) console.log(`   ⚠️  ${w}`);
   if (!errors.length && !warnings.length) console.log('   No issues found.');
@@ -437,7 +440,7 @@ async function fromAdapter() {
   writeIfAbsentOrForced('.github/workflows/self-improve.yml', workflow, 'the generated workflow');
   writeIfAbsentOrForced('SELF-IMPROVE-README.md', renderReadme(answers), 'the install README');
 
-  const { errors, warnings } = validateAdapter(adapter, { repoRoot, env: process.env });
+  const { errors, warnings } = validateAdapter(adapter, { repoRoot, env: process.env, remoteDefaultBranch: remoteDefaultBranch(gitRunner(repoRoot)) });
   for (const e of errors) console.log(`   ❌ ${e}`);
   for (const w of warnings) console.log(`   ⚠️  ${w}`);
   process.exit(errors.length ? 1 : 0);

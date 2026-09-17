@@ -87,29 +87,27 @@ and the owner merged it.
 | **The walkthrough's `cp harness/.env.example .env` would have overwritten the app's live `.env`**, which held OpenAI, Supabase service-role, SMTP, Stripe and Railway secrets. Caught by reading the target before running the command. | PR #19: `how-to-run.html` says to use `.env.harness.local` (covered by a `.env.*.local` ignore rule) and `--env-file=.env.harness.local` |
 | **Merge order.** The rehearsal's agent branch is cut from the setup branch, and its record is persisted back onto the setup branch. The owner merged the agent branch into `main` first, so `main` got the harness without the generation record, and the setup PR looked half-merged. An extra empty PR followed. | PR #19: `how-to-run.html` says merge setup first. The records were recovered by merging setup afterwards. |
 
+## Fixed after the write-up, the same day
+
+| Finding | Fix |
+|---|---|
+| **The suggestion prompt asked for two incompatible structures.** Fable's escalation (target `pipeline`), confirmed in the code. `buildSuggestSystemPrompt()` embedded `buildEditFormatSpec()`, which says "Respond in EXACTLY this format. No other structure is accepted." with SUMMARY/RATIONALE. The user prompt then ended with `SUGGEST_RESPONSE_FORMAT`: "Respond in this structure: PILLAR / PROBLEM / CHANGE / …". Models padded their answers to satisfy both, and generation 001's good commit title existed only because Fable wrote the SUMMARY the conflicting instruction asked for. | `buildEditFormatSpec({ blocksOnly: true })` gives the suggester the edit-block contract without a second structure. SUMMARY moved to the top of `SUGGEST_RESPONSE_FORMAT`, so a suggester whose own edits ship still titles its commit. `proposal.md` fills Pillar and Rationale from the suggestion's own PILLAR and WHY THIS ONE. The implementer's prompt is byte-identical. Three tests fail on the old code. |
+| **`init.mjs` offered the current branch as `project.default_branch`.** The walkthrough has you on `self-optimisation-setup` when you run init, so `--yes` wrote that. Every generation would have been cut from, and every pull request opened against, a branch nothing deploys. Railway deploys this project, and the self-optimisation console, from `main`. | `harness/lib/git-default-branch.mjs` offers the remote's default (`origin/HEAD`), then a local or remote `main`/`master`, and never the current branch. `validate.mjs`, init's own check and `rehearse.mjs` now warn when `default_branch` disagrees with the remote. Tested against real clones, including a remote whose default is `trunk`. |
+
 ## Found, not fixed
 
-- **The suggestion prompt asks for two incompatible structures.** Fable's
-  escalation (target `pipeline`), confirmed in the code.
-  `buildSuggestSystemPrompt()` embeds `buildEditFormatSpec()`, which says
-  "Respond in EXACTLY this format. No other structure is accepted." and
-  gives SUMMARY/RATIONALE plus edit blocks. The user prompt then ends with
-  `SUGGEST_RESPONSE_FORMAT`: "Respond in this structure: PILLAR / PROBLEM /
-  CHANGE / …". Models pad their answer to satisfy both. The parser copes,
-  but output tokens pay for it, and a model that picks one format loses
-  fields from the other.
-- **`init.mjs` records the current branch as `project.default_branch`.**
-  `detectGitBranch()` runs `git branch --show-current`, and the walkthrough
-  has you on `self-optimisation-setup` when you run init. So the adapter said
-  `default_branch: self-optimisation-setup` until it was corrected by hand.
-  `validate.mjs` does not flag a default branch that isn't the remote's
-  default. `git symbolic-ref refs/remotes/origin/HEAD` would give the real
-  one.
-- **The budget cap is not a ceiling within one fan-out.** It is checked as a
-  projection of input tokens before the fan-out, and against actual spend
-  between refine attempts. Output tokens and headroom retries inside the
-  fan-out are uncounted until afterwards. Here it went 1% over. With more
-  truncating models it could go further.
+- **The budget cap reserves on an estimate that undercounts code.** *(This
+  bullet first said the cap was not enforced inside a fan-out. That was
+  wrong, and was corrected after reading `spend.mjs`.)* Every request,
+  headroom retries included, is admitted only if its reservation fits:
+  estimated input plus its full output allowance. The estimate is characters
+  ÷ 4, about 258k tokens for this prompt. The real counts were 247k
+  (`gpt-6-astra`), 281k (`gemini-3.8-flash`) and **383k (`claude-fable-5-1`)**.
+  Anthropic's tokenizer counts this code-heavy HTML at about 1.5× the
+  estimate, and that gap is the 1% overshoot. On a larger fan-out of
+  Anthropic models it would be bigger. Every record already carries both the
+  estimate's input (the prompt) and the provider's real count, so a
+  per-provider ratio learnt from past records would close most of the gap.
 - **A truncating model pays twice for nothing.** `deepseek-flash` spent
   610k tokens on two truncated calls. The headroom retry doubles the output
   allowance, but it also resends the whole input, here 257k. On a repository
@@ -125,25 +123,62 @@ and the owner merged it.
   place billing shows up, and it drops the lab without failing the run. The
   script, plus a manual workflow that runs it against repository secrets, is
   worth upstreaming into `harness/scripts/`.
-- **Installing js-yaml at the project root** (`npm install --no-save
-  js-yaml@5.3.0`, as the walkthrough says) would have replaced the js-yaml
-  3.15.0 that jest's coverage loader depends on in this project. It was
-  installed with `--prefix harness` instead, and Node resolves it from
-  `harness/node_modules` first. This was avoided, not observed. The
-  generated workflow still installs at the root in CI, and that has not
-  been exercised here yet.
+- **The copied-in workflow's js-yaml install is also, silently, the project's
+  dependency install.** See the next section. It is the only step that puts
+  a Node project's own packages (jest, here) on the runner, so it cannot
+  simply be isolated the way the local command now is.
 - **Display names are not API ids.** The owner named models by their
   marketing names. "DeepSeek-V4.1-Flash" has no versioned id in DeepSeek's
   catalogue. The only match was the `deepseek-flash` alias. The ids were
   found by listing each catalogue through the harness's own provider
   modules.
 
+- **Railway deploys on every push to `main` without waiting for CI.** Both
+  this project's service and the self-optimisation console have
+  `checkSuites: false`. A merged generation goes live whether or not the
+  project's own CI passed. Under `human-approval-required` a person merges
+  and can wait for green. Under `autonomous-merge` nothing would. That is a
+  host setting, not a harness one, but it belongs on an installer's
+  checklist, and now is.
+
+## Installing js-yaml at the project root, tested
+
+The walkthrough's `npm install --no-save js-yaml@5.3.0`, run at a project's
+top level, was worried about during the install and then tested in
+throwaway projects (npm 10.9, Node 23):
+
+| Project shape | What a root install did |
+|---|---|
+| Depends on js-yaml `^4` directly | **Silently swapped the project's copy for 5.3.0.** `package.json` and the lock file were unchanged, so nothing showed in git. `yaml.safeLoad`, still used by older code, became `undefined`. A later `npm ci` put 4.3.2 back, so the harness then ran on a version it was not written for, also silently. |
+| Gets js-yaml 3 only transitively (jest's coverage loader, as NetworkinAI does) | **Nothing broke.** npm nested 3.15.2 under its dependent. The worry during this install was unfounded for this project. |
+| Has a package installed by hand, not in `package.json` | **Deleted it.** |
+| Has an install script, installed via the workflow's `--ignore-scripts` | **The script never ran.** Anything it generates is missing when the tests run. |
+| Has no `package.json` (a Python project, say) | **npm walked up to the nearest parent folder with a `package.json` and installed there.** On the machine this was tested on, that was the user's home folder. The harness still worked, because Node's resolution walks up too, which is why nothing looked wrong. The experiment's two stray packages were removed afterwards. |
+| `--prefix harness --no-save --no-package-lock` instead | **Isolated.** The project's copy was untouched, only `harness/node_modules` appeared, and it survived a later `npm ci`. |
+
+What changed: `console/how-to-run.html` now gives the `--prefix harness`
+command, says why in one warning, and has a checklist for a finished
+installation. The shared workflow already installs js-yaml in its own
+directory.
+
+What did not change, and why: the **copied-in workflow**
+(`COPIED_HARNESS_SETUP` in `harness/lib/scaffold.mjs`) still installs at the
+root. For a Node project that step is the only thing installing the
+project's own dependencies before `npm test`. It does so with
+`--ignore-scripts`, and nobody chose that. Isolating it without a project
+install step would break every copied install's tests. The fix is to give
+copied installs what shared ones have: an explicit
+`evaluation.setup_commands` step (for example `npm ci`), run before an
+isolated harness install. Existing adapters would need that field added
+before they upgrade.
+
 ## What is still not proven
 
 - **The monthly workflow on this repository.** Everything above ran locally,
   except the manual key-check workflow and ordinary CI. The first scheduled
   or dispatched `self-improve.yml` run, including its root js-yaml install
-  and the new digest step, has not happened.
+  (which is what installs jest there) and the new digest step, has not
+  happened.
 - **`context.strategy: scoped`.** At 1.03 million characters of editable
   source, `full-dump` still fit every model's window and cost ~250–510k input
   tokens per model. That makes WORKPLAN 2.1a concrete: it is a cost question

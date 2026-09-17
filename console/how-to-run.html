@@ -320,11 +320,21 @@
       </li>
       <li>
         <h3>Give your project the settings reader</h3>
-        <div class="cmd"><pre>npm install --no-save js-yaml@5.3.0</pre></div>
+        <div class="cmd"><pre>npm install --prefix harness --no-save --no-package-lock js-yaml@5.3.0</pre></div>
         <p>
-          This installs the same library as Part 1 into your project, without
-          changing its <code>package.json</code>. Make sure your project's
+          This installs the same library as Part 1 into
+          <code>harness/node_modules</code>, where only the harness looks for it.
+          Your project's own <code>package.json</code>, lock file and installed
+          packages are left alone. Make sure your project's
           <code>.gitignore</code> includes <code>node_modules/</code>.
+        </p>
+        <p class="notice warning">
+          <b>Don't install it at your project's top level.</b> Tested, a top-level
+          install can: quietly swap your project's own copy of js-yaml for this
+          one, breaking code that uses the older API; delete packages you
+          installed by hand; and, in a project with no <code>package.json</code>,
+          install into the nearest parent folder that has one, which can be your
+          home folder. A later <code>npm ci</code> also removes it again.
         </p>
       </li>
       <li>
@@ -390,6 +400,15 @@
         </p>
         <div class="cmd"><pre>node --env-file=.env harness/scripts/rehearse.mjs --models claude-opus-5</pre></div>
         <p>It never pushes, opens a pull request or merges.</p>
+        <p class="notice warning">
+          <b>Start with one model.</b> Each model you name is sent every file it may
+          edit. On a large project that is 250,000 tokens or more <em>per model</em>
+          before it writes a word, and a model that runs out of room is asked
+          again with the whole input resent. The first practice run on a large
+          web app, with six models, used just over 2 million tokens. Each run's
+          <code>docs/generations/gen-NNN/attempts.json</code> shows what every model
+          spent, so read it before adding more.
+        </p>
       </li>
       <li>
         <h3>Optional: run it on GitHub automatically</h3>
@@ -409,6 +428,69 @@
         </p>
       </li>
     </ol>
+  </section>
+
+  <section id="finished">
+    <h2>Before you let it run: a finished installation</h2>
+    <p>
+      Every item below went wrong at least once in a real installation. Tick them
+      all before the monthly run starts, whichever way you installed.
+    </p>
+    <ul class="need">
+      <li>
+        <b>Everything is on your default branch.</b> The harness, your
+        <code>project-adapter.yml</code>, both brief files and the workflow are
+        merged into the branch your project deploys from, usually
+        <code>main</code>. <code>project.default_branch</code> in the settings file
+        names that same branch. <code>node harness/scripts/validate.mjs</code> warns
+        if it doesn't match your repository's default.
+      </li>
+      <li>
+        <b>Your keys are nowhere in git.</b>
+        <code>git ls-files .env .env.harness.local</code> prints nothing, and
+        <code>git check-ignore .env</code> prints the file's name.
+      </li>
+      <li>
+        <b>GitHub has a secret for every lab the run calls.</b> On your project's
+        repository: <b>Settings → Secrets and variables → Actions</b>. One for each
+        lab you watch, plus the labs of the models you chose to write and review
+        changes. Add <code>SENDGRID_API_KEY</code> too if you want the email.
+        <code>SELF-IMPROVE-README.md</code> lists exactly which.
+      </li>
+      <li>
+        <b>Workflow permissions are saved.</b> Read and write, with
+        <b>Allow GitHub Actions to create and approve pull requests</b> ticked, on
+        <b>Settings → Actions → General</b>. Reload the page to check the tick
+        stayed.
+      </li>
+      <li>
+        <b>Every lab has credit, not just a key.</b> A key can be valid on an
+        account with no payment method. The practice run's reachability check is
+        the first place that shows up (for example <code>402
+        billing_not_configured</code>), and the run carries on without that lab.
+        Set a monthly spending limit with each lab you use.
+      </li>
+      <li>
+        <b>The email works, if you want it.</b> A <code>notify:</code> section in
+        <code>project-adapter.yml</code> with a sender address your email service
+        has verified, the key as a secret, and the workflow regenerated with
+        <code>node harness/cli/init.mjs --from-adapter --force</code>. Without the
+        <code>notify:</code> section the workflow has no email step at all.
+      </li>
+      <li>
+        <b>You know what a merge will deploy.</b> If your host deploys your default
+        branch on every push (Railway, Vercel and Netlify usually do), merging a
+        generation's pull request puts it live. Check whether your host waits for
+        your CI to pass first. On Railway that is each service's <b>Wait for CI</b>
+        setting.
+      </li>
+      <li>
+        <b>You know when it runs.</b> On the 1st of each month, or straight away
+        from <b>Actions → Self-improvement loop → Run workflow</b>. Leave the
+        models box empty to wait for a new release, or name models to run on
+        them now.
+      </li>
+    </ul>
   </section>
 
   <section id="configure">
@@ -494,6 +576,35 @@
         Run <code>npm install</code> in this repository (Part 1, step 4). If the
         error comes from your own project, run the command from Way B, step 3
         there.
+      </p>
+    </details>
+    <details>
+      <summary>The digest email is only a few terse lines</summary>
+      <p>
+        That is the fallback, sent when the model that writes the plain-language
+        email can't be reached. Harness copies from before 17 September 2026 always
+        sent it, because the email scripts never loaded the labs. Copy
+        <code>harness/</code> in again from this repository. If you're up to date,
+        check the key for your <code>notify.digest_model</code>'s lab.
+      </p>
+    </details>
+    <details>
+      <summary>A practice run drops a lab with "402" or "billing"</summary>
+      <p>
+        The key works, but the account behind it can't be charged. Add a payment
+        method or credit on that lab's billing page. The run carries on with the
+        other labs. Checking a key by listing models won't catch this, because
+        listing is free.
+      </p>
+    </details>
+    <details>
+      <summary>validate warns that <code>default_branch</code> doesn't match</summary>
+      <p>
+        Setup was probably run while you were on a setup branch, and older harness
+        copies saved that branch as the default. Set
+        <code>project.default_branch</code> to the branch you deploy from (usually
+        <code>main</code>) and run
+        <code>node harness/cli/init.mjs --from-adapter --force</code>.
       </p>
     </details>
     <details>

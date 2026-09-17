@@ -121,11 +121,20 @@ export function isCreatable(filePath, allowlist) {
  * @param {{pathDescription: string, examplePath: string}} [opts.createSection]
  *   If present, documents an optional CREATE block for the given
  *   create-only surface. Omit entirely for a project with no such surface.
+ * @param {boolean} [opts.blocksOnly]  Emit only the edit-block contract, not
+ *   the "Respond in EXACTLY this format" header and its SUMMARY/RATIONALE
+ *   fields. For a prompt that already defines the response's structure. The
+ *   suggestion stage is one: it had both this header in its system prompt
+ *   and SUGGEST_RESPONSE_FORMAT in its user prompt, two structures each
+ *   claiming to be the only one, and models padded their answers to satisfy
+ *   both. A suggesting model escalated it in the first external install
+ *   (docs/campaigns/2026-09-17-networkinai-install.md).
  */
 export function buildEditFormatSpec({
   extraField = null,
   safetyFraming = 'and why it is safe to ship unattended',
   createSection = null,
+  blocksOnly = false,
 } = {}) {
   const extraFieldLine = extraField
     ? `${extraField.name}: <${extraField.description}>\n`
@@ -147,12 +156,16 @@ FILE: ${createSection.examplePath}
    append-only and cannot be modified through CREATE.`
     : '';
 
-  return `Respond in EXACTLY this format. No other structure is accepted.
+  const header = blocksOnly
+    ? `Edit blocks, one or more:`
+    : `Respond in EXACTLY this format. No other structure is accepted.
 
 SUMMARY: <one line, imperative, max 80 chars — becomes the commit message>
 ${extraFieldLine}RATIONALE: <2-4 sentences: why this change, why now, ${safetyFraming}>
 
-Then one or more edit blocks:
+Then one or more edit blocks:`;
+
+  return `${header}
 
 <<<EDIT>>>
 FILE: <path from the editable list>

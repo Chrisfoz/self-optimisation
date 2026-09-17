@@ -142,8 +142,14 @@ export function section(heading, body) {
 // Field names match what extractField()/parseEscalation() expect.
 // ---------------------------------------------------------------------------
 
-export const SUGGEST_RESPONSE_FORMAT = `Respond in this structure:
+// The ONE structure a suggesting model is asked for. The system prompt used
+// to add a second (edit-format.mjs's SUMMARY/RATIONALE header, "No other
+// structure is accepted"), so models wrote both. SUMMARY lives here now
+// because a suggester whose own edits ship is titled from it; without it
+// the title falls back to the first 80 characters of CHANGE.
+export const SUGGEST_RESPONSE_FORMAT = `Respond in this structure. It is the only one; nothing else in these instructions asks for another.
 
+SUMMARY: <one line, imperative, max 80 chars — becomes the commit message if your own edits ship>
 PILLAR: <which quality dimension this strengthens>
 PROBLEM: <what is weak today, citing the specific code or behaviour you saw>
 CHANGE: <precisely what should change — name the functions, constants,
@@ -170,7 +176,7 @@ ESCALATION SUPPORT: <none, or the id(s) of open escalations you independently
          agree with, and why.>
 ESCALATION DISSENT: <none, or the id of one you think is wrong, and why.>
 
-Then, optionally, the edit blocks implementing your change.`;
+Then, optionally, the edit blocks implementing your change, in the format the system prompt gives.`;
 
 /**
  * The committed goal, rendered as the one thing that does not change —
@@ -217,10 +223,13 @@ export function buildGoalSection(goal) {
  * @param {number} [opts.suggestMaxTokens]
  */
 export function buildSuggestSystemPrompt({ agentBrief, scopeText, editableFiles, createOnlyDescription, suggestMaxTokens = 32000, goal = null }) {
+  // Blocks only: the response's structure is SUGGEST_RESPONSE_FORMAT, in the
+  // user prompt. See buildEditFormatSpec's blocksOnly for why.
   const editSpec = buildEditFormatSpec({
     createSection: createOnlyDescription
       ? { pathDescription: createOnlyDescription, examplePath: '<a new path matching that pattern>' }
       : null,
+    blocksOnly: true,
   });
 
   const goalSection = buildGoalSection(goal);
@@ -236,6 +245,10 @@ You may optionally implement your own proposal. If you do, it is applied
 and reviewed exactly as written, and this generation is credited to you as
 the implementer. This is entirely optional: a proposal that stands on its
 own, with no edits attached, is a complete and acceptable response.
+
+Your response's structure is set at the end of the task below. Edit blocks,
+if you write any, go after the last field of that structure. They are not a
+second response format.
 
 ${editSpec}
 
@@ -795,12 +808,12 @@ export function writeProposal({ repoRoot, generationsDir = 'docs/generations', g
 - **Implemented by:** \`${implementedBy}\`${implementedBy !== implementModel ? ' — **the suggesting model wrote its own edits**' : ''}
 - **Reviewed by:** \`${reviewModel}\`
 - **Attempts:** ${attempts}
-- **Summary:** ${parsed.summary}
-- **Pillar:** ${parsed.pillar ?? ''}
+- **Summary:** ${parsed.summary || extractField(proposal, 'SUMMARY')}
+- **Pillar:** ${parsed.pillar || extractField(proposal, 'PILLAR')}
 
 ## Rationale
 
-${parsed.rationale}
+${parsed.rationale || extractField(proposal, 'WHY THIS ONE')}
 
 ## What the suggesting model said about its own brief
 

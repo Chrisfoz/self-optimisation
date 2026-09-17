@@ -50,9 +50,12 @@ const PLACEHOLDER = /\[[A-Za-z][^\]\n]{0,80}\](?!\()/g;
  *   key would be found, checked only to warn, never to fail validation:
  *   a config can be structurally correct on a machine with no keys set at
  *   all (a design-time check, a CI job that only lints).
+ * @param {string|null} [opts.remoteDefaultBranch]  The repository's default
+ *   branch as its remote reports it (git-default-branch.mjs), or null when
+ *   unknown. Passed in rather than read here so this stays free of git.
  * @returns {{errors: string[], warnings: string[]}}
  */
-export function validateAdapter(adapter, { repoRoot = process.cwd(), env = process.env } = {}) {
+export function validateAdapter(adapter, { repoRoot = process.cwd(), env = process.env, remoteDefaultBranch = null } = {}) {
   const errors = [];
   const warnings = [];
 
@@ -61,6 +64,15 @@ export function validateAdapter(adapter, { repoRoot = process.cwd(), env = proce
   }
 
   if (!adapter.project?.id) errors.push('project.id is required.');
+
+  // A warning, not an error: a project may deliberately run the loop against
+  // a staging branch. But the usual cause is init having recorded the setup
+  // branch it was run on, and then every generation is cut from, and every
+  // pull request opened against, a branch nothing deploys.
+  const configuredBranch = adapter.project?.default_branch;
+  if (remoteDefaultBranch && configuredBranch && configuredBranch !== remoteDefaultBranch) {
+    warnings.push(`project.default_branch is "${configuredBranch}", but the repository's default branch is "${remoteDefaultBranch}". Generations are cut from, and pull requests opened against, "${configuredBranch}". If that is the branch init was run on rather than a deliberate choice, set it to "${remoteDefaultBranch}" and regenerate the workflow (node harness/cli/init.mjs --from-adapter --force).`);
+  }
 
   // A half-specified goal throws from goalConfig() itself (a half-specified
   // goal silently ignored is worse than none, per its own doc comment).

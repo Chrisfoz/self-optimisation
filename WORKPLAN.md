@@ -29,12 +29,15 @@ back — three are open in `Chrisfoz/icd-mapper-harness-campaign`. After that,
 ([`docs/campaigns/2026-09-17-networkinai-install.md`](docs/campaigns/2026-09-17-networkinai-install.md))
 gives 2.1a its first data point. 1.03 million characters of editable source
 still fit `full-dump`, but cost 250–510k input tokens per suggesting model,
-so at six models the prompt was most of a 2M budget. It also logs two
-harness defects found but not fixed: the suggestion prompt demands two
-incompatible response formats, and `init.mjs` records the current branch as
-`default_branch`. Neither closes the "person's verdict" item above, because
-the merged change came from a rehearsal branch rather than a workflow-opened
-pull request.
+so at six models the prompt was most of a 2M budget. Two harness defects it
+found are fixed: the suggestion prompt demanded two incompatible response
+formats, and `init.mjs` recorded the current branch as `default_branch`. It
+also records one design question that is still open. The copied-in
+workflow's root `js-yaml` install is silently the project's dependency
+install, so isolating it needs `evaluation.setup_commands` for copied
+installs first. None of this closes the "person's verdict" item above,
+because the merged change came from a rehearsal branch rather than a
+workflow-opened pull request.
 
 *Superseded 2026-09-11 — kept for the record:*
 **→ Tier 0.5's one open item: a real generation through `harness/`, then
