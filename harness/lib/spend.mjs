@@ -61,6 +61,24 @@ export function normalizeUsage(usage) {
   return { inputTokens: input, outputTokens: output };
 }
 
+/**
+ * Prompt-cache activity inside a usage object, already counted in the input
+ * total by normalizeUsage() and reported separately so a record can show what
+ * caching saved. Reads are billed at a fraction of the input price, writes at a
+ * premium. Anthropic reports both; OpenAI-shaped and Gemini responses report
+ * cached reads only.
+ *
+ * @returns {{cacheReadTokens: number, cacheWriteTokens: number}}
+ */
+export function cacheUsage(usage) {
+  const n = (v) => (Number.isFinite(v) ? v : 0);
+  if (!usage || typeof usage !== 'object') return { cacheReadTokens: 0, cacheWriteTokens: 0 };
+  return {
+    cacheReadTokens: n(usage.cache_read_input_tokens) + n(usage.prompt_tokens_details?.cached_tokens) + n(usage.prompt_cache_hit_tokens) + n(usage.cachedContentTokenCount),
+    cacheWriteTokens: n(usage.cache_creation_input_tokens),
+  };
+}
+
 /** Rough tokens for a prompt or response when the provider reported nothing — the same 4-chars-per-token rule context-pack.mjs uses. */
 export function estimateTokens(text) {
   return Math.round((text ?? '').length / 4);
@@ -137,6 +155,13 @@ export function createSpendLedger({ maxTokens = null } = {}) {
           outputTokens: estimateTokens(text),
           estimated: true,
         };
+    // Only when there was any, so a record from a run with no caching is
+    // unchanged.
+    if (real) {
+      const cache = cacheUsage(usage);
+      if (cache.cacheReadTokens) entry.cacheReadTokens = cache.cacheReadTokens;
+      if (cache.cacheWriteTokens) entry.cacheWriteTokens = cache.cacheWriteTokens;
+    }
     if (failed) entry.failed = true;
     if (statusCode !== null && statusCode !== 200) entry.statusCode = statusCode;
     calls.push(entry);
@@ -240,6 +265,8 @@ export function createSpendLedger({ maxTokens = null } = {}) {
           out[k].calls += 1;
           out[k].inputTokens += c.inputTokens;
           out[k].outputTokens += c.outputTokens;
+          if (c.cacheReadTokens) out[k].cacheReadTokens = (out[k].cacheReadTokens ?? 0) + c.cacheReadTokens;
+          if (c.cacheWriteTokens) out[k].cacheWriteTokens = (out[k].cacheWriteTokens ?? 0) + c.cacheWriteTokens;
         }
         return out;
       };
@@ -261,6 +288,13 @@ export function createSpendLedger({ maxTokens = null } = {}) {
         // on these; they are why a run stopped early, not what it cost.
         refusedRequests: refused.length,
         maxGenerationTokens: cap,
+        // Present only when a lab reported cache activity. Included in
+        // inputTokens above; this is how much of it was cheap (reads) or
+        // carried a premium (writes).
+        ...(calls.some((c) => c.cacheReadTokens || c.cacheWriteTokens) ? {
+          cacheReadTokens: calls.reduce((s, c) => s + (c.cacheReadTokens ?? 0), 0),
+          cacheWriteTokens: calls.reduce((s, c) => s + (c.cacheWriteTokens ?? 0), 0),
+        } : {}),
         byModel: by('model'),
         bySite: by('site'),
       };

@@ -1,5 +1,23 @@
 import { registerProvider } from '../lib/llm-provider.mjs';
 
+/**
+ * The user turn as text blocks, with a cache breakpoint after \cachePrefix\`n * when the caller marked one. Everything up to a breakpoint (system prompt
+ * included) is written to Anthropic's prompt cache and reread at a tenth of
+ * the input price by any request with the same prefix within five minutes.
+ * Writing costs 1.25x once. The implementer marks the proposal and source it
+ * rereads unchanged on a headroom retry or a refinement: on a large project
+ * that is ~380k tokens a time (NetworkinAI generations 002 and 003).
+ *
+ * A prefix that isn't actually a prefix of \user\ is ignored rather than
+ * trusted: a breakpoint in the wrong place would cache nothing useful.
+ */
+export function userBlocks(user, cachePrefix) {
+  if (!cachePrefix || typeof user !== 'string' || !user.startsWith(cachePrefix)) return [{ type: 'text', text: user }];
+  const rest = user.slice(cachePrefix.length);
+  const cached = { type: 'text', text: cachePrefix, cache_control: { type: 'ephemeral' } };
+  return rest ? [cached, { type: 'text', text: rest }] : [cached];
+}
+
 registerProvider('anthropic', {
   pattern: /^(claude|anthropic\.)/i,
   envKey: 'ANTHROPIC_API_KEY',
@@ -18,7 +36,7 @@ registerProvider('anthropic', {
     // created_at is an ISO timestamp.
     parseModels: (data) => data.data.map((m) => ({ id: m.id, created: Date.parse(m.created_at) || 0 })),
   },
-  body: ({ model, system, user, maxTokens, images, effort = null }) => ({
+  body: ({ model, system, user, maxTokens, images, effort = null, cachePrefix = null }) => ({
     model,
     max_tokens: maxTokens,
     // Opt-in, per seat (roles.<seat>.effort). Omitted by default for the same
@@ -37,9 +55,9 @@ registerProvider('anthropic', {
               type: 'image',
               source: { type: 'base64', media_type: img.mime, data: img.data },
             })),
-            { type: 'text', text: user },
+            ...userBlocks(user, cachePrefix),
           ]
-        : user,
+        : cachePrefix ? userBlocks(user, cachePrefix) : user,
     }],
     // NOTE: `thinking` is deliberately omitted rather than set explicitly.
     // This has to run on models that do not exist yet. Omitting the field is
