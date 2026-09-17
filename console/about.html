@@ -240,6 +240,19 @@
         download configuration without signing in. API keys are entered on
         GitHub, never in this console.
       </p>
+      <h3>It costs real money, so judge it per merged change</h3>
+      <p>
+        Every generation is paid for in API credit, mostly for the models
+        reading the code. On a large web app, a generation that shipped used
+        393,000 tokens: under $1 for the review, plus the suggesting model's
+        reading. Runs where a pinned model writes the change cost a few dollars
+        more. The fair comparison is the
+        cost of each change that ships, including your review of it, against the
+        time a person would have spent. Runs that spend and ship nothing are the
+        real waste, and the harness now stops the most common ones before
+        paying for them.
+        <a href="/how-to-run#cost">What it costs</a>
+      </p>
       <h3>Better models do not guarantee better changes</h3>
       <p>
         Your test coverage and project brief still matter. The wider curiosity

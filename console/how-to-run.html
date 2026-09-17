@@ -493,6 +493,78 @@
     </ul>
   </section>
 
+  <section id="cost">
+    <h2>What it costs, and what that buys</h2>
+    <p>
+      Each generation is paid for in API credit, and each one that ships is a
+      change someone didn't have to make by hand. So the useful question isn't
+      "how many tokens?" but <b>"what did each merged change cost, against the
+      time it would have taken a person?"</b> Count your own review of the pull
+      request in that time too. The harness only saves time if you trust what
+      it sends.
+    </p>
+    <h3>Tokens are not dollars</h3>
+    <p>
+      Most tokens a run uses are <em>input</em>: the files each model reads.
+      Input costs a fraction of output. The first real installation, a large
+      web app with about a million characters of editable code, gave these
+      figures (September 2026, at each lab's list price):
+    </p>
+    <div class="table-scroll">
+      <table>
+        <tr><th>What happened</th><th>Tokens</th><th>Roughly</th></tr>
+        <tr><td>Each suggesting model reading the project</td><td>250,000–380,000 input</td><td>Depends on the lab's price and tokenizer</td></tr>
+        <tr><td>A practice run with six suggesting models</td><td>2.0 million</td><td>Most of it input, spread across six labs</td></tr>
+        <tr><td>A failed run: one suggester, then the implementer ran out of room twice</td><td>1.06 million</td><td>About $5 for the Claude Opus 5 part</td></tr>
+        <tr><td><b>A run that shipped:</b> one suggester wrote its own edits, tests passed, one review, pull request opened</td><td>393,000</td><td>Under $1 for the Claude Opus 5 review, plus the suggester reading the project</td></tr>
+        <tr><td>The same, but the implementer writes the change</td><td>About 0.8–1 million</td><td>Add roughly $2–3 of Opus 5 input per implementation attempt on a project this size</td></tr>
+      </table>
+    </div>
+    <p>
+      Model prices change often, so check each lab's pricing page for your
+      own estimate. Divide your editable code's character count by four for a
+      rough token count per model.
+    </p>
+    <h3>What actually wastes money</h3>
+    <ul class="need">
+      <li><b>Runs that spend and ship nothing.</b> A seat whose account has no
+        credit, or a model that runs out of output room. The harness now checks
+        every fixed model before paying for a suggester, and turns a crashed run
+        red. Read the email or the run, not just the tick.</li>
+      <li><b>Many suggesters at once.</b> Each one reads the whole project. Start
+        with one or two.</li>
+      <li><b>A wide editable area.</b> Every file in
+        <code>constitution.allowed_paths</code> is sent to every suggesting
+        model. List the files that matter, not whole folders' worth.</li>
+      <li><b>Thinking you didn't need.</b> Reasoning models spend output tokens
+        thinking, and that counts against their limit. For the implementer,
+        which follows a proposal someone else wrote,
+        <code>roles.implement.effort: medium</code> is often enough.</li>
+      <li><b>The most expensive model where a cheaper one will do.</b> The top
+        tier can cost twice as much per token as the next one down. The digest
+        email only needs a mid-tier model
+        (<code>notify.digest_model</code>).</li>
+    </ul>
+    <h3>Keeping it bounded</h3>
+    <ul class="need">
+      <li><b>A spending limit at every lab you use.</b> This is the only hard
+        monthly ceiling. The harness can't see your balance.</li>
+      <li><b>A token cap per generation</b>
+        (<code>budget.max_generation_tokens</code>), sized to your project: about
+        a quarter of your editable characters per suggesting model, plus the
+        same again for the implementer and reviewer. A run that would go over
+        stops before calling anyone.</li>
+      <li><b>The monthly schedule.</b> The loop runs when a lab releases a new
+        model, checked once a month, not continuously.</li>
+    </ul>
+    <p class="notice">
+      <b>Two changes that would cut the cost further are planned but not built
+      yet:</b> sending the implementer only the files a proposal names, rather
+      than everything, and prompt caching, so a retry or refinement rereads the
+      same code at a tenth of the price.
+    </p>
+  </section>
+
   <section id="configure">
     <h2>Make it yours: where everything is configured</h2>
     <p>Find what you want to change on the left, then open the file on the right.</p>
