@@ -25,6 +25,17 @@ merging or closing one of its pull requests and the next cycle reading that
 back — three are open in `Chrisfoz/icd-mapper-harness-campaign`. After that,
 2.1a: a larger repository, to force the `context.strategy: scoped` question.
 
+*2026-09-17:* the first install into an existing project
+([`docs/campaigns/2026-09-17-networkinai-install.md`](docs/campaigns/2026-09-17-networkinai-install.md))
+gives 2.1a its first data point. 1.03 million characters of editable source
+still fit `full-dump`, but cost 250–510k input tokens per suggesting model,
+so at six models the prompt was most of a 2M budget. It also logs two
+harness defects found but not fixed: the suggestion prompt demands two
+incompatible response formats, and `init.mjs` records the current branch as
+`default_branch`. Neither closes the "person's verdict" item above, because
+the merged change came from a rehearsal branch rather than a workflow-opened
+pull request.
+
 *Superseded 2026-09-11 — kept for the record:*
 **→ Tier 0.5's one open item: a real generation through `harness/`, then
 Tier 2.1a.** [`docs/Review-10x-2026-09.md`](docs/Review-10x-2026-09.md)
