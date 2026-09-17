@@ -283,7 +283,15 @@ export function rolesConfig(adapter) {
     suggestMaxTokens: Number.isFinite(adapter?.roles?.suggest?.max_output_tokens)
       ? adapter.roles.suggest.max_output_tokens
       : null,
+    implementMaxTokens: Number.isFinite(adapter?.roles?.implement?.max_output_tokens)
+      ? adapter.roles.implement.max_output_tokens
+      : null,
     implementModel: adapter?.roles?.implement?.model ?? null,
+    // Anthropic's output_config.effort for the implement and review seats
+    // (low | medium | high | xhigh | max). Null sends nothing, and the lab's
+    // default applies. See providers/anthropic.mjs for why it is opt-in.
+    implementEffort: adapter?.roles?.implement?.effort ?? null,
+    reviewEffort: adapter?.roles?.review?.effort ?? null,
     reviewModel: adapter?.roles?.review?.model ?? null,
     rankModel: adapter?.roles?.rank?.model ?? null,
     // The lab serving each pinned model, when the installation named one

@@ -44,7 +44,7 @@ for (const mode of MODES) {
     const pr = mode === 'human-approval-required';
     const r = runStep(findStep(steps, 'gates'), {
       env: {
-        PREFLIGHT: 'success', REVIEW: 'success', GUARD: 'success', TESTS: 'success',
+        PREFLIGHT: 'success', IMPROVE: 'success', REVIEW_VERDICT: 'approved', GUARD: 'success', TESTS: 'success',
         PULL_REQUEST: pr ? 'success' : '', PROMOTE: pr ? '' : 'success', VERIFY: pr ? '' : 'success',
       },
     });
@@ -60,7 +60,7 @@ for (const mode of MODES) {
   test(`gates (${mode}): a run that stopped at review still reports, with later gates skipped`, opts, () => {
     const { steps } = renderSteps(answers({ approvalClass: mode }));
     const r = runStep(findStep(steps, 'gates'), {
-      env: { PREFLIGHT: 'success', REVIEW: 'failure', GUARD: 'skipped', TESTS: 'skipped', PULL_REQUEST: '', PROMOTE: '', VERIFY: '' },
+      env: { PREFLIGHT: 'success', IMPROVE: 'failure', REVIEW_VERDICT: 'rejected', GUARD: 'skipped', TESTS: 'skipped', PULL_REQUEST: '', PROMOTE: '', VERIFY: '' },
     });
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(JSON.parse(r.outputs.json).map((g) => `${g.name}:${g.result}`),
@@ -68,9 +68,23 @@ for (const mode of MODES) {
     assert.equal(r.outputs.merged, 'false');
   });
 
+  test(`gates (${mode}): a loop that crashed before any verdict is reported as the loop, not as a review`, opts, () => {
+    // The first real GitHub run crashed on an empty credit balance, and its
+    // digest said "❌ review" although nothing had been reviewed.
+    const { steps } = renderSteps(answers({ approvalClass: mode }));
+    for (const [verdict, expected] of [['', 'improve:failure'], ['no-proposal', 'improve:failure'], ['over-budget', 'improve:failure']]) {
+      const r = runStep(findStep(steps, 'gates'), {
+        env: { PREFLIGHT: 'success', IMPROVE: 'failure', REVIEW_VERDICT: verdict, GUARD: 'skipped', TESTS: 'skipped', PULL_REQUEST: '', PROMOTE: '', VERIFY: '' },
+      });
+      assert.equal(r.status, 0, r.stderr);
+      const names = JSON.parse(r.outputs.json).map((g) => `${g.name}:${g.result}`);
+      assert.deepEqual(names, ['preflight:success', expected, 'guard:skipped', 'tests:skipped'], `verdict "${verdict}"`);
+    }
+  });
+
   test(`gates (${mode}): every outcome empty still exits 0 with an empty list`, opts, () => {
     const { steps } = renderSteps(answers({ approvalClass: mode }));
-    const r = runStep(findStep(steps, 'gates'), { env: { PREFLIGHT: '', REVIEW: '', GUARD: '', TESTS: '', PULL_REQUEST: '', PROMOTE: '', VERIFY: '' } });
+    const r = runStep(findStep(steps, 'gates'), { env: { PREFLIGHT: '', IMPROVE: '', REVIEW_VERDICT: '', GUARD: '', TESTS: '', PULL_REQUEST: '', PROMOTE: '', VERIFY: '' } });
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.outputs.json, '[]');
   });

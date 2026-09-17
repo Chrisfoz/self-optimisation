@@ -104,8 +104,12 @@ test('detector: nine labs baseline, then a release at each, held to max_fanout, 
   assert.equal(probed.selectedModels.length, 8, 'every candidate reachable');
   assert.deepEqual(probed.probeDropped, []);
   const probes = labs.requests.filter((r) => r.stage === 'probe');
-  assert.equal(probes.length, 8);
-  assert.ok(probes.every((r) => r.model.endsWith('-next')), 'the probe called the NEW ids');
+  const candidateProbes = probes.filter((r) => r.model.endsWith('-next'));
+  assert.equal(candidateProbes.length, 8, 'the probe called each NEW id once');
+  // The pinned seats are probed too, once each, so a seat that cannot answer
+  // stops the cycle before a suggester is paid for.
+  assert.ok(probes.length > 8, 'pinned seats were probed as well');
+  assert.deepEqual(probed.pinnedUnreachable, []);
 });
 
 test('a model the lab does not serve is dropped by the probe, not discovered mid-run', async (t) => {

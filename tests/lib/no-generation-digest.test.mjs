@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { buildNoGenerationEmail, NO_GENERATION_REASONS } from '../../harness/lib/notify.mjs';
+import { buildNoGenerationEmail, NO_GENERATION_REASONS, noGenerationReason } from '../../harness/lib/notify.mjs';
 import { renderWorkflowTemplate } from '../../harness/lib/scaffold.mjs';
 
 /* A cycle with no generation must still say WHICH kind of nothing happened.
@@ -157,4 +157,38 @@ test('a paused cycle says so, says nothing was spent, and says how to resume', (
   assert.match(body, /SELF_IMPROVE_PAUSED/);
   assert.match(body, /no tokens were spent/i);
   assert.match(body, /To resume/);
+});
+
+// --- from the first real GitHub run ---------------------------------------------
+
+test('noGenerationReason: a campaign run skips the release check, and that is not a failed check', () => {
+  assert.equal(noGenerationReason({ CHECK_RESULT: 'skipped', PREFLIGHT_RESULT: 'success' }), NO_GENERATION_REASONS.QUIET);
+  assert.equal(noGenerationReason({ CHECK_RESULT: 'failure' }), NO_GENERATION_REASONS.CHECK_FAILED);
+});
+
+test('noGenerationReason: an unreachable pinned seat is its own reason, ahead of preflight', () => {
+  assert.equal(noGenerationReason({ CHECK_RESULT: 'skipped', PINNED_BLOCKED: 'true', PREFLIGHT_RESULT: '' }), NO_GENERATION_REASONS.PINNED_UNREACHABLE);
+  assert.equal(noGenerationReason({ PAUSED: 'true', PINNED_BLOCKED: 'true' }), NO_GENERATION_REASONS.PAUSED);
+});
+
+test('the pinned-seat email says nothing was spent, names billing, and carries the detail', () => {
+  const { subject, body } = buildNoGenerationEmail({
+    reason: NO_GENERATION_REASONS.PINNED_UNREACHABLE,
+    detail: 'claude-opus-5 (implement, review seat): credit balance is too low',
+  });
+  assert.match(subject, /nothing was spent/);
+  assert.match(body, /billing/i);
+  assert.match(body, /credit balance is too low/);
+});
+
+test('the workflow turns a crash and an unreachable pinned seat red, but not a rejection', () => {
+  const wf = renderWorkflowTemplate(readFileSync('harness/templates/workflow.yml.tmpl', 'utf8'), ANSWERS);
+  const crash = wf.slice(wf.indexOf('- name: Fail the run if the improvement loop crashed'));
+  assert.match(crash.slice(0, 300), /steps\.improve\.outcome == 'failure' && steps\.improve\.outputs\.review-verdict == ''/);
+  const pinned = wf.slice(wf.indexOf('- name: Fail the run if a pinned model could not be reached'));
+  assert.match(pinned.slice(0, 300), /steps\.probe\.outputs\.pinned-blocked == 'true'/);
+  const probeStep = wf.slice(wf.indexOf('- name: Probe reachability'), wf.indexOf('- name: Run this project'));
+  assert.match(probeStep, /pinned-blocked=/);
+  const digest = wf.slice(wf.indexOf('- name: Send the generation digest'), wf.indexOf('- name: Send an escalation notice'));
+  assert.match(digest, /PINNED_BLOCKED: \$\{\{ steps\.probe\.outputs\.pinned-blocked \}\}/);
 });

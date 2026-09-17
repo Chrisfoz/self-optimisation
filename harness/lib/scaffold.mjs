@@ -731,6 +731,7 @@ function renderWorkflow(template, answers, shared) {
           PREFLIGHT_RESULT: \${{ steps.preflight.outcome }}
           RELEASE_DETECTED: \${{ steps.check.outputs.release-detected }}
           NO_GENERATION_DETAIL: \${{ steps.probe.outputs.dropped }}
+          PINNED_BLOCKED: \${{ steps.probe.outputs.pinned-blocked }}
           LABS_WATCHED: ${shared ? '${{ env.PROVIDERS_CSV }}' : answers.providers.map((p) => p.name).join(',')}
           RUN_URL: \${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}
           GATES: \${{ steps.gates.outputs.json }}

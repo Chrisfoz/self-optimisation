@@ -158,6 +158,9 @@ roles:
     max_output_tokens: 32000   # covers a full analysis plus an ambitious edit set
   implement:
     model: claude-opus-5       # the pinned fallback implementer
+    # max_output_tokens: 32000 # default; a reasoning model on a large project spends much of it thinking
+    # effort: medium          # Anthropic models only: low | medium | high | xhigh | max. Thinking counts
+    #                         # against max_output_tokens, so a lower effort leaves more room for the edits.
     # provider: anthropic      # only needed when the id doesn't name its own lab
   review:
     model: claude-opus-5       # pinned — this gate does not rotate

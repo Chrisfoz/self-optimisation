@@ -314,6 +314,10 @@ jobs:
           # Which candidates were dropped, and why — the difference between
           # "nothing shipped" and "something shipped that we could not call".
           echo "dropped=$(jq -c '[.probeDropped[]? | "\(.id): \(.reason)"] | join("; ")' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
+          # A pinned seat (implement, review, a named ranker, the digest
+          # writer) that could not answer. The cycle is skipped before any
+          # suggester is paid for, and the run is turned red at the end.
+          echo "pinned-blocked=$(jq -r '(.pinnedUnreachable // []) | length > 0' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
           echo "models=$(jq -c '.selectedModels' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
           echo "model=$(jq -r '.selectedModel // "none"' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
           echo "provider=$(jq -r '.selectedProvider // "none"' "$RUNNER_TEMP/release-check.json")" >> "$GITHUB_OUTPUT"
@@ -598,7 +602,12 @@ jobs:
         shell: bash
         env:
           PREFLIGHT: ${{ steps.preflight.outcome }}
-          REVIEW: ${{ steps.improve.outcome }}
+          # The loop step fails for a rejected change AND for a crash, an
+          # empty fan-out or a budget refusal. Labelled "review" whatever
+          # happened, a run that crashed on an empty credit balance reported
+          # "❌ review" when nothing was ever reviewed. The verdict says which.
+          IMPROVE: ${{ steps.improve.outcome }}
+          REVIEW_VERDICT: ${{ steps.improve.outputs.review-verdict }}
           GUARD: ${{ steps.guard.outcome }}
           TESTS: ${{ steps.tests.outcome }}
           # Exactly one of these two paths was rendered into this file (see
@@ -623,7 +632,13 @@ jobs:
             gates=$(printf '%s' "$gates" | jq -c --arg n "$1" --arg r "$2" '. + [{name:$n, result:$r}]')
           }
           add preflight "$PREFLIGHT"
-          add review "$REVIEW"
+          # A review gate only when a review happened; otherwise the loop's
+          # own result, under its own name.
+          case "$REVIEW_VERDICT" in
+            approved) add review success ;;
+            rejected) add review failure ;;
+            *) add improve "$IMPROVE" ;;
+          esac
           add guard "$GUARD"
           add tests "$TESTS"
           add pull-request "$PULL_REQUEST"
@@ -655,6 +670,7 @@ jobs:
           PREFLIGHT_RESULT: ${{ steps.preflight.outcome }}
           RELEASE_DETECTED: ${{ steps.check.outputs.release-detected }}
           NO_GENERATION_DETAIL: ${{ steps.probe.outputs.dropped }}
+          PINNED_BLOCKED: ${{ steps.probe.outputs.pinned-blocked }}
           LABS_WATCHED: ${{ env.PROVIDERS_CSV }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GATES: ${{ steps.gates.outputs.json }}
@@ -699,4 +715,24 @@ jobs:
         shell: bash
         run: |
           echo "::error::This generation's record could not be committed to ${DEFAULT_BRANCH:?the project configuration was not read} — see the persist step. It exists only on this runner and is gone when the job ends."
+          exit 1
+
+      # The same reasoning as the step above, for two more ways a run looked
+      # green while achieving nothing. A REJECTED change stays green: that is
+      # the gates working. A crash is not. The first real run on GitHub Actions
+      # crashed on an empty credit balance and showed a green tick.
+      - name: Fail the run if the improvement loop crashed
+        if: always() && steps.improve.outcome == 'failure' && steps.improve.outputs.review-verdict == ''
+        shell: bash
+        run: |
+          echo "::error::The improvement loop crashed before reaching a verdict — see the 'Run the improvement loop' step. Its record says why."
+          exit 1
+
+      - name: Fail the run if a pinned model could not be reached
+        if: always() && steps.probe.outputs.pinned-blocked == 'true'
+        shell: bash
+        env:
+          DROPPED: ${{ steps.probe.outputs.dropped }}
+        run: |
+          echo "::error::A pinned seat could not be reached, so the cycle stopped before spending anything: $DROPPED"
           exit 1

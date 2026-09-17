@@ -296,6 +296,12 @@ export const NO_GENERATION_REASONS = {
   // it was written must never be reported as a month with nothing to do.
   VALIDATE_FAILED: 'validate-failed',
   CHECK_FAILED: 'check-failed',
+  // A model to suggest was reachable, but a PINNED seat (implement, review,
+  // a named rank model, the digest writer) was not, so nothing was spent. The
+  // first real run on GitHub Actions learned this the expensive way: the
+  // suggester's full-context call succeeded, then the implementer's account
+  // had no credit, and ~900k tokens bought a crashed generation.
+  PINNED_UNREACHABLE: 'pinned-unreachable',
   ALL_UNREACHABLE: 'all-unreachable',
   PREFLIGHT_FAILED: 'preflight-failed',
   // The owner flipped the kill switch (the SELF_IMPROVE_PAUSED repository
@@ -304,6 +310,27 @@ export const NO_GENERATION_REASONS = {
   // from a loop that is silently broken.
   PAUSED: 'paused',
 };
+
+/**
+ * Which no-generation email to send, from the workflow's step results. First
+ * match wins, in the order a cycle can stop.
+ *
+ * @param {Record<string, string|undefined>} env  PAUSED, VALIDATE_RESULT,
+ *   CHECK_RESULT, PINNED_BLOCKED, PREFLIGHT_RESULT, RELEASE_DETECTED.
+ * @returns {string} one of NO_GENERATION_REASONS
+ */
+export function noGenerationReason(env) {
+  if (env.PAUSED === 'true') return NO_GENERATION_REASONS.PAUSED;
+  if (env.VALIDATE_RESULT && env.VALIDATE_RESULT !== 'success') return NO_GENERATION_REASONS.VALIDATE_FAILED;
+  // `skipped` is not a failure: a campaign run names its models by hand and
+  // never runs the release check, and was being told the check "did not
+  // complete".
+  if (env.CHECK_RESULT && !['success', 'skipped'].includes(env.CHECK_RESULT)) return NO_GENERATION_REASONS.CHECK_FAILED;
+  if (env.PINNED_BLOCKED === 'true') return NO_GENERATION_REASONS.PINNED_UNREACHABLE;
+  if (env.PREFLIGHT_RESULT && env.PREFLIGHT_RESULT !== 'success') return NO_GENERATION_REASONS.PREFLIGHT_FAILED;
+  if (env.RELEASE_DETECTED === 'true') return NO_GENERATION_REASONS.ALL_UNREACHABLE;
+  return NO_GENERATION_REASONS.QUIET;
+}
 
 /**
  * Builds the email for a cycle that produced no generation.
@@ -366,6 +393,23 @@ export function buildNoGenerationEmail({ reason, runUrl, labs = [], detail = '',
         ``,
         `A crashed release check is usually an expired key, a lab changing its`,
         `models endpoint, or a network failure. The run log will say which.`,
+        ...footer,
+      ].join('\n'),
+    };
+  }
+
+  if (reason === NO_GENERATION_REASONS.PINNED_UNREACHABLE) {
+    return {
+      subject: '❌ A fixed model could not be reached — nothing was spent',
+      body: [
+        `A model was ready to suggest a change, but one of the models this project`,
+        `always uses (to implement, review, rank or write this email) failed its`,
+        `reachability check, so the cycle stopped before any real work.`,
+        ``,
+        `The usual cause is billing: an account with no credit or no payment`,
+        `method. A key can be valid on such an account. Top up or fix it on that`,
+        `lab's billing page, or change the seat in project-adapter.yml.`,
+        ...(detail ? ['', detail] : []),
         ...footer,
       ].join('\n'),
     };

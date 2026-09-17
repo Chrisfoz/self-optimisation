@@ -30,7 +30,8 @@
 import fs from 'fs';
 import '../providers/index.mjs';
 import { callModel } from '../lib/llm-provider.mjs';
-import { probeCandidates, PROBE_SYSTEM, PROBE_USER } from '../lib/probe-models.mjs';
+import { probeCandidates, probePinnedSeats, pinnedSeats, PROBE_SYSTEM, PROBE_USER } from '../lib/probe-models.mjs';
+import { loadAdapter, rolesConfig, notifyConfig } from '../lib/adapter.mjs';
 
 function parseArgs(argv) {
   const out = {};
@@ -84,6 +85,27 @@ const { survivors, dropped } = await probeCandidates(
   { estimatedTokens }
 );
 
+// The pinned seats, probed only when there is a suggester to spend on. A
+// generation calls them whichever candidate wins, so one that cannot answer
+// (in practice: an account with no credit) stops the cycle here, before the
+// fan-out's full-context calls rather than after them. Skipped when there is
+// no adapter to read, as in a bare test of this script.
+let pinnedBlocked = [];
+if (survivors.length) {
+  const adapter = await loadAdapter(process.env.PROJECT_ADAPTER_PATH || undefined).catch(() => null);
+  if (adapter) {
+    const seats = pinnedSeats({ roles: rolesConfig(adapter), notify: adapter.notify ? notifyConfig(adapter) : null, env: process.env });
+    pinnedBlocked = await probePinnedSeats(seats, prober, (msg) => console.error(msg));
+  }
+}
+if (pinnedBlocked.length) {
+  for (const b of pinnedBlocked) {
+    dropped.push({ id: `${b.model} (${b.seats.join(', ')} seat)`, provider: b.provider, reason: b.reason });
+  }
+  survivors.length = 0;
+}
+release.pinnedUnreachable = pinnedBlocked;
+
 release.selectedModels = survivors;
 release.selectedModel = survivors[0]?.id ?? '';
 release.selectedProvider = survivors[0]?.provider ?? '';
@@ -100,6 +122,8 @@ fs.writeFileSync(args.releasePath, JSON.stringify(release, null, 2));
 if (dropped.length) {
   console.error(`\n⚠️  Dropped ${dropped.length} unreachable candidate(s): ${dropped.map((d) => d.id).join(', ')}`);
 }
-if (!survivors.length) {
+if (pinnedBlocked.length) {
+  console.error(`\n❌ ${pinnedBlocked.length} pinned seat(s) unreachable: ${pinnedBlocked.map((b) => `${b.model} (${b.seats.join(', ')})`).join('; ')}. The improvement cycle will be skipped, before anything is spent on a suggester.`);
+} else if (!survivors.length) {
   console.error('\nNo candidate model is reachable — the improvement cycle will be skipped.');
 }
