@@ -49,6 +49,11 @@
 
 import fs from 'fs';
 import path from 'path';
+// Registers every lab. Without it no model id resolves to a provider, so the
+// plain-language call threw on every run and every digest silently went out
+// as the terse fallback. The fallback is built to hide exactly that kind of
+// failure, so nothing showed it until a real install read one.
+import '../providers/index.mjs';
 import { loadAdapter, notifyConfig, contextConfig, memoryConfig } from '../lib/adapter.mjs';
 import { callModelWithHeadroom } from '../lib/llm-provider.mjs';
 import { buildGenerationDigestEmail, buildNoGenerationEmail, NO_GENERATION_REASONS, getSender } from '../lib/notify.mjs';

@@ -33,6 +33,9 @@
 
 import fs from 'fs';
 import path from 'path';
+// Registers every lab, for the same reason as send-digest.mjs: without it the
+// model call cannot resolve a provider and the notice always falls back.
+import '../providers/index.mjs';
 import { loadAdapter, notifyConfig } from '../lib/adapter.mjs';
 import { callModelWithHeadroom } from '../lib/llm-provider.mjs';
 import { buildEscalationNoticeEmail, getSender } from '../lib/notify.mjs';
