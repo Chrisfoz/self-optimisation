@@ -558,10 +558,14 @@
         model, checked once a month, not continuously.</li>
     </ul>
     <p class="notice">
-      <b>Two changes that would cut the cost further are planned but not built
-      yet:</b> sending the implementer only the files a proposal names, rather
-      than everything, and prompt caching, so a retry or refinement rereads the
-      same code at a tenth of the price.
+      <b>Two savings are built in.</b> The implementer is shown only the files
+      the proposal names, and can ask for more (it used to receive every
+      editable file). On Anthropic models, what it rereads on a retry or
+      refinement comes from the prompt cache at a tenth of the input price. The
+      first write costs a quarter more, once. Each run's
+      <code>attempts.json</code> shows <code>cacheReadTokens</code> when caching
+      saved something. To turn caching off:
+      <code>roles.implement.prompt_cache: false</code>.
     </p>
   </section>
 

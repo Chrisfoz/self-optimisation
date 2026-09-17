@@ -388,6 +388,8 @@ try {
       suggestMaxTokens,
       implementMaxTokens,
       implementEffort: process.env.IMPLEMENT_EFFORT || roles.implementEffort,
+      sourcesFor: (files) => fenceUntrusted('SOURCE', buildSourceBundle(files, { repoRoot })) ?? '',
+      implementPromptCache: roles.implementPromptCache !== false,
       reviewEffort: process.env.REVIEW_EFFORT || roles.reviewEffort,
       scope,
       projectDescription,

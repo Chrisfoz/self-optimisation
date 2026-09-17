@@ -201,6 +201,7 @@ context:
         implementMaxTokens: null,
         implementModel: 'claude-opus-5',
         implementEffort: null,
+        implementPromptCache: null,
         reviewEffort: null,
         reviewModel: 'claude-opus-5',
         rankModel: 'claude-opus-5',
@@ -227,7 +228,7 @@ context:
 test('briefPaths, rolesConfig and contextConfig return null/empty defaults on a bare adapter', () => {
   assert.deepEqual(briefPaths(null), { agentBriefPath: null, reviewerBriefPath: null });
   assert.deepEqual(rolesConfig(null), {
-    suggestMaxTokens: null, implementMaxTokens: null, implementModel: null, implementEffort: null, reviewEffort: null, reviewModel: null, rankModel: null,
+    suggestMaxTokens: null, implementMaxTokens: null, implementModel: null, implementEffort: null, implementPromptCache: null, reviewEffort: null, reviewModel: null, rankModel: null,
     implementProvider: null, reviewProvider: null, rankProvider: null,
     maxAttempts: null, promotionThreshold: null,
   });

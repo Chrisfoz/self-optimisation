@@ -124,6 +124,34 @@ export function salvageTruncated(text, anchorField = 'VERIFICATION') {
   return `${prose}\n\n[NOTE: this response hit its output limit. The analysis above is complete; any edits the model began writing were discarded.]`;
 }
 
+/**
+ * The editable files a piece of text names: by full path, or by bare file
+ * name when that name is unique among the editable files ("venue.html" for
+ * `venue.html`, "venueCollision.js" for `shared/venueCollision.js`). A name
+ * shared by two editable files counts only when written in full, rather than
+ * guessing which was meant.
+ *
+ * @param {string} text
+ * @param {string[]} editableFiles
+ * @returns {string[]} in editableFiles order
+ */
+export function filesNamedIn(text, editableFiles) {
+  if (!text) return [];
+  const base = (f) => f.split('/').pop();
+  const counts = new Map();
+  for (const f of editableFiles) counts.set(base(f), (counts.get(base(f)) ?? 0) + 1);
+  const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Not part of a longer path or name on either side.
+  const named = (s) => new RegExp(`(?<![\\w./-])${escape(s)}(?![\\w/-]|\\.\\w)`).test(text);
+  return editableFiles.filter((f) => named(f) || (counts.get(base(f)) === 1 && named(base(f))));
+}
+
+/** A NEED FILES: line from an implementer that was shown too little, as editable paths. */
+export function requestedFilesIn(text, editableFiles) {
+  const line = String(text ?? '').match(/^\s*NEED FILES:\s*(.+)$/im)?.[1];
+  return line ? filesNamedIn(line, editableFiles) : [];
+}
+
 /** The argument only: no edit blocks, no note to the maintainers. Used when a proposal is shown to a different model than the one that wrote it (ranking, or a rejected attempt's context). */
 export function forRanking(text) {
   return text
@@ -554,7 +582,7 @@ ${editSpec}`;
  * @param {string} proposal
  * @param {{applyErrors?: string[], reviewFeedback?: string, rejectedRender?: object, attempt: number, author: string}} state
  */
-export async function implement(promptConfig, proposal, { applyErrors, reviewFeedback, testFailure, testFailureBy, rejectedRender, attempt, author }, deps = {}) {
+export async function implement(promptConfig, proposal, { applyErrors, reviewFeedback, testFailure, testFailureBy, rejectedRender, requestedFiles, scopeFiles, attempt, author }, deps = {}) {
   const call = deps.call ?? callModelWithHeadroom;
   const log = deps.log ?? (() => {});
   const maxAttempts = deps.maxAttempts;
@@ -562,8 +590,36 @@ export async function implement(promptConfig, proposal, { applyErrors, reviewFee
   const system = buildImplementSystemPrompt(promptConfig);
   const invariants = promptConfig.context.testIndex ? `\n# Frozen test invariants\n${promptConfig.context.testIndex}\n` : '';
 
+  // Only the files this change is about, when the run can build a bundle for
+  // a subset (run-generation.mjs supplies sourcesFor) and the proposal named
+  // any. Every editable file used to go to every attempt: ~380k tokens on
+  // NetworkinAI, for changes that touched one or two files.
+  const scoped = Array.isArray(scopeFiles) && scopeFiles.length > 0 && typeof promptConfig.sourcesFor === 'function';
+  const sources = scoped ? promptConfig.sourcesFor(scopeFiles) : (promptConfig.context.sources ?? '');
+  const scopeNote = scoped
+    ? `
+# What you are shown
+
+To keep this call small, the source below is only the editable files this
+change is about: ${scopeFiles.join(', ')}. Every file you may edit is listed in
+your instructions. If the change genuinely needs another of them, write no
+edit blocks and reply with exactly one line naming it, and you will be shown
+it on the next attempt:
+
+NEED FILES: <path>, <path>
+`
+    : '';
+
   let correction = '';
-  if (applyErrors) {
+  if (requestedFiles?.length) {
+    correction = `
+# THE FILES YOU ASKED FOR ARE NOW INCLUDED
+
+${requestedFiles.map((f) => `- ${f}`).join('\n')}
+
+Write the complete set of edit blocks for the change.
+`;
+  } else if (applyErrors) {
     correction = `
 # YOUR PREVIOUS ATTEMPT COULD NOT BE APPLIED
 
@@ -615,18 +671,25 @@ next version.
 
   log(`🔧 Stage 2 — implementation on ${promptConfig.implementModel}` + (attempt > 1 ? ` (attempt ${attempt}/${maxAttempts})` : ''));
 
-  const result = await call({
-    model: promptConfig.implementModel,
-    system,
-    user: `${promptConfig.genLabel}
+  // Everything that stays identical from one attempt to the next comes first,
+  // so a lab that caches by prefix can reread it cheaply on a retry or a
+  // refinement. What changes between attempts (the correction, a render of
+  // the rejected change) comes after.
+  const stablePrefix = `${promptConfig.genLabel}
 
 # The proposed improvement, from ${author}
 ${forRanking(proposal)}
-${invariants}
+${invariants}${scopeNote}
 # Current source
-${promptConfig.context.sources ?? ''}
-${correction}${renderBack}
+${sources}
+`;
+  const result = await call({
+    model: promptConfig.implementModel,
+    system,
+    user: `${stablePrefix}${correction}${renderBack}
 Implement the proposal above using the required edit format.`,
+    // roles.implement.prompt_cache (default on). Off sends no cache breakpoint.
+    ...(promptConfig.implementPromptCache === false ? {} : { cachePrefix: stablePrefix }),
     // roles.implement.max_output_tokens. A fixed 16,000 was too little for a
     // reasoning model on a large project (see run-generation.mjs).
     maxTokens: promptConfig.implementMaxTokens ?? 32000,
@@ -1065,6 +1128,10 @@ export async function runGeneration(config, deps = {}) {
     implementMaxTokens = 32000,
     implementEffort = null,
     reviewEffort = null,
+    // (files) => the source bundle for just those files. Present, the
+    // implementer is shown only the files a proposal names; absent, everything.
+    sourcesFor = null,
+    implementPromptCache = true,
     scope,
     scopeText = DEFAULT_SCOPE_TEXT,
     projectDescription,
@@ -1134,6 +1201,8 @@ export async function runGeneration(config, deps = {}) {
     suggestMaxTokens,
     implementMaxTokens,
     implementEffort,
+    sourcesFor,
+    implementPromptCache,
     context: {
       ...context,
       ...(escalationBrief ? { escalations: escalationBrief } : {}),
@@ -1312,6 +1381,22 @@ export async function runGeneration(config, deps = {}) {
     // Who implements, in order. When the suggesting model wrote its own
     // edits they are tried first and do not consume one of the pinned
     // implementer's attempts.
+    // Which files the pinned implementer is shown. Seeded from what the
+    // proposal names and what the suggester's own edits touched; grown by a
+    // NEED FILES: request, or by an edit that failed against a file it was not
+    // shown. Null (every file) when the run cannot build a partial bundle or
+    // the proposal names nothing.
+    let implementScope = null;
+    if (typeof sourcesFor === 'function') {
+      const seed = new Set(filesNamedIn(proposal, editableFiles));
+      for (const e of [...(winner.directEdits?.edits ?? []), ...(winner.directEdits?.creates ?? [])]) {
+        if (editableFiles.includes(e.file)) seed.add(e.file);
+      }
+      implementScope = seed.size ? seed : null;
+    }
+    const scopeList = () => (implementScope ? editableFiles.filter((f) => implementScope.has(f)) : null);
+    let requestedFiles = null;
+
     const plan = [];
     if (winner.directEdits) plan.push({ by: `${winner.id} (${winner.provider})`, direct: true });
     for (let i = 0; i < maxAttempts; i++) plan.push({ by: implementModel, direct: false });
@@ -1347,7 +1432,7 @@ export async function runGeneration(config, deps = {}) {
             // The implementer's OWN attempt number, for its "n of maxAttempts"
             // log line — the plan's index also counts the suggester's direct
             // edits, which is how a run printed "attempt 4/3".
-            { applyErrors, reviewFeedback, testFailure, testFailureBy, rejectedRender, attempt: plan.slice(0, index + 1).filter((p) => !p.direct).length, author: `${winner.id} (${winner.provider})` },
+            { applyErrors, reviewFeedback, testFailure, testFailureBy, rejectedRender, requestedFiles, scopeFiles: scopeList(), attempt: plan.slice(0, index + 1).filter((p) => !p.direct).length, author: `${winner.id} (${winner.provider})` },
             { call: callFor('implement'), log, maxAttempts }
           );
         } catch (err) {
@@ -1355,6 +1440,22 @@ export async function runGeneration(config, deps = {}) {
           break;
         }
         parsed = parseResponse(implemented.text, ['PILLAR']);
+        requestedFiles = null;
+
+        // Shown too little, and said so: widen and go again, without the
+        // misleading "could not be applied" note an empty edit set would get.
+        const asked = implementScope ? requestedFilesIn(implemented.text, editableFiles).filter((f) => !implementScope.has(f)) : [];
+        if (asked.length && parsed.edits.length === 0 && parsed.creates.length === 0) {
+          for (const f of asked) implementScope.add(f);
+          log(`   📂 Attempt ${attempt} (${step.by}) asked to see ${asked.join(', ')}; included next attempt`);
+          attemptLog.push({ attempt, by: step.by, outcome: 'needed-files', detail: oneLine(asked.join(', '), 400) });
+          requestedFiles = asked;
+          applyErrors = null;
+          reviewFeedback = null;
+          testFailure = null;
+          rejectedRender = null;
+          continue;
+        }
       }
       crashState.created = parsed.creates.map((c) => c.file);
 
@@ -1364,6 +1465,11 @@ export async function runGeneration(config, deps = {}) {
         log(`⚠️  Attempt ${attempt} (${step.by}): edits did not apply`);
         attemptLog.push({ attempt, by: step.by, outcome: 'edits-did-not-apply', detail: oneLine(outcome.errors.join('; '), 400) });
         applyErrors = step.direct ? null : outcome.errors;
+        // An edit aimed at a file the implementer was never shown fails here;
+        // show it next time instead of letting it fail the same way again.
+        if (implementScope) {
+          for (const f of filesNamedIn([...parsed.edits.map((e) => e.file), outcome.errors.join('\n')].join('\n'), editableFiles)) implementScope.add(f);
+        }
         reviewFeedback = null;
         testFailure = null;
         rejectedRender = null;

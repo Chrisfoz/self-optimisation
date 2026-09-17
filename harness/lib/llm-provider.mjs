@@ -324,6 +324,10 @@ export async function callModel({
   // Anthropic's output_config.effort, for a seat that sets roles.<seat>.effort.
   // Other labs' request builders ignore it. Null sends no effort field at all.
   effort = null,
+  // The leading part of \user\ that stays identical across retries and
+  // refinements, for a lab that caches by explicit breakpoint (Anthropic).
+  // Labs that cache implicitly, or not at all, ignore it.
+  cachePrefix = null,
   provider = null,
   timeoutMs = 600000,
   images = [],
@@ -364,7 +368,7 @@ export async function callModel({
     hostname: config.hostname,
     path: config.path({ model, key }),
     headers: config.headers(key),
-    body: config.body({ model, system, user, maxTokens, images, effort }),
+    body: config.body({ model, system, user, maxTokens, images, effort, cachePrefix }),
     timeoutMs,
   };
 
@@ -426,7 +430,7 @@ export async function callModel({
       `   ⚠️  ${resolved}/${model} rejected the ${sentImages} screenshot(s); retrying text-only.`
     );
     sentImages = 0;
-    request.body = config.body({ model, system, user, maxTokens, images: [], effort });
+    request.body = config.body({ model, system, user, maxTokens, images: [], effort, cachePrefix });
     ({ statusCode, raw } = await send());
   }
 

@@ -273,18 +273,30 @@ generation that ships is cheap. What makes the loop expensive is waste:
 
 The first is now largely stopped. The rest are configuration.
 
-Two harness changes would cut a normal run's cost further, and are planned
-but not built:
+Two harness changes cut a normal run's cost further. Both were built the same day, after these runs:
 1. **Send the implementer only the files the proposal names.** It gets all
    ~380k tokens of editable source today, even when the change touches two
    files.
 2. **Use prompt caching on the Anthropic seats.** An implementation retry, a
    refinement or a headroom retry rereads identical source, which caching
-   bills at a tenth of the input price. The harness sends no `cache_control`
-   today.
+   bills at a tenth of the input price.
+
+How each works now:
+- **Scoped implementer context.** The implementer is shown the editable files
+  the proposal names, plus any the suggester's own edits touched. A
+  `NEED FILES:` reply, or an edit that fails against a file it was not shown,
+  widens the set for the next attempt. A proposal that names no file falls
+  back to every file.
+- **Prompt caching.** The implementer's prompt is ordered so that everything
+  identical across attempts comes first (proposal, test invariants, source),
+  and Anthropic gets a cache breakpoint after it. Checked live: two calls with a
+  shared ~30,000-character prefix wrote 10,665 tokens to the cache, and the
+  second read all 10,665 back with 12 uncached. `attempts.json` now reports
+  `cacheReadTokens` and `cacheWriteTokens`. Neither saving has been
+  measured on a real generation yet.
 
 What users are told: `console/how-to-run.html` has a "What it costs, and what
-that buys" section with these figures. The installer's Seats, Labs and Budget
+that buys" section with these figures and says the two savings are in. The installer's Seats, Labs and Budget
 steps and the About page say the same things where the choices are made.
 
 ## What is still not proven

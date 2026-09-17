@@ -291,6 +291,9 @@ export function rolesConfig(adapter) {
     // (low | medium | high | xhigh | max). Null sends nothing, and the lab's
     // default applies. See providers/anthropic.mjs for why it is opt-in.
     implementEffort: adapter?.roles?.implement?.effort ?? null,
+    // Anthropic prompt caching on the implementer's stable prompt. On unless
+    // set to false (see providers/anthropic.mjs's userBlocks()).
+    implementPromptCache: adapter?.roles?.implement?.prompt_cache ?? null,
     reviewEffort: adapter?.roles?.review?.effort ?? null,
     reviewModel: adapter?.roles?.review?.model ?? null,
     rankModel: adapter?.roles?.rank?.model ?? null,
