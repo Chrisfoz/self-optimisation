@@ -712,6 +712,62 @@ the real campaigns that tested the fixes, in
   evidence to choose between 2.2's two shapes still has to come from a
   larger repository (2.1a).
 
+## Tier 7 — the first install into an existing project (2026-09-17)
+
+The harness installed into NetworkinAI, a live private web app. There was one
+local rehearsal, then four runs on GitHub Actions: two crashed, and two went
+through every gate to a pull request. Written up in
+[`docs/campaigns/2026-09-17-networkinai-install.md`](docs/campaigns/2026-09-17-networkinai-install.md).
+Most of what broke was the install path and the cost of runs, not the loop.
+
+- [x] **I1 — GitHub setup that actually works first time.** The permissions
+  page, a check that it saved, no personal token, SendGrid in three places,
+  not overwriting an app's `.env`, and merge order. *Done when:* README,
+  the generated install README, `console/DEPLOYMENT.md` and
+  `how-to-run.html` say so. **True** (#19).
+- [x] **I2 — The notify scripts register the labs.** Every digest had fallen
+  back to its terse form. *Done when:* a test fails any model-calling script
+  without the import. **True** (#20).
+- [x] **I3 — One response format, and the right default branch.** **True** (#22).
+- [x] **I4 — Runs that cannot finish don't get paid for, and don't show
+  green.** Pinned seats are probed first, a crash turns the run red, the
+  digest's gates are honest, and the implementer's output allowance and effort
+  are configurable. **True** (#23).
+- [x] **I5 — Users are told what a run costs.** This is framed as cost per
+  merged change against a person's time. **True** (#24).
+- [x] **I6 — The implementer reads less.** It gets scoped context and
+  Anthropic prompt caching, and cache tokens are recorded. **True** (#25).
+- [x] **I7 — A run history page for every installation.** **True** (#26).
+- [ ] **I8 — Measure I6 on a real generation.** *Done when:* a GitHub run's
+  `attempts.json` shows the implementer's input well below full context,
+  or `cacheReadTokens` above zero on a retry, and the write-up says by how
+  much.
+- [ ] **I9 — The digest says a waiting pull request is waiting.** Under
+  `human-approval-required` it still says "⚠️ NOT MERGED", and the
+  plain-language version said "we don't know why". *Done when:* an approved
+  generation with an open pull request gets a subject naming the pull request
+  as waiting for review, with a test.
+- [ ] **I10 — Copied installs get an explicit dependency step.** The root
+  `npm install js-yaml` is silently the project's own dependency install,
+  with `--ignore-scripts`. *Done when:* the copied workflow runs
+  `evaluation.setup_commands` and then an isolated harness install, and a
+  project with no setup commands is told what to add.
+- [ ] **I11 — A key check in the harness, with balance where a lab allows
+  it.** NetworkinAI's own `scripts/verify-harness-keys.mjs` does the catalogue
+  check. DeepSeek (`GET /user/balance`) and Moonshot
+  (`GET /v1/users/me/balance`) also return a balance with an ordinary key.
+  Anthropic and OpenAI report spend only, with an admin key. *Done when:*
+  `harness/scripts/` has the check, the generated workflow offers it as a
+  manual job, and it reports balance for the labs that expose one.
+- [ ] **I12 — The budget estimate learns each lab's tokenizer.** Characters
+  ÷ 4 undercounted Anthropic's count of HTML by about 1.5×. *Done when:* the
+  reservation uses each provider's ratio of real to estimated input from past
+  records, with a test.
+- [ ] **I13 — The unexplained digest fallback.** Generation 004's
+  plain-language digest failed once on GitHub ("No BODY: section found") and
+  did not reproduce locally. *Done when:* the raw response of a failed
+  compose is kept in the run log, and the cause is known.
+
 ## Housekeeping, whenever a nearby file is open
 
 - [x] Fold doc-drift fixes in as you touch things: `console/DESIGN.md` §2.1
