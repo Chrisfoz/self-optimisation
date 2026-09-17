@@ -72,6 +72,7 @@ export function renderPage(fragment, { route, partials = {} } = {}) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>:root{color-scheme:light}body{margin:0;font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#fafaf8}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -111,6 +112,7 @@ export function createConsoleServer({
       ["/assets/console.css", ["text/css; charset=utf-8", "console.css"]],
       ["/assets/app.mjs", ["text/javascript; charset=utf-8", "app.mjs"]],
       ["/assets/how-to-run.mjs", ["text/javascript; charset=utf-8", "how-to-run.mjs"]],
+      ["/favicon.svg", ["image/svg+xml; charset=utf-8", "favicon.svg"]],
     ].map(([route, [type, file]]) => [
       route,
       { type, body: fs.readFileSync(path.join(dir, file), "utf8") },

@@ -122,6 +122,17 @@ test('no page has an inline script, which the content security policy would bloc
   await res.body?.cancel();
 });
 
+test('every page links the site icon, and the icon is served as SVG', async () => {
+  for (const route of Object.keys(PAGES)) {
+    const html = await (await fetch(base + route)).text();
+    assert.match(html, /<link rel="icon" href="\/favicon\.svg" type="image\/svg\+xml">/, route);
+  }
+  const res = await fetch(base + '/favicon.svg');
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'image/svg+xml; charset=utf-8');
+  assert.match(await res.text(), /^<svg /);
+});
+
 test('renderPage refuses a page that includes a partial that does not exist', () => {
   assert.throws(() => renderPage('<!-- include:sidebar -->', { route: '/', partials: { nav: '' } }), /unknown partial "sidebar"/);
 });
