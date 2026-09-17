@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadAdapter, contextConfig, memoryConfig } from '../lib/adapter.mjs';
 import { persistRecords } from '../lib/persist-records.mjs';
+import { writeReports } from '../lib/run-history.mjs';
 import { setOutput } from '../lib/gh-output.mjs';
 
 function parseArgs(argv) {
@@ -52,8 +53,25 @@ const base = args.base || process.env.BASE_BRANCH || adapter?.project?.default_b
 
 const generationsDir = ctx.generationsDir || 'docs/generations';
 const genDir = `${generationsDir}/gen-${genNumber}`;
+// The run history and REPORT.md, rebuilt from the records now on disk, which
+// include this generation's, so the page is current the moment the record
+// lands. A failure here must never cost the record itself, so it is logged
+// and the record is persisted without them.
+let reportFiles = [];
+try {
+  reportFiles = writeReports({
+    repoRoot,
+    generationsDir,
+    ledgerPath: memory.ledgerPath || 'docs/escalations/ledger.json',
+    projectName: adapter?.project?.id || 'This project',
+  });
+} catch (err) {
+  console.error(`⚠️  Could not rebuild the run history: ${err.message}. Persisting the record without it.`);
+}
+
 const roots = [...new Set([
   genDir,
+  ...reportFiles,
   memory.ledgerPath || 'docs/escalations/ledger.json',
   memory.themesDir || 'docs/themes',
   ctx.runtimeEvidenceDir || 'docs/runtime',

@@ -220,6 +220,8 @@ function fateOf(record) {
   const state = record?.pullRequest?.state;
   if (state === 'closed') return { label: 'CLOSED UNMERGED', clean: false, detail: 'approved by review, but a person closed the pull request without merging it' };
   if (state === 'open') return { label: 'PR OPEN', clean: true, detail: 'approved by review; the pull request is still waiting for a person' };
+  // Opened, not yet read back (the read-back step failed, say): not merged.
+  if (!state && record?.pullRequestUrl) return { label: 'PR OPEN', clean: true, detail: 'approved by review; a pull request was opened and its fate has not been read back yet' };
   // A local run (rehearse.mjs) opens no pull request and merges nothing, so
   // "no PR state" does not mean "merged" for it the way it does on the
   // autonomous-merge path. Records from before `run` existed keep the old

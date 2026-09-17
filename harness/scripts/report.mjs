@@ -10,7 +10,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadAdapter, contextConfig } from '../lib/adapter.mjs';
+import { loadAdapter, contextConfig, memoryConfig } from '../lib/adapter.mjs';
+import { renderRunHistory } from '../lib/run-history.mjs';
 import { loadRecords, computeMetrics, renderReport } from '../lib/report.mjs';
 import { setOutput } from '../lib/gh-output.mjs';
 
@@ -38,7 +39,12 @@ if (args.stdout) {
   const relative = `${generationsDir}/REPORT.md`;
   fs.mkdirSync(path.join(repoRoot, generationsDir), { recursive: true });
   fs.writeFileSync(path.join(repoRoot, relative), page, 'utf8');
-  console.error(`Wrote ${relative} from ${records.length} record(s).`);
+  // The run history beside it: the same records, for the owner to read.
+  let ledger = null;
+  try { ledger = JSON.parse(fs.readFileSync(path.join(repoRoot, memoryConfig(adapter).ledgerPath || 'docs/escalations/ledger.json'), 'utf8')); } catch { /* no ledger yet */ }
+  const historyPath = `${generationsDir}/index.html`;
+  fs.writeFileSync(path.join(repoRoot, historyPath), renderRunHistory({ records, ledger, projectName: adapter?.project?.id || 'This project', generationsDir }), 'utf8');
+  console.error(`Wrote ${relative} and ${historyPath} from ${records.length} record(s).`);
   setOutput('path', relative);
 }
 setOutput('generations', String(metrics.total));

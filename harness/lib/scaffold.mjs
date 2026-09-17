@@ -1034,6 +1034,24 @@ ${approvalSection}
 
 ${cadenceSection}
 
+## Tracking progress
+
+Every run rebuilds two files from the records it leaves, and commits them to
+\`${answers.defaultBranch || 'main'}\` with the record itself:
+
+- \`${answers.generationsDir || 'docs/generations'}/index.html\` — **the run history.** One row per
+  generation: which model suggested it, the change in plain words, what became
+  of it (shipped, waiting for your review, or why it didn't ship, with each
+  failed attempt and its reason) and what it cost in tokens. Pull requests
+  waiting for you are listed at the top. It is a single file with no scripts or
+  outside resources: download it, or open it from a local checkout, in any
+  browser. GitHub shows HTML files as source, so to browse it on the web, serve
+  that folder with GitHub Pages.
+- \`${answers.generationsDir || 'docs/generations'}/REPORT.md\` — the same records as metrics (release
+  yield, precision, tokens per kept change, results by lab). GitHub renders it.
+
+Both are regenerated, never edited by hand. The next run replaces them.
+
 ## Undoing a generation
 
 Every gate is a prediction; this is the correction. From a checkout with
