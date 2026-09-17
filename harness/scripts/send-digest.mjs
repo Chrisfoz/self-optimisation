@@ -25,11 +25,13 @@
  *   SPEND_TOKENS
  *
  * When GEN_NUMBER is ABSENT no generation ran, and this still sends an email
- * saying which of the five no-generation outcomes occurred. Read in this
- * order, first match wins:
+ * saying which no-generation outcome occurred (notify.mjs's
+ * noGenerationReason()). Read in this order, first match wins:
  *   PAUSED            == "true"     -> the owner flipped the kill switch
  *   VALIDATE_RESULT   != "success"  -> the adapter itself failed validation
- *   CHECK_RESULT      != "success"  -> the release check never completed
+ *   CHECK_RESULT      failed        -> the release check never completed
+ *                                      (skipped, as in campaign mode, is not failed)
+ *   PINNED_BLOCKED    == "true"     -> a pinned seat was unreachable; nothing spent
  *   PREFLIGHT_RESULT  != "success"  -> the project's own checks failed first
  *   RELEASE_DETECTED  == "true"     -> something shipped, nothing was reachable
  *   otherwise                        -> a genuinely quiet cycle
@@ -56,7 +58,7 @@ import path from 'path';
 import '../providers/index.mjs';
 import { loadAdapter, notifyConfig, contextConfig, memoryConfig } from '../lib/adapter.mjs';
 import { callModelWithHeadroom } from '../lib/llm-provider.mjs';
-import { buildGenerationDigestEmail, buildNoGenerationEmail, NO_GENERATION_REASONS, getSender } from '../lib/notify.mjs';
+import { buildGenerationDigestEmail, buildNoGenerationEmail, noGenerationReason, getSender } from '../lib/notify.mjs';
 import { loadLedger, minorityReport, renderMinorityReport } from '../lib/escalations.mjs';
 
 function parseArgs(argv) {
@@ -105,18 +107,7 @@ if (!apiKey) {
 const genNumber = process.env.GEN_NUMBER;
 
 if (!genNumber) {
-  const reason =
-    process.env.PAUSED === 'true'
-      ? NO_GENERATION_REASONS.PAUSED
-      : process.env.VALIDATE_RESULT && process.env.VALIDATE_RESULT !== 'success'
-      ? NO_GENERATION_REASONS.VALIDATE_FAILED
-      : process.env.CHECK_RESULT && process.env.CHECK_RESULT !== 'success'
-      ? NO_GENERATION_REASONS.CHECK_FAILED
-      : process.env.PREFLIGHT_RESULT && process.env.PREFLIGHT_RESULT !== 'success'
-        ? NO_GENERATION_REASONS.PREFLIGHT_FAILED
-        : process.env.RELEASE_DETECTED === 'true'
-          ? NO_GENERATION_REASONS.ALL_UNREACHABLE
-          : NO_GENERATION_REASONS.QUIET;
+  const reason = noGenerationReason(process.env);
 
   const email = buildNoGenerationEmail({
     reason,

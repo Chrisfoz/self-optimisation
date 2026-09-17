@@ -215,9 +215,15 @@ test('changedFiles refuses output from a runner that trimmed the status columns,
 test('workflow: a record that could not be saved turns the whole run red, after the digest', () => {
   for (const approvalClass of ['human-approval-required', 'autonomous-merge']) {
     const { steps } = renderSteps({ projectId: 'p', allowedPaths: ['a'], testCommands: ['true'], approvalClass, providers: [{ name: 'anthropic', envKey: 'ANTHROPIC_API_KEY' }] });
-    const last = steps.at(-1);
-    assert.match(last.if, /steps\.persist\.outcome == 'failure'/);
-    assert.match(last.run, /exit 1/);
+    // Found by name: later steps turn other silent failures red too (a crash,
+    // an unreachable pinned seat), so it is no longer necessarily the last.
+    const index = steps.findIndex((s) => /record was not saved/.test(s.name ?? ''));
+    const step = steps[index];
+    assert.match(step.if, /steps\.persist\.outcome == 'failure'/);
+    assert.match(step.run, /exit 1/);
+    const digest = steps.findIndex((s) => /Send the generation digest/.test(s.name ?? ''));
+    assert.ok(digest === -1 || digest < index, 'after the digest, so the digest still has its say');
+    assert.ok(steps.slice(index).every((s) => /^Fail the run/.test(s.name ?? '')), 'only other red-run checks follow it');
   }
 });
 

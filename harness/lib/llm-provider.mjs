@@ -321,6 +321,9 @@ export async function callModel({
   system,
   user,
   maxTokens = 16000,
+  // Anthropic's output_config.effort, for a seat that sets roles.<seat>.effort.
+  // Other labs' request builders ignore it. Null sends no effort field at all.
+  effort = null,
   provider = null,
   timeoutMs = 600000,
   images = [],
@@ -361,7 +364,7 @@ export async function callModel({
     hostname: config.hostname,
     path: config.path({ model, key }),
     headers: config.headers(key),
-    body: config.body({ model, system, user, maxTokens, images }),
+    body: config.body({ model, system, user, maxTokens, images, effort }),
     timeoutMs,
   };
 
@@ -423,7 +426,7 @@ export async function callModel({
       `   ⚠️  ${resolved}/${model} rejected the ${sentImages} screenshot(s); retrying text-only.`
     );
     sentImages = 0;
-    request.body = config.body({ model, system, user, maxTokens, images: [] });
+    request.body = config.body({ model, system, user, maxTokens, images: [], effort });
     ({ statusCode, raw } = await send());
   }
 

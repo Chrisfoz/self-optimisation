@@ -627,7 +627,10 @@ ${invariants}
 ${promptConfig.context.sources ?? ''}
 ${correction}${renderBack}
 Implement the proposal above using the required edit format.`,
-    maxTokens: 16000,
+    // roles.implement.max_output_tokens. A fixed 16,000 was too little for a
+    // reasoning model on a large project (see run-generation.mjs).
+    maxTokens: promptConfig.implementMaxTokens ?? 32000,
+    ...(promptConfig.implementEffort ? { effort: promptConfig.implementEffort } : {}),
     images,
   });
 
@@ -1059,6 +1062,9 @@ export async function runGeneration(config, deps = {}) {
     rankModel = implementModel,
     maxAttempts = 3,
     suggestMaxTokens = 32000,
+    implementMaxTokens = 32000,
+    implementEffort = null,
+    reviewEffort = null,
     scope,
     scopeText = DEFAULT_SCOPE_TEXT,
     projectDescription,
@@ -1126,6 +1132,8 @@ export async function runGeneration(config, deps = {}) {
     editableFiles,
     createOnlyDescription,
     suggestMaxTokens,
+    implementMaxTokens,
+    implementEffort,
     context: {
       ...context,
       ...(escalationBrief ? { escalations: escalationBrief } : {}),
@@ -1404,6 +1412,7 @@ export async function runGeneration(config, deps = {}) {
         testResults: testRun ? renderTestPass(testRun) : null,
         captureVisual,
         reviewModel,
+        ...(reviewEffort ? { effort: reviewEffort } : {}),
         goal,
         call: callFor('review'),
       });

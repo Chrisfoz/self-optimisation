@@ -18,9 +18,16 @@ registerProvider('anthropic', {
     // created_at is an ISO timestamp.
     parseModels: (data) => data.data.map((m) => ({ id: m.id, created: Date.parse(m.created_at) || 0 })),
   },
-  body: ({ model, system, user, maxTokens, images }) => ({
+  body: ({ model, system, user, maxTokens, images, effort = null }) => ({
     model,
     max_tokens: maxTokens,
+    // Opt-in, per seat (roles.<seat>.effort). Omitted by default for the same
+    // reason as thinking below: this has to run on models that do not exist
+    // yet. It matters because thinking counts against max_tokens: on a
+    // ~380k-token prompt Opus 5 at its default effort spent a 16k and then a
+    // 32k output allowance and never finished the edits (NetworkinAI
+    // generation 003, ~1.06M tokens for nothing).
+    ...(effort ? { output_config: { effort } } : {}),
     system,
     messages: [{
       role: 'user',

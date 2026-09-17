@@ -175,6 +175,8 @@ export async function reviewChanges({
   captureVisual = noVisualCapture,
   reviewModel = 'claude-opus-5',
   maxTokens = 16000,
+  // roles.review.effort. Null (the default) leaves the request exactly as it was.
+  effort = null,
   goal = null,
   call = callModelWithHeadroom,
 }) {
@@ -225,6 +227,7 @@ ${REVIEW_CONTRACT}`;
     user,
     maxTokens,
     images: visual.images,
+    ...(effort ? { effort } : {}),
   });
 
   const raw = result.text ?? '';

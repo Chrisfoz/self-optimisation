@@ -172,13 +172,44 @@ copied installs what shared ones have: an explicit
 isolated harness install. Existing adapters would need that field added
 before they upgrade.
 
+## Then on GitHub Actions
+
+The same afternoon, the loop's first two real runs on GitHub, both campaign
+runs on `gpt-6-astra` alone. Both passed every setup step, including the
+project's own tests on the runner (which settles that the root js-yaml
+install does install jest there). Both produced nothing, and each showed
+something the rehearsal could not.
+
+| Generation | What happened | Tokens |
+|---|---|---|
+| **002** | `gpt-6-astra` proposed. `claude-opus-5`, implementing, spent its 16,000-token output allowance with no text, and its retry was refused: **the Anthropic account had no credit.** The run showed a green tick, and the digest said "❌ review", although nothing had been reviewed. | 909,843 |
+| **003**, after a top-up | The same shape. `claude-opus-5` used its whole 16,000 output allowance, then its whole 32,000, and was truncated both times. Opus 5 runs adaptive thinking at effort `high` when a request omits both, as the harness does, and **thinking counts against `max_tokens`**. On a ~380k-token prompt it thought its way through both allowances. Green tick again. | 1,057,031 |
+
+About 2 million tokens, for zero changes. Each finding became a fix in the
+same pull request as this section:
+
+| Finding | Fix |
+|---|---|
+| **A pinned seat's billing was discovered after the suggester had been paid for.** The probe only probed candidates. | `probe-models.mjs` probes the pinned seats too: implement and review, a named ranker, and the digest writer. It does so only when a candidate survived, so a quiet month still costs nothing. An unreachable one skips the cycle before any suggester call, sends its own email ("A fixed model could not be reached — nothing was spent"), and turns the run red. |
+| **A crashed loop showed a green tick.** | A final step turns the run red when the loop failed without a verdict. A rejection stays green, because that is the gates working. |
+| **The digest's "review" gate was the whole loop step's outcome**, so a crash, an empty fan-out or a budget refusal all read "❌ review". | The gate is `review` only when a review happened, and `improve` otherwise. |
+| **A campaign run with no generation was told the release check "did not complete"**, because campaign mode skips that check and `skipped` was read as failed. | `noGenerationReason()` treats `skipped` as not failed. It is now a tested function instead of an inline chain. |
+| **The implementer's output allowance was a hard-coded 16,000.** | `roles.implement.max_output_tokens`, default 32,000. |
+| **No way to set a seat's thinking effort.** | `roles.implement.effort` and `roles.review.effort`, sent as Anthropic's `output_config.effort` and ignored by every other lab. Opt-in, because a field a future model does not know would 400 every call. `validate` refuses a value no lab accepts. |
+
+Also from these runs: the digest model does not need to be the implementer.
+It writes a short email, so `claude-sonnet-5` ($2 / $10 per million tokens
+against Opus 5's $5 / $25) is plenty. `claude-fable-5-1` is $10 / $50. It is
+only ever called when named for a campaign, or when it is a new release from a
+watched lab, but then it is the suggester, and a suggester whose own edits
+pass ships them.
+
 ## What is still not proven
 
-- **The monthly workflow on this repository.** Everything above ran locally,
-  except the manual key-check workflow and ordinary CI. The first scheduled
-  or dispatched `self-improve.yml` run, including its root js-yaml install
-  (which is what installs jest there) and the new digest step, has not
-  happened.
+- **A generation that ships from GitHub.** Two dispatched runs reached the
+  implementer and stopped there (see above). Neither the guard, the tests on
+  the agent branch, nor pull-request creation has run for real on this
+  repository yet, nor a scheduled run.
 - **`context.strategy: scoped`.** At 1.03 million characters of editable
   source, `full-dump` still fit every model's window and cost ~250–510k input
   tokens per model. That makes WORKPLAN 2.1a concrete: it is a cost question

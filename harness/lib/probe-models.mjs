@@ -123,3 +123,58 @@ export async function probeCandidates(candidates, prober, log = () => {}, { esti
 
   return { survivors, dropped };
 }
+
+/**
+ * The models this run will call no matter which suggester wins: the pinned
+ * implement and review seats (with the same defaults run-generation.mjs
+ * applies), a rank model only when one is named (an auto-picked ranker is
+ * chosen from reachable labs anyway), and the digest writer when email is
+ * configured. Deduplicated by model and provider, keeping every seat name.
+ *
+ * @param {object} opts
+ * @param {ReturnType<import('./adapter.mjs').rolesConfig>} opts.roles
+ * @param {ReturnType<import('./adapter.mjs').notifyConfig>|null} [opts.notify]
+ * @param {Record<string,string|undefined>} [opts.env]  IMPLEMENT_MODEL / REVIEW_MODEL / RANK_MODEL overrides, as run-generation.mjs reads them.
+ * @returns {Array<{seats: string[], model: string, provider: string|null}>}
+ */
+export function pinnedSeats({ roles, notify = null, env = {} }) {
+  const wanted = [
+    ['implement', env.IMPLEMENT_MODEL || roles.implementModel || 'claude-opus-5', roles.implementProvider],
+    ['review', env.REVIEW_MODEL || roles.reviewModel || 'claude-opus-5', roles.reviewProvider],
+    ['rank', env.RANK_MODEL || roles.rankModel, roles.rankProvider],
+    ['digest', notify?.recipient ? (notify.digestModel || 'claude-opus-5') : null, null],
+  ];
+  const byKey = new Map();
+  for (const [seat, model, provider] of wanted) {
+    if (!model) continue;
+    const key = `${provider ?? ''}::${model}`;
+    if (byKey.has(key)) byKey.get(key).seats.push(seat);
+    else byKey.set(key, { seats: [seat], model, provider: provider ?? null });
+  }
+  return [...byKey.values()];
+}
+
+/**
+ * Probe each pinned model once. Same trivial request as a candidate probe,
+ * so the cost is a few hundred tokens a seat, spent only when a generation
+ * is about to run. The point is to spend them BEFORE the fan-out: a
+ * suggester's full-context call is hundreds of thousands of tokens, and it
+ * buys nothing if the implementer's account cannot be charged.
+ *
+ * @returns {Promise<Array<{seats: string[], model: string, provider: string|null, reason: string}>>} the unreachable ones
+ */
+export async function probePinnedSeats(seats, prober, log = () => {}) {
+  const blocked = [];
+  for (const seat of seats) {
+    let provider = seat.provider;
+    try {
+      provider = provider || resolveProvider(seat.model);
+      await prober({ model: seat.model, provider });
+      log(`✓ ${seat.model} (${seat.seats.join(', ')} seat): reachable`);
+    } catch (err) {
+      blocked.push({ ...seat, provider: provider || null, reason: err.message });
+      log(`❌ ${seat.model} (${seat.seats.join(', ')} seat): ${err.message}`);
+    }
+  }
+  return blocked;
+}

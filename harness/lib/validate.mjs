@@ -69,6 +69,14 @@ export function validateAdapter(adapter, { repoRoot = process.cwd(), env = proce
   // a staging branch. But the usual cause is init having recorded the setup
   // branch it was run on, and then every generation is cut from, and every
   // pull request opened against, a branch nothing deploys.
+  // An effort the lab does not know is a 400 on every call to that seat.
+  for (const seat of ['implement', 'review']) {
+    const effort = adapter.roles?.[seat]?.effort;
+    if (effort != null && !['low', 'medium', 'high', 'xhigh', 'max'].includes(effort)) {
+      errors.push(`roles.${seat}.effort is \"${effort}\" — use low, medium, high, xhigh or max, or remove it.`);
+    }
+  }
+
   const configuredBranch = adapter.project?.default_branch;
   if (remoteDefaultBranch && configuredBranch && configuredBranch !== remoteDefaultBranch) {
     warnings.push(`project.default_branch is "${configuredBranch}", but the repository's default branch is "${remoteDefaultBranch}". Generations are cut from, and pull requests opened against, "${configuredBranch}". If that is the branch init was run on rather than a deliberate choice, set it to "${remoteDefaultBranch}" and regenerate the workflow (node harness/cli/init.mjs --from-adapter --force).`);

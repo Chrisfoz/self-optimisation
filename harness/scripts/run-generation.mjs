@@ -222,6 +222,11 @@ console.error(`🪑 Seats: ${seats.line}`);
 for (const warning of seats.warnings) console.error(`   ⚠️  ${warning}`);
 const maxAttempts = Number(process.env.MAX_ATTEMPTS || roles.maxAttempts || 3);
 const suggestMaxTokens = Number(process.env.SUGGEST_MAX_TOKENS || roles.suggestMaxTokens || 32000);
+// Was a fixed 16,000. On a large project a reasoning implementer spent all of
+// it thinking, returned no text, and was retried at 32,000: one full-context
+// call (~320k input tokens) bought nothing. The retry still exists as a safety
+// net; this stops it being the normal path.
+const implementMaxTokens = Number(process.env.IMPLEMENT_MAX_TOKENS || roles.implementMaxTokens || 32000);
 const campaign = process.env.CAMPAIGN === 'true';
 if (campaign) console.error('🧪 Campaign generation — models named by hand; recorded as campaign: true');
 
@@ -381,6 +386,9 @@ try {
       rankModel,
       maxAttempts,
       suggestMaxTokens,
+      implementMaxTokens,
+      implementEffort: process.env.IMPLEMENT_EFFORT || roles.implementEffort,
+      reviewEffort: process.env.REVIEW_EFFORT || roles.reviewEffort,
       scope,
       projectDescription,
       testDescription: null, // a project with test_commands configured could join them into prose here
