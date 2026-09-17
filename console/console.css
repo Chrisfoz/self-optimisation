@@ -425,12 +425,25 @@ small {
   color: var(--lime);
   margin-bottom: 20px;
 }
+/* The line under the loop grid: where the run ends up, and where the choices
+   behind it are documented. Reads as a footnote, not a fifth step. */
+.loop-note {
+  margin: 28px 0 0;
+  max-width: 760px;
+  font-size: 15px;
+  color: var(--muted);
+}
 .dark-note {
   border-top: 1px solid #ffffff25;
   padding-top: 24px;
   margin: 20px 0 0;
   max-width: 850px;
   font-size: 14px;
+}
+/* What is NOT built is the point of this note, so the bold inside it has to
+   survive the muted body colour .dark-section sets. */
+.dark-note b {
+  color: #fff;
 }
 .evidence {
   border-top: 1px solid var(--line);

@@ -1,7 +1,7 @@
 <title>Self-Optimisation — New models. Better software. Your rules.</title>
 <meta
   name="description"
-  content="Give new AI models a turn to improve your repository. Changes that pass independent review, protected paths and your own tests wait for you as a pull request, or merge automatically if you opt in."
+  content="A portable harness for AI-driven self-improvement: every new frontier model gets a turn at one small change, and what each run learned decides what the next one is curious about. Changes that pass independent review, protected paths and your own tests wait for you as a pull request, or merge automatically if you opt in."
 />
 <link rel="stylesheet" href="/assets/console.css" />
 <a class="skip" href="#main">Skip to content</a>
@@ -10,14 +10,15 @@
   <section class="hero wrap">
     <div>
       <p class="eyebrow">
-        A continuous improvement harness for your repository
+        A portable harness for AI-driven self-improvement
       </p>
       <h1>New models.<br />Better software.<br /><em>Your rules.</em></h1>
       <p class="hero-copy">
         We bet on the curve. Frontier labs ship new models every few weeks, and
         each one is a fresh chance to improve your project. Give every new model
-        a turn, and keep a change only after independent review,
-        protected-path checks and your own tests.
+        a turn at one small change, and keep it only after independent review,
+        protected-path checks and your own tests. Then let what the run learned
+        decide what the next one is curious about.
       </p>
       <div class="button-row">
         <a class="button primary" href="/console"
@@ -127,98 +128,125 @@
   <section id="how" class="wrap section">
     <div class="section-intro">
       <p class="eyebrow">THE IMPROVEMENT LOOP</p>
-      <h2>Fresh ideas enter.<br />Evidence decides what leaves.</h2>
+      <h2>Two things start a run.<br />Evidence decides what leaves.</h2>
       <p>
-        A convincing proposal is only the beginning. Each change must pass the
-        checks you configured.
+        A lab shipping a new model is one trigger. A question your last runs
+        left open is the other. Either way a proposal is only the beginning:
+        every change must pass the checks you configured.
       </p>
     </div>
     <div class="loop-grid">
       <article>
-        <span class="step-label">01 / DISCOVER</span>
+        <span class="step-label">01 / A RELEASE ARRIVES</span>
         <h3>Watch the labs you choose</h3>
         <p>
-          The first check establishes a baseline. Later checks compare model
-          catalogues against that saved snapshot. A manual campaign lets you try
-          a chosen model now.
+          The first check saves a snapshot of every watched lab's catalogue.
+          Later checks compare against it, so a new model is noticed rather
+          than announced. A manual campaign lets you put a chosen model to work
+          without waiting for one.
         </p>
       </article>
       <article>
-        <span class="step-label">02 / PROPOSE</span>
-        <h3>Give fresh eyes a clear goal</h3>
+        <span class="step-label">02 / ONE CHANGE IS PROPOSED</span>
+        <h3>Incremental by default</h3>
         <p>
-          New models propose changes using your brief and run history. Small,
-          steady improvements by default; after a clean streak, a run may try
-          something bigger. When there are several proposals, the harness ranks
-          them before implementation.
+          The new model gets your brief, your committed goal and the run
+          history, and proposes a single change. Small and steady is the
+          default; a clean streak earns a bigger swing. When several labs
+          propose, the harness ranks them before anything is implemented.
         </p>
       </article>
       <article>
-        <span class="step-label">03 / CHALLENGE</span>
-        <h3>Check the actual change</h3>
+        <span class="step-label">03 / EVIDENCE DECIDES</span>
+        <h3>Check the change, not the pitch</h3>
         <p>
-          A pinned reviewer examines the result. Rejected edits can be refined
-          within your attempt limit. Protected paths and test failures stop
-          promotion.
+          A pinned reviewer reads the actual edits with fresh context.
+          Rejected work can be refined within your attempt limit. Protected
+          paths and failing tests stop promotion outright — those are not
+          arguments a model gets to win.
         </p>
       </article>
       <article>
-        <span class="step-label">04 / DECIDE & LEARN</span>
-        <h3>Merge it, or review it first</h3>
+        <span class="step-label">04 / THE RUN IS REMEMBERED</span>
+        <h3>And the next one starts there</h3>
         <p>
-          A change that passes every gate waits for you as a pull request. Once
-          you're confident in the runs, you can opt in to merging automatically
-          instead. Every outcome is recorded, including
-          when nothing ships, and periodic reviews name open questions you may
-          not have thought to ask. The next model starts with that history.
+          Every outcome is written down, including the runs that shipped
+          nothing, and the next model reads it back. Every few generations a
+          review looks across that history for the pattern nobody named and
+          records the questions it raises — yesterday's evidence choosing
+          tomorrow's ambition.
         </p>
       </article>
     </div>
+    <p class="loop-note">
+      Whatever passes every gate waits for you as a pull request; merging
+      automatically is opt-in. Which seat each model takes, and how much of
+      that you hand over, is set in one file —
+      <a href="/how-to-run#seats">who does what in a run</a>.
+    </p>
   </section>
   <section class="dark-section">
     <div class="wrap section">
       <div class="section-intro">
-        <p class="eyebrow">YOU CHOOSE HOW MUCH TO HAND OVER</p>
-        <h2>Different roles.<br />One quality bar.</h2>
+        <p class="eyebrow">THE CURIOSITY LOOP</p>
+        <h2>Fixing is not the same<br />as getting curious.</h2>
+        <p>
+          A loop that only repairs what it can already see gets very good at
+          small repairs. The second half of the design turns a project's own
+          history into questions, and questions into work. Four of its ten
+          components run today.
+        </p>
       </div>
       <div class="role-grid">
         <article>
-          <span class="tag">Rotating</span>
-          <h3>The suggester</h3>
+          <span class="tag">Running</span>
+          <h3>A goal it may argue with</h3>
           <p>
-            The newest model from the labs you select proposes the change, so
-            every run benefits from the latest improvements in the field.
+            You commit to one goal when you install. A model can argue it is
+            wrong, and the reviewer rejects a correct, tested change that moves
+            away from it — but nothing in a run may edit it.
           </p>
         </article>
         <article>
-          <span class="tag">Pinned</span>
-          <h3>The implementer</h3>
+          <span class="tag">Running</span>
+          <h3>Questions, not just fixes</h3>
           <p>
-            Your chosen model writes or refines edits when needed. It does not
-            get to change the rules.
+            The periodic review names what it cannot explain, not only what it
+            can. Those open questions go into the next proposal prompt,
+            numbered, so a model can cite the one it is answering.
           </p>
         </article>
         <article>
-          <span class="tag">Pinned</span>
-          <h3>The reviewer</h3>
+          <span class="tag">Running</span>
+          <h3>Agreement becomes work</h3>
           <p>
-            Fresh context and a strict verdict. An unreadable or contradictory
-            approval is rejected.
+            When models from different labs raise the same concern, it is
+            escalated to you. Accept it and it becomes a queued work order a
+            later run is handed and has to report back on.
           </p>
         </article>
         <article>
-          <span class="tag">Deterministic</span>
-          <h3>The gates</h3>
+          <span class="tag">Running</span>
+          <h3>What the run actually saw</h3>
           <p>
-            The allowlist, diff guard and your existing tests check the work
-            regardless of which model wrote it.
+            Test output, deployment checks and model probes are fed back as
+            observations, so the next question can be about how the project
+            behaves rather than only about how it reads.
           </p>
         </article>
       </div>
       <p class="dark-note">
-        The ranking model can be pinned separately, or selected from another
-        model family when available. Choosing a seat from an unwatched lab still
-        requires that lab’s key.
+        Six components are specified and <b>not built</b>: the question ledger,
+        three-way run modes, the spike (a run that produces a sourced document
+        instead of a diff), external research, memory consolidation and
+        retrospective scoring. They are deliberately gated on one cheap
+        experiment — if the questions this harness already writes are never
+        cited by a later run, the rest should not be built at all. The specs,
+        the gate and the reasoning are all public:
+        <a
+          href="https://github.com/Chrisfoz/self-optimisation/tree/main/docs/curiosity"
+          >docs/curiosity ↗</a
+        >.
       </p>
     </div>
   </section>
@@ -255,9 +283,10 @@
       </p>
       <h3>Better models do not guarantee better changes</h3>
       <p>
-        Your test coverage and project brief still matter. The wider curiosity
-        programme remains partly implemented; it is not a promise of autonomous
-        research.
+        Your test coverage, your committed goal and your project brief still
+        decide most of it. Six of the ten curiosity components are specs rather
+        than code, and none of this is a promise of autonomous research: it
+        proposes one change at a time and asks you to judge it.
       </p>
       <a
         href="https://github.com/Chrisfoz/self-optimisation/tree/main/docs/campaigns"

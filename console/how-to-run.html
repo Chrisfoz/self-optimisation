@@ -503,6 +503,110 @@
     </ul>
   </section>
 
+  <section id="seats">
+    <h2>Who does what in a run, and how much you hand over</h2>
+    <p>
+      A run is not one model doing everything. Four seats do the work, and the
+      gates that decide whether it ships are not models at all. All of it is set
+      in <code>roles:</code> in <code>project-adapter.yml</code>, so you can see
+      the whole arrangement in one screen.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <tr><th>Seat</th><th>Who fills it</th><th>What it does</th><th>Set in</th></tr>
+        <tr>
+          <td><b>Suggest</b><br /><span class="tag">Rotating</span></td>
+          <td>Whichever watched lab shipped something new</td>
+          <td>
+            Reads your brief, your committed goal and the run history, and
+            proposes one change. This is the seat that makes a new release
+            worth something: every run gets the newest reader in the field.
+          </td>
+          <td><code>providers.watched</code> decides who is eligible; the seat itself is not pinned</td>
+        </tr>
+        <tr>
+          <td><b>Implement</b><br /><span class="tag">Pinned</span></td>
+          <td>A model you chose</td>
+          <td>
+            Writes or refines the exact edits when the suggesting model's own
+            edits need work. It may change only files your allowlist permits,
+            and it does not get to change the rules.
+          </td>
+          <td><code>roles.implement.model</code></td>
+        </tr>
+        <tr>
+          <td><b>Review</b><br /><span class="tag">Pinned</span></td>
+          <td>A model you chose, ideally from another family</td>
+          <td>
+            Reads the actual edits with fresh context and returns a verdict. An
+            unreadable or self-contradictory approval is treated as a rejection,
+            not a pass.
+          </td>
+          <td><code>roles.review.model</code> — this seat fails closed, so it is never auto-picked</td>
+        </tr>
+        <tr>
+          <td><b>Rank</b><br /><span class="tag">Optional</span></td>
+          <td>Auto-picked from a different family, or pinned</td>
+          <td>
+            Only called when more than one lab proposed in the same run: it
+            orders the proposals before any of them is implemented. Left unset,
+            the run picks a model from a different family than the implementer,
+            because a judge prefers its own family's prose.
+          </td>
+          <td><code>roles.rank.model</code>, or <code>null</code> to auto-pick</td>
+        </tr>
+        <tr>
+          <td><b>The gates</b><br /><span class="tag backend">Deterministic</span></td>
+          <td>No model at all</td>
+          <td>
+            The path allowlist, the diff guard and your own test command check
+            the work regardless of which model wrote it. These are the checks a
+            model cannot argue its way past.
+          </td>
+          <td><code>constitution</code> and your project's test command</td>
+        </tr>
+      </table>
+    </div>
+    <p style="margin-top: 16px">
+      A pinned model's lab does <b>not</b> have to be one you watch — watching
+      is what the release detector looks at, pinning is a separate choice. But
+      that lab's API key still has to be a repository secret, or the run fails
+      when it reaches that seat.
+    </p>
+
+    <h3 style="margin-top: 36px">How much you hand over is three separate dials</h3>
+    <p>
+      They are easy to confuse, so here they are apart. Each one has a
+      conservative default, and you can turn any of them up later without
+      touching the others.
+    </p>
+    <ul class="need">
+      <li>
+        <b>How big a change may be.</b>
+        <code>context.ambition</code>: <code>focused</code> keeps every run
+        small, <code>earned</code> (the usual choice) starts small and allows a
+        bigger swing after a clean streak, <code>ambitious</code> allows one
+        from the start.
+      </li>
+      <li>
+        <b>Who presses merge.</b> By default a change that passes every gate
+        stops at a pull request and waits for you. Automatic merge is opt-in,
+        and switching it on is itself a change you have to approve — after a
+        practice run has passed. What happens after a merge is
+        <code>deployment.verify_strategy</code>.
+      </li>
+      <li>
+        <b>Whether a seat can be earned.</b>
+        <code>roles.promotion.implement_after_self_implemented_approvals</code>
+        lets a rotating model that has had its own edits approved and kept that
+        many times take the implement seat from your pinned model, for as long
+        as it holds the record. Omit it, or set <code>0</code>, and no seat ever
+        moves — that is the default. The review seat is never promoted: it is
+        the gate, and a gate is not a prize.
+      </li>
+    </ul>
+  </section>
+
   <section id="cost">
     <h2>What it costs, and what that buys</h2>
     <p>
@@ -588,6 +692,7 @@
         <tr><td><span class="tag">Frontend</span> Add, rename or remove a menu link</td><td><code>console/partials/nav.html</code></td></tr>
         <tr><td><span class="tag">Frontend</span> Change the footer</td><td><code>console/partials/footer.html</code></td></tr>
         <tr><td><span class="tag">Frontend</span> Change colours, fonts or spacing</td><td><code>console/console.css</code></td></tr>
+        <tr><td><span class="tag">Frontend</span> Change the browser-tab icon</td><td><code>console/favicon.svg</code>. It's served from the asset table in <code>console/server.mjs</code> and linked from every page by <code>renderPage()</code> there.</td></tr>
         <tr><td><span class="tag">Frontend</span> Edit a page's text</td><td>That page's file in <code>console/</code>, such as <code>about.html</code> or <code>how-to-run.html</code></td></tr>
         <tr><td><span class="tag">Frontend</span> Add a new page</td><td>Copy <code>console/how-to-run.html</code> as a starting point, then add one line to <code>PAGES</code> in <code>console/server.mjs</code>. The <code>&lt;!-- include:nav --&gt;</code> and <code>&lt;!-- include:footer --&gt;</code> lines are where the header and footer appear.</td></tr>
         <tr><td><span class="tag">Frontend</span> Use a port other than 3000</td><td>Mac/Linux: <code>PORT=8080 npm start</code>. Windows PowerShell: <code>$env:PORT=8080; npm start</code></td></tr>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The site icon: the brand mark's colours (console.css --ink and --lime)
+       with its "S↗" arrow redrawn as a staircase, because at 16px a letterform
+       is mud. Two steps rather than three, for the same reason — at that size
+       the gap between strokes is about two pixels, and a third step closes it
+       into a diagonal blob. The steps are the message: one small change per
+       run, each starting from where the last one finished. -->
+  <title>Self-Optimisation</title>
+  <rect width="32" height="32" rx="7.5" fill="#122238"/>
+  <path d="M7 25h7v-7h7V9m-4 4l4-4 4 4"
+        fill="none" stroke="#c7ff68" stroke-width="3"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -52,7 +52,7 @@ set up in one place:
 
 | Half | Folder | What it is | Configured in |
 |---|---|---|---|
-| **Frontend** | `console/` | The website: what the project does, how to run it, the ten-step installer, the privacy policy | Page files in `console/`; the shared header and footer in `console/partials/nav.html` and `footer.html`; routes in `PAGES` in `console/server.mjs`; styling in `console/console.css`; the port with `PORT`; GitHub sign-in (optional) with the variables in `console/.env.example` |
+| **Frontend** | `console/` | The website: what the project does, how to run it, the ten-step installer, the privacy policy | Page files in `console/`; the shared header and footer in `console/partials/nav.html` and `footer.html`; routes in `PAGES` in `console/server.mjs`; styling in `console/console.css`; the browser-tab icon in `console/favicon.svg`; the port with `PORT`; GitHub sign-in (optional) with the variables in `console/.env.example` |
 | **Backend** | `harness/` | The loop that asks each new model to improve a project, gates the change, and opens a pull request | `project-adapter.yml` (labs, editable paths, ambition, budget) and `.env` (API keys) in the project you install it into |
 
 The quick version, with [Node.js 22.11+](https://nodejs.org) installed:
