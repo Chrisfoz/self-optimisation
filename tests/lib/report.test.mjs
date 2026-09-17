@@ -22,6 +22,8 @@ test('fateOf mirrors context-pack: reverted, closed, open, else merged', () => {
   assert.equal(fateOf({ pullRequest: { state: 'closed' } }), 'closed');
   assert.equal(fateOf({ pullRequest: { state: 'open' } }), 'open');
   assert.equal(fateOf({}), 'merged');
+  // Opened but not yet read back: open, not merged (the report is rebuilt right after the run that opened it).
+  assert.equal(fateOf({ pullRequestUrl: 'https://github.com/o/r/pull/1' }), 'open');
 });
 
 test('computeMetrics: yield, precision, recurrence, cost and per-lab/per-scope counts from the records alone', () => {

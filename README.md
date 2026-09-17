@@ -352,6 +352,20 @@ Three things the generated workflow needs that are easy to miss:
   built-in token. The loop runs your test commands itself before it opens the
   pull request, so the gate is still there.
 
+**Where to see how it's going:** every run rebuilds
+`docs/generations/index.html`, the run history, and commits it with the run's
+record. It shows every generation newest first:
+- which model suggested the change;
+- the change in plain words;
+- whether it shipped, is waiting for your review, or why it didn't ship,
+  with each failed attempt and its reason;
+- what it cost in tokens.
+
+Pull requests waiting for you are listed at the top. It's one self-contained
+file: open it from a checkout or a download. GitHub shows HTML as source, so
+use GitHub Pages to browse it on the web. `docs/generations/REPORT.md`
+carries the same records as metrics, and GitHub renders it.
+
 ---
 
 ## What only you can provide
@@ -537,6 +551,7 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | The ambition dial (`context.ambition`, [`docs/Ambition-Control.md`](docs/Ambition-Control.md)) and scope-aware ranking | ✅ Built, tested — `focused` / `earned` (default) / `ambitious`, read at run time, per-run override from the Actions tab; the ranking rubric follows the scope; a lone ambitious failure no longer resets the streak |
 | Seats (`harness/lib/seats.mjs`) — cross-family ranker, seat promotion | ✅ Built, tested — the rank seat defaults to another lab's model from the snapshot; a rotating model whose own edits keep being approved and kept can earn the implement seat (`roles.promotion`, off by default); the review seat is never auto-assigned |
 | Operational report (`harness/lib/report.mjs` → `<generationsDir>/REPORT.md`) | ✅ Built, tested — the paper's §7 metrics from the records, regenerated every cycle, never hand-edited |
+| Run history page (`harness/lib/run-history.mjs` → `<generationsDir>/index.html`) | ✅ Built, tested — one self-contained page for the owner: every generation newest first, the change in plain words, its outcome and pull request, failed attempts with their reasons, tokens and cache savings, pull requests waiting for review, open escalations. Rebuilt after every run with the record and at the start of each cycle once fates are read back. Every installation gets it; no configuration |
 | Campaign mode (`harness/lib/campaign.mjs`, the workflow's `models` input) | ✅ Built, tested — a generation now, on models named by hand, recorded as `campaign: true` |
 | The committed goal (`project.goal`, [`docs/curiosity/C1`](docs/curiosity/C1-committed-goal.md)) and the themes review's `UNKNOWN` field ([`C2`](docs/curiosity/C2-themes-review-cli.md) phase A) | ✅ Built, tested — the goal sits above the brief, the reviewer rejects drift from it, the guard refuses a diff that edits it; a review may name open questions, rendered as their own section and dropped when none |
 | Kill switch, version stamp, pinned supply chain | ✅ Built, tested — `SELF_IMPROVE_PAUSED` repository variable; `harness/VERSION` in every adapter and record; actions by SHA, `js-yaml` exact with scripts disabled |

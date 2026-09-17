@@ -297,7 +297,9 @@ test('workflow: the claim step and the persist step, twice over, give two genera
   }
   assert.deepEqual(numbers, ['001', '002']);
   const c = clone('c');
-  assert.deepEqual(fs.readdirSync(path.join(c.dir, 'docs/generations')).sort(), ['gen-001', 'gen-002']);
+  // Two records, and the run history and report rebuilt from them, committed with the last.
+  assert.deepEqual(fs.readdirSync(path.join(c.dir, 'docs/generations')).sort(), ['REPORT.md', 'gen-001', 'gen-002', 'index.html']);
+  assert.match(fs.readFileSync(path.join(c.dir, 'docs/generations/index.html'), 'utf8'), />002<[\s\S]*>001</, 'both generations are on the page, newest first');
 });
 
 test('workflow: the agent-branch commit stages a newly created file under create_only_paths', shellOpts, (t) => {

@@ -54,6 +54,10 @@ export function fateOf(record) {
   const state = record?.pullRequest?.state;
   if (state === 'closed') return 'closed';
   if (state === 'open') return 'open';
+  // A pull request was opened but its fate has not been read back yet: the
+  // report is now rebuilt straight after the run that opened it, before the
+  // next cycle's read-back. Without this it counted as merged.
+  if (!state && record?.pullRequestUrl) return 'open';
   // See context-pack.mjs's fateOf(): a local rehearsal's approval was never
   // put to a person, so it is not a change anyone kept.
   if (!state && record?.run?.source === 'local') return 'rehearsed';

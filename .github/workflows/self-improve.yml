@@ -281,10 +281,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           node "$HARNESS_DIR"/scripts/sync-pull-request-outcomes.mjs --generations-dir "${GENERATIONS_DIR:?the project configuration was not read}"
-          # The operational report — the paper's §7 metrics, generated from
-          # the records and never hand-edited. Regenerated here, after the
-          # read-back, so it reflects every fate known at the start of this
-          # cycle. See harness/lib/report.mjs.
+          # The operational report (REPORT.md, the paper's §7 metrics) and the
+          # run history (index.html, the owner's page), generated from the
+          # records and never hand-edited. Regenerated here, after the
+          # read-back, so a merge or close since the last run shows up. Both
+          # are rebuilt again when this run's record is persisted. See
+          # harness/lib/report.mjs and harness/lib/run-history.mjs.
           node "$HARNESS_DIR"/scripts/report.mjs --generations-dir "${GENERATIONS_DIR:?the project configuration was not read}"
           git add -A -- "${GENERATIONS_DIR:?the project configuration was not read}"
           git commit -m "Record pull request outcomes and regenerate the report" || echo "Nothing to record"
