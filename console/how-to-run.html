@@ -271,6 +271,17 @@
           secrets (<b>Settings → Secrets and variables → Actions</b>) and how to
           do the first run.
         </p>
+        <p class="notice">
+          <b>One GitHub switch is off by default, and it's easy to miss.</b> On your
+          project's repository (not your account), open <b>Settings</b>, click
+          <b>Actions</b> in the left sidebar, then <b>General</b>, and scroll to
+          <b>Workflow permissions</b> at the bottom. Choose <b>Read and write
+          permissions</b>, tick <b>Allow GitHub Actions to create and approve pull
+          requests</b>, and click <b>Save</b>. The <i>Pull Requests</i> section under
+          Settings → General looks similar but is the wrong page. Reload the page
+          afterwards to check the tick stayed. You don't need a GitHub personal
+          access token.
+        </p>
       </li>
     </ol>
     <p class="notice">
@@ -329,6 +340,14 @@
           to your project's <code>.gitignore</code> now. Anyone who sees your key
           can spend your money.
         </p>
+        <p class="notice warning">
+          <b>Already have a <code>.env</code>?</b> Many apps keep their own secrets
+          there, and the copy command above would overwrite it. Copy to
+          <code>.env.harness.local</code> instead, make sure
+          <code>.gitignore</code> covers it (a <code>.env.*.local</code> line does),
+          and use <code>--env-file=.env.harness.local</code> wherever these steps
+          say <code>--env-file=.env</code>.
+        </p>
       </li>
       <li>
         <h3>Answer the setup questions</h3>
@@ -377,7 +396,16 @@
         <p>
           When a practice run looks good, the generated workflow can run the
           same loop on GitHub. The steps are in the README, under
-          <a href="https://github.com/Chrisfoz/self-optimisation#step-5--github-setup-repository-secrets">Getting started, Steps 5–7</a>.
+          <a href="https://github.com/Chrisfoz/self-optimisation#step-5--github-setup-repository-secrets">Getting started, Steps 5–7</a>,
+          including the <b>Workflow permissions</b> switch GitHub leaves off.
+        </p>
+        <p class="notice">
+          <b>Merge the setup branch first.</b> A practice run cuts its branch
+          (<code>agent/gen-001</code>) from your setup branch and saves its record
+          back onto the setup branch. If you merge the practice run's pull request
+          into <code>main</code> first, the harness arrives without that record,
+          and the setup pull request still looks unmerged. Merge setup into
+          <code>main</code>, then the practice run into <code>main</code>.
         </p>
       </li>
     </ol>
