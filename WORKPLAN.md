@@ -35,7 +35,7 @@ formats, and `init.mjs` recorded the current branch as `default_branch`. It
 also records one design question that is still open. The copied-in
 workflow's root `js-yaml` install is silently the project's dependency
 install, so isolating it needs `evaluation.setup_commands` for copied
-installs first. None of this closes the "person's verdict" item above,
+installs first. Its GitHub runs add a cost finding. A generation that shipped cost ~393k tokens, under $1 for the Anthropic seat. Two runs that crashed cost ~$9. Two changes are now the cheapest big savings: sending the implementer only the files a proposal names, and prompt caching on the Anthropic seats. None of this closes the "person's verdict" item above,
 because the merged change came from a rehearsal branch rather than a
 workflow-opened pull request.
 

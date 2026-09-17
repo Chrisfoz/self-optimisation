@@ -127,7 +127,10 @@
           <div class="notice">
             <strong>Add API keys directly on GitHub.</strong> This console never
             accepts or stores model API keys. It checks secret names, not values
-            or available credit. A rehearsal tests the real provider calls.
+            or available credit. A rehearsal tests the real provider calls. A
+            valid key on an account with no credit is caught when a run checks
+            every model it will use, before it pays for any of them. Add credit,
+            and a spending limit, at each lab first.
           </div>
           <div class="button-row">
             <a
@@ -221,6 +224,16 @@
             names are not API model IDs. A model ID whose lab this harness
             cannot recognise still works — name its lab beside it, and nothing
             in the harness needs changing to run a model released this morning.
+          </p>
+          <p class="notice">
+            <strong>These seats are called on every generation, with the whole
+            editable project.</strong> The most capable tier can cost twice as
+            much per token as the next one down, and a reasoning model spends
+            part of its output limit thinking. For the implementer, which follows
+            someone else's proposal, a lower <code>roles.implement.effort</code>
+            in the adapter is often enough. A suggester that writes its own edits
+            ships them, so an expensive suggester can also end up writing the
+            change.
           </p>
         </section>
         <section data-step="3" hidden>
@@ -459,6 +472,17 @@
             Model usage is billed by your providers, and GitHub Actions usage is
             subject to your GitHub plan. Reserve estimates can stop a run before
             it finishes; increase the budget only after inspecting the record.
+          </p>
+          <p class="notice">
+            <strong>Size the cap to your project.</strong> Every suggesting model
+            reads every editable file: roughly your editable characters divided
+            by four, in tokens, per model. The implementer and reviewer need about
+            that much again. A web app with a million characters of editable code
+            needs around 1 million tokens for one suggester, so the default
+            500,000 would stop it before any model is called. Judge the spend by
+            what each merged change cost against the time it would have taken a
+            person, and set a monthly limit at every lab: the only ceiling the
+            harness can't enforce for you.
           </p>
         </section>
         <section data-step="9" hidden>

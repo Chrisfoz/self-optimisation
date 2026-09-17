@@ -4,8 +4,10 @@
 configured, rehearsed, taken to GitHub and wired to email in one working
 session. An AI coding session did the work, following the terminal
 walkthrough at the owner's direction, with the owner making every choice
-and every GitHub settings change.** One generation, one
-change merged, about 2 million tokens. The 2026-09-11 campaigns proved the
+and every GitHub settings change.** Four generations: one rehearsed locally
+and merged, then three on GitHub Actions. Two of those crashed and taught the
+most. One went through every gate to a pull request, for under a dollar of
+review. The 2026-09-11 campaigns proved the
 loop works on projects prepared for it. This was the first time the install
 path itself was the thing under test. Most of what broke was in the steps
 around the loop, not in the loop.
@@ -204,12 +206,95 @@ only ever called when named for a campaign, or when it is a new release from a
 watched lab, but then it is the suggester, and a suggester whose own edits
 pass ships them.
 
+## After the fixes: the first generation to ship from GitHub
+
+With #23's harness and the new settings (`roles.implement.effort: medium`,
+`notify.digest_model: claude-sonnet-5`), generation **004** ran
+`gpt-6-astra` alone and went through every gate on GitHub for the first
+time. Its steps:
+1. The pinned-seat probe passed: `claude-opus-5` for implement and review,
+   `claude-sonnet-5` for the digest.
+2. The suggester wrote its own two edits, to `venue.html` and `README.md`.
+3. The in-loop tests passed.
+4. Opus approved on the first review.
+5. The guard and the branch tests passed.
+6. The pull request was opened (NetworkinAI #52: "Suspend venue controls for
+   the whole persona dialogue").
+7. The record was persisted.
+
+It cost 392,919 tokens:
+
+| Seat | Model | Input | Output | At list price |
+|---|---|---|---|---|
+| suggest (and implement, its own edits) | `gpt-6-astra` | 249,530 | 1,661 | not looked up |
+| review | `claude-opus-5` | 137,091 | 4,637 | about $0.80 |
+
+The reviewer's own reasoning caught a real mechanism: the venue's movement
+gates test `display !== 'block'` while the dialogue opens with `flex`, so
+controls were only suspended by accident. That is the loop working as
+designed. It is still unreviewed by a person, and the change is untested on a
+phone.
+
+Two things the digest got wrong, not yet fixed:
+- **The plain-language email failed once on GitHub** ("No BODY: section
+  found in the response") and fell back to the terse one. It did not
+  reproduce: the same composition locally with `claude-sonnet-5` ended
+  cleanly, using 988 of its 2,000 output tokens (309 thinking), with a BODY.
+  So the cause is intermittent or a formatting slip, and unproven. Raising the
+  digest's output allowance would make truncation unlikely for a few cents,
+  but nothing yet shows truncation was the cause.
+- **It reads a pull request waiting for review as a failure.** Under
+  `human-approval-required`, "not merged" is the expected end state, yet the
+  subject says "⚠️ NOT MERGED", and the plain-language version said "we don't
+  know why". It should say a pull request is waiting.
+
+## What it costs, and what that buys
+
+Tokens overstate cost. Almost all of them are input, the models reading the
+project, and input is billed at a fraction of output. At September 2026 list
+prices for the Anthropic seats (Opus 5 $5 / $25, Sonnet 5 $2 / $10, Fable 5.1
+$10 / $50 per million input / output):
+
+| Run | Tokens | Anthropic share |
+|---|---|---|
+| 004, shipped: suggester self-implemented, one Opus review | 392,919 | ~$0.80 |
+| 003, failed: Opus implementer truncated twice | 1,057,031 | ~$5.00 |
+| 001 rehearsal, six suggesters, Fable self-implemented | 2,021,356 | ~$5.90 (Fable ~$4.70, Opus ~$1.20) |
+
+The measure that matters is the cost of each change that ships, including
+the owner's review of it, against the time a person would have taken to make
+it. That is an opportunity cost, not a token count. On those terms a
+generation that ships is cheap. What makes the loop expensive is waste:
+- runs that spend and ship nothing (002 and 003, ~$9 of Anthropic credit and
+  ~500k tokens of OpenAI input between them);
+- more suggesters than needed;
+- an editable surface wider than the goal;
+- a reasoning model thinking through a task that only needs following.
+
+The first is now largely stopped. The rest are configuration.
+
+Two harness changes would cut a normal run's cost further, and are planned
+but not built:
+1. **Send the implementer only the files the proposal names.** It gets all
+   ~380k tokens of editable source today, even when the change touches two
+   files.
+2. **Use prompt caching on the Anthropic seats.** An implementation retry, a
+   refinement or a headroom retry rereads identical source, which caching
+   bills at a tenth of the input price. The harness sends no `cache_control`
+   today.
+
+What users are told: `console/how-to-run.html` has a "What it costs, and what
+that buys" section with these figures. The installer's Seats, Labs and Budget
+steps and the About page say the same things where the choices are made.
+
 ## What is still not proven
 
-- **A generation that ships from GitHub.** Two dispatched runs reached the
-  implementer and stopped there (see above). Neither the guard, the tests on
-  the agent branch, nor pull-request creation has run for real on this
-  repository yet, nor a scheduled run.
+- **A generation the pinned implementer writes, on GitHub.** 004 shipped
+  from the suggester's own edits, so `roles.implement.effort: medium` is
+  untested on a real proposal. No scheduled run has happened yet either.
+- **The owner's verdict read back.** Pull request #52 is open. Nothing has
+  yet merged or closed a workflow-opened pull request for the next cycle to
+  record.
 - **`context.strategy: scoped`.** At 1.03 million characters of editable
   source, `full-dump` still fit every model's window and cost ~250–510k input
   tokens per model. That makes WORKPLAN 2.1a concrete: it is a cost question
