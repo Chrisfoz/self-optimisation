@@ -961,10 +961,23 @@ The pull request's URL is written back into that generation's
 **One repository setting this needs, which GitHub turns off by default:**
 Settings → Actions → General → Workflow permissions → tick **Allow GitHub
 Actions to create and approve pull requests**. Without it every generation
-passes its gates and then fails to open its pull request. (Or, with the
-\`gh\` CLI: \`gh api -X PUT repos/OWNER/REPO/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true\`
-— read-only is fine as the default: the workflow asks for the write
-permissions it needs itself.)
+passes its gates and then fails to open its pull request.
+
+- **Where it is:** \`https://github.com/OWNER/REPO/settings/actions\`, or the
+  repository's **Settings**, then **Actions** in the left sidebar, then
+  **General**, then scroll to **Workflow permissions** at the bottom. The
+  *Pull Requests* section of **Settings → General** (merge commits, squash,
+  rebase) looks like the right place and is not.
+- **Check it saved:** the tickbox has been seen not to stick without saying
+  so. \`gh api repos/OWNER/REPO/actions/permissions/workflow\` should show
+  \`"can_approve_pull_request_reviews":true\`. Or set it from the \`gh\` CLI:
+  \`gh api -X PUT repos/OWNER/REPO/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true\`
+  (read-only is fine as the default: the workflow asks for the write
+  permissions it needs itself).
+- **No personal access token is needed.** The workflow uses GitHub's
+  built-in token. GitHub does not start your other workflows (your own CI)
+  for a pull request that token opens, but the loop has already run your
+  test commands by then.
 
 To switch to autonomous merge later, set
 \`constitution.approval_class: autonomous-merge\` in \`project-adapter.yml\`

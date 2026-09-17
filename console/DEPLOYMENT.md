@@ -66,6 +66,14 @@ work. A download does not claim to verify repository contents or secrets.
    deployment can install the shared harness instead; see **Shared harness** below.
 5. Open and inspect the setup PR. In GitHub's Actions settings enable **Allow
    GitHub Actions to create and approve pull requests**. Merge setup yourself.
+   The setting is on the target repository at `/settings/actions` (**Settings →
+   Actions → General**, bottom of the page, *Workflow permissions*), not in the
+   *Pull Requests* section of **Settings → General**, which people land on
+   first. Confirm it saved with
+   `gh api repos/OWNER/REPO/actions/permissions/workflow`
+   (`can_approve_pull_request_reviews` must be `true`): in the first real install
+   the tickbox didn't stick and nothing on the page said so. No personal access
+   token is needed; the workflow uses the built-in `github.token`.
 6. Refresh setup status and explicitly request the rehearsal. It dispatches a
    real, focused campaign using the configured implementer as the campaign model.
    It may spend tokens and open an improvement PR, but cannot auto-merge it.

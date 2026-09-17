@@ -315,15 +315,42 @@ run, from your default branch. While this repository is private, other
 repositories cannot read it, so use the copied install above. See
 [`console/DEPLOYMENT.md`](console/DEPLOYMENT.md), "Shared harness".
 
-Two things the generated workflow needs that are easy to miss:
+Three things the generated workflow needs that are easy to miss:
 
 - **The pull-request path needs one repository setting GitHub turns off by
   default:** Settings → Actions → General → Workflow permissions → **Allow
   GitHub Actions to create and approve pull requests**. Without it every
   generation passes its gates and then cannot open its pull request.
-- **A secret for every lab the workflow calls** — the watched labs and the
+  - **It is on the repository, and not on the page you'd guess.** Open
+    `https://github.com/OWNER/REPO/settings/actions`, or in the repository's
+    **Settings** click **Actions** in the left sidebar, then **General**, then
+    scroll to the **Workflow permissions** box at the bottom. **Settings →
+    General** has a *Pull Requests* section (merge commits, squash, rebase,
+    auto-merge) that looks like the right place and isn't. Your account's own
+    settings don't have this switch either.
+  - **Pick Read and write permissions and tick the box, then Save.** Read-only
+    also works, since the workflow asks for its own write permissions, but
+    Read and write is the choice people expect to make.
+  - **Check it saved.** During the first real install, Read and write saved
+    but the tickbox didn't, and nothing on the page said so. Check with
+    `gh api repos/OWNER/REPO/actions/permissions/workflow`: you want
+    `"can_approve_pull_request_reviews":true`. Or set both at once with
+    `gh api -X PUT repos/OWNER/REPO/actions/permissions/workflow -f default_workflow_permissions=write -F can_approve_pull_request_reviews=true`.
+- **A secret for every lab the workflow calls:** the watched labs and the
   labs your implement, review and rank models belong to. The generated
-  `SELF-IMPROVE-README.md` lists exactly which.
+  `SELF-IMPROVE-README.md` lists exactly which. Add them under the
+  repository's **Settings → Secrets and variables → Actions** as *repository*
+  secrets. A digest email adds one more: `SENDGRID_API_KEY`, alongside a
+  `notify:` block in `project-adapter.yml` and a regenerated workflow
+  (`init.mjs --from-adapter --force`). Without that block, the workflow has
+  no email step.
+- **No GitHub personal access token.** The workflow pushes its branch and
+  opens its pull request with GitHub's built-in `github.token`, using the
+  permissions it declares. Nothing reads a `GH_PAT`, so don't create one and
+  don't keep one in your key file. One side effect: GitHub does not start
+  other workflows (such as your own CI) for pull requests opened with that
+  built-in token. The loop runs your test commands itself before it opens the
+  pull request, so the gate is still there.
 
 ---
 
