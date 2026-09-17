@@ -4,9 +4,9 @@
 configured, rehearsed, taken to GitHub and wired to email in one working
 session. An AI coding session did the work, following the terminal
 walkthrough at the owner's direction, with the owner making every choice
-and every GitHub settings change.** Four generations: one rehearsed locally
-and merged, then three on GitHub Actions. Two of those crashed and taught the
-most. One went through every gate to a pull request, for under a dollar of
+and every GitHub settings change.** Five generations: one rehearsed locally
+and merged, then four on GitHub Actions. Two of those crashed and taught the
+most. Two went through every gate to a pull request, one for under a dollar of
 review. The 2026-09-11 campaigns proved the
 loop works on projects prepared for it. This was the first time the install
 path itself was the thing under test. Most of what broke was in the steps
@@ -248,6 +248,81 @@ Two things the digest got wrong, not yet fixed:
   subject says "⚠️ NOT MERGED", and the plain-language version said "we don't
   know why". It should say a pull request is waiting.
 
+## Generation 005: the pinned implementer, on GitHub
+
+Rotating to `gemini-3.8-flash`, generation **005** is the first run where the
+pinned implementer wrote the change on GitHub. Its steps:
+1. The pinned-seat probe passed.
+2. Gemini ran out of output room at 32,000 tokens, and the headroom retry at
+   64,000 resent the whole ~283k-token input.
+3. Its proposal came with its own edits: only a new test file and no code
+   change. **That test failed in the loop,** before any review was paid for.
+4. `claude-opus-5` at `roles.implement.effort: medium` then implemented the
+   change: 6 edits to `venue.html`, 7,246 characters, no truncation. That is
+   the fix for generations 002 and 003, working.
+5. The tests passed, the review approved on attempt 2, and so did the guard
+   and the branch tests.
+6. The pull request was opened (NetworkinAI #53: every way of dismissing a
+   persona dialogue goes through one `closeDialogue()` path, including a tap
+   outside it).
+7. The plain-language digest, from `claude-sonnet-5`, worked.
+
+| Seat | Model | Calls | Input | Output |
+|---|---|---|---|---|
+| suggest | `gemini-3.8-flash` | 2 | 566,660 | 60,290 |
+| implement + review | `claude-opus-5` | 2 | 512,230 | 15,785 |
+
+1,154,965 tokens in all, about $2.95 of it Opus 5. The wasted Gemini call
+led to `roles.suggest.max_output_tokens: 64000` for NetworkinAI.
+
+**Every GitHub run, so far:**
+
+| Gen | Suggester | Outcome | Tokens |
+|---|---|---|---|
+| 002 | `gpt-6-astra` | crashed: no Anthropic credit | 909,843 |
+| 003 | `gpt-6-astra` | crashed: implementer out of output room | 1,057,031 |
+| 004 | `gpt-6-astra` | pull request #52, suggester's own edits | 392,919 |
+| 005 | `gemini-3.8-flash` | pull request #53, Opus implemented after the suggester's edits failed tests | 1,154,965 |
+
+## The run history page
+
+Reading these records to tell the owner what happened took a script each
+time. carrotgame had solved that for itself with a hand-built page whose run
+table was the part people read. Every installation now gets
+`docs/generations/index.html` (#26):
+- one self-contained page, newest run first;
+- the change in plain words, and the outcome in plain words;
+- failed attempts with their reasons;
+- tokens and cache reads, and pull requests waiting for review;
+- open escalations.
+
+It is rebuilt with every run's record and at the start of each cycle.
+Rendering it from NetworkinAI's five real records found that an opened but
+unread pull request counted as merged. That was invisible while the report
+was only rebuilt after fates were read back, and it is fixed.
+
+## Checking credit, not just keys
+
+Generation 002 died on an empty balance that every key check had passed. What
+each lab lets a key see, from their documentation in September 2026:
+- **DeepSeek:** `GET /user/balance` with the ordinary API key. It returns
+  `is_available` and total, granted and topped-up balances.
+- **Moonshot / Kimi:** `GET /v1/users/me/balance` with the ordinary key. It
+  returns available, voucher and cash balances. At zero or below, requests
+  fail with a quota error.
+- **Anthropic:** no balance endpoint. The Usage & Cost Admin API reports
+  spend, and needs an Admin API key (`sk-ant-admin…`) that only an
+  organisation admin can create.
+- **OpenAI:** the Costs endpoint reports spend with an admin key. Credit
+  balance is not reliably available to API keys.
+- **Google, Qwen, xAI, Meta, Z.ai:** not checked.
+
+The console holds no keys by design, so any balance check has to run where
+the keys are, locally or in the workflow, and report into the records the
+console already reads. The probe of pinned seats (#23) is the part that
+matters most: it catches an unchargeable account before anything is spent,
+on every lab, with no admin key. WORKPLAN I11 carries the rest.
+
 ## What it costs, and what that buys
 
 Tokens overstate cost. Almost all of them are input, the models reading the
@@ -301,12 +376,13 @@ steps and the About page say the same things where the choices are made.
 
 ## What is still not proven
 
-- **A generation the pinned implementer writes, on GitHub.** 004 shipped
-  from the suggester's own edits, so `roles.implement.effort: medium` is
-  untested on a real proposal. No scheduled run has happened yet either.
-- **The owner's verdict read back.** Pull request #52 is open. Nothing has
-  yet merged or closed a workflow-opened pull request for the next cycle to
-  record.
+- **The two cost savings on a real run.** Scoped implementer context and
+  prompt caching (#25) are tested and checked live against the API, but no
+  generation has run with them yet (WORKPLAN I8).
+- **A scheduled run.** All four GitHub runs were dispatched by hand.
+- **The owner's verdict read back.** Pull requests #52 and #53 are open.
+  Nothing has yet merged or closed a workflow-opened pull request for the next
+  cycle to record.
 - **`context.strategy: scoped`.** At 1.03 million characters of editable
   source, `full-dump` still fit every model's window and cost ~250–510k input
   tokens per model. That makes WORKPLAN 2.1a concrete: it is a cost question
@@ -318,4 +394,5 @@ steps and the About page say the same things where the choices are made.
 - **The read-back of a workflow-opened pull request.** The merged change came
   from a rehearsal branch, not from a pull request the workflow opened, so
   `sync-pull-request-outcomes.mjs` has nothing to read yet.
-- **n = 1.**
+- **n = 1 project.** Five generations on one repository. Nothing here is a
+  rate.
