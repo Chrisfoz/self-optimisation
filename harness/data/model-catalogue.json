@@ -1,49 +1,1093 @@
 {
   "note": "Bundled model catalogue, read by harness/lib/model-catalogue.mjs and served by the console's /api/models. It is a STARTING list, never an authority: a lab can ship a model an hour after this file is committed. Regenerate it with `node --env-file=.env harness/scripts/refresh-model-catalogue.mjs`, which lists every lab you hold a key for and rewrites this file with real release dates. A connected repository's own .agent/model-snapshot.json always takes precedence in the console, because it was written with that project's keys and is current.",
-  "fetchedAt": null,
-  "source": "recorded-runs",
-  "sourceDetail": "Seeded from models this harness has actually called and recorded, not from a live /models listing: docs/campaigns/2026-09-11-first-real-campaigns.md and the generation records beneath docs/campaigns/2026-09-11/. Release dates are unknown for these entries, so they carry none.",
+  "fetchedAt": "2026-09-18T05:18:50.362Z",
+  "source": "listed",
+  "sourceDetail": "Listed live from each lab's own catalogue endpoint by harness/scripts/refresh-model-catalogue.mjs. Labs with no key on that machine kept their previous entries.",
   "labs": {
     "anthropic": {
-      "source": "recorded-runs",
+      "source": "listed",
       "models": [
-        { "id": "claude-opus-5", "created": null },
-        { "id": "claude-fable-5-1", "created": null }
+        {
+          "id": "claude-fable-5-1",
+          "created": "2026-08-28T00:00:00.000Z"
+        },
+        {
+          "id": "claude-opus-5",
+          "created": "2026-07-24T00:00:00.000Z"
+        },
+        {
+          "id": "claude-sonnet-5",
+          "created": "2026-06-29T00:00:00.000Z"
+        },
+        {
+          "id": "claude-fable-5",
+          "created": "2026-06-07T00:00:00.000Z"
+        },
+        {
+          "id": "claude-opus-4-8",
+          "created": "2026-05-28T00:00:00.000Z"
+        },
+        {
+          "id": "claude-opus-4-7",
+          "created": "2026-04-14T00:00:00.000Z"
+        },
+        {
+          "id": "claude-sonnet-4-6",
+          "created": "2026-02-17T00:00:00.000Z"
+        },
+        {
+          "id": "claude-opus-4-6",
+          "created": "2026-02-04T00:00:00.000Z"
+        },
+        {
+          "id": "claude-opus-4-5-20251101",
+          "created": "2025-11-24T00:00:00.000Z"
+        },
+        {
+          "id": "claude-haiku-4-5-20251001",
+          "created": "2025-10-15T00:00:00.000Z"
+        },
+        {
+          "id": "claude-sonnet-4-5-20250929",
+          "created": "2025-09-29T00:00:00.000Z"
+        }
       ]
     },
     "openai": {
-      "source": "recorded-runs",
+      "source": "listed",
       "models": [
-        { "id": "gpt-6-astra", "created": null },
-        { "id": "gpt-5.5", "created": null }
+        {
+          "id": "gpt-live-1",
+          "created": "2026-09-08T17:43:27.000Z"
+        },
+        {
+          "id": "gpt-6-astra",
+          "created": "2026-08-27T18:00:04.000Z"
+        },
+        {
+          "id": "gpt-5.6-luna",
+          "created": "2026-06-23T15:30:58.000Z"
+        },
+        {
+          "id": "gpt-5.6-terra",
+          "created": "2026-06-23T15:27:39.000Z"
+        },
+        {
+          "id": "gpt-5.6-sol",
+          "created": "2026-06-23T15:20:18.000Z"
+        },
+        {
+          "id": "chat-latest",
+          "created": "2026-05-02T06:50:02.000Z"
+        },
+        {
+          "id": "gpt-5.5-pro-2026-04-23",
+          "created": "2026-04-22T21:47:50.000Z"
+        },
+        {
+          "id": "gpt-5.5-pro",
+          "created": "2026-04-22T21:45:49.000Z"
+        },
+        {
+          "id": "gpt-5.5-2026-04-23",
+          "created": "2026-04-22T06:27:21.000Z"
+        },
+        {
+          "id": "gpt-5.5",
+          "created": "2026-04-22T02:27:27.000Z"
+        },
+        {
+          "id": "gpt-5.4-mini",
+          "created": "2026-03-14T01:18:43.000Z"
+        },
+        {
+          "id": "gpt-5.4-mini-2026-03-17",
+          "created": "2026-03-14T01:17:56.000Z"
+        },
+        {
+          "id": "gpt-5.4-nano",
+          "created": "2026-03-14T01:14:30.000Z"
+        },
+        {
+          "id": "gpt-5.4-nano-2026-03-17",
+          "created": "2026-03-14T01:13:57.000Z"
+        },
+        {
+          "id": "gpt-5.4",
+          "created": "2026-03-05T06:24:12.000Z"
+        },
+        {
+          "id": "gpt-5.4-pro-2026-03-05",
+          "created": "2026-03-04T21:27:37.000Z"
+        },
+        {
+          "id": "gpt-5.4-pro",
+          "created": "2026-03-04T21:26:41.000Z"
+        },
+        {
+          "id": "gpt-5.4-2026-03-05",
+          "created": "2026-03-04T19:54:22.000Z"
+        },
+        {
+          "id": "gpt-5.3-chat-latest",
+          "created": "2026-02-27T23:56:11.000Z"
+        },
+        {
+          "id": "gpt-5.3-codex",
+          "created": "2026-02-08T08:05:15.000Z"
+        },
+        {
+          "id": "gpt-5.2-codex",
+          "created": "2025-12-19T17:23:05.000Z"
+        },
+        {
+          "id": "gpt-5.2-chat-latest",
+          "created": "2025-12-10T05:25:52.000Z"
+        },
+        {
+          "id": "gpt-5.2-pro",
+          "created": "2025-12-10T05:19:43.000Z"
+        },
+        {
+          "id": "gpt-5.2-pro-2025-12-11",
+          "created": "2025-12-10T05:19:19.000Z"
+        },
+        {
+          "id": "gpt-5.2",
+          "created": "2025-12-09T20:44:11.000Z"
+        },
+        {
+          "id": "gpt-5.2-2025-12-11",
+          "created": "2025-12-09T20:43:48.000Z"
+        },
+        {
+          "id": "gpt-5.1-codex-max",
+          "created": "2025-11-20T20:45:32.000Z"
+        },
+        {
+          "id": "gpt-5.1-codex-mini",
+          "created": "2025-11-13T04:11:49.000Z"
+        },
+        {
+          "id": "gpt-5.1-codex",
+          "created": "2025-11-12T22:57:01.000Z"
+        },
+        {
+          "id": "gpt-5.1",
+          "created": "2025-11-10T18:51:13.000Z"
+        },
+        {
+          "id": "gpt-5.1-2025-11-13",
+          "created": "2025-11-10T18:45:53.000Z"
+        },
+        {
+          "id": "gpt-5.1-chat-latest",
+          "created": "2025-11-07T20:39:11.000Z"
+        },
+        {
+          "id": "sora-2-pro",
+          "created": "2025-10-05T23:57:43.000Z"
+        },
+        {
+          "id": "sora-2",
+          "created": "2025-10-05T23:56:55.000Z"
+        },
+        {
+          "id": "gpt-5-pro",
+          "created": "2025-10-03T05:37:02.000Z"
+        },
+        {
+          "id": "gpt-5-pro-2025-10-06",
+          "created": "2025-10-03T05:35:07.000Z"
+        },
+        {
+          "id": "gpt-5-codex",
+          "created": "2025-09-10T18:10:18.000Z"
+        },
+        {
+          "id": "gpt-5-nano",
+          "created": "2025-08-05T20:39:44.000Z"
+        },
+        {
+          "id": "gpt-5-nano-2025-08-07",
+          "created": "2025-08-05T20:38:23.000Z"
+        },
+        {
+          "id": "gpt-5-mini",
+          "created": "2025-08-05T20:32:08.000Z"
+        },
+        {
+          "id": "gpt-5-mini-2025-08-07",
+          "created": "2025-08-05T20:31:07.000Z"
+        },
+        {
+          "id": "gpt-5",
+          "created": "2025-08-05T20:29:37.000Z"
+        },
+        {
+          "id": "gpt-5-2025-08-07",
+          "created": "2025-08-01T19:09:20.000Z"
+        },
+        {
+          "id": "gpt-5-chat-latest",
+          "created": "2025-08-01T18:35:06.000Z"
+        },
+        {
+          "id": "o4-mini-deep-research-2025-06-26",
+          "created": "2025-06-25T15:42:01.000Z"
+        },
+        {
+          "id": "o3-deep-research-2025-06-26",
+          "created": "2025-06-25T15:26:59.000Z"
+        },
+        {
+          "id": "o3-deep-research",
+          "created": "2025-06-13T18:42:01.000Z"
+        },
+        {
+          "id": "o4-mini-deep-research",
+          "created": "2025-06-11T23:44:45.000Z"
+        },
+        {
+          "id": "o3-pro-2025-06-10",
+          "created": "2025-06-05T23:39:21.000Z"
+        },
+        {
+          "id": "o3-pro",
+          "created": "2025-05-28T23:35:49.000Z"
+        },
+        {
+          "id": "gpt-4.1-nano",
+          "created": "2025-04-10T21:48:27.000Z"
+        },
+        {
+          "id": "gpt-4.1-nano-2025-04-14",
+          "created": "2025-04-10T21:37:05.000Z"
+        },
+        {
+          "id": "gpt-4.1-mini",
+          "created": "2025-04-10T20:49:33.000Z"
+        },
+        {
+          "id": "gpt-4.1-mini-2025-04-14",
+          "created": "2025-04-10T20:39:07.000Z"
+        },
+        {
+          "id": "gpt-4.1",
+          "created": "2025-04-10T20:22:22.000Z"
+        },
+        {
+          "id": "gpt-4.1-2025-04-14",
+          "created": "2025-04-10T20:09:06.000Z"
+        },
+        {
+          "id": "o4-mini",
+          "created": "2025-04-09T19:02:31.000Z"
+        },
+        {
+          "id": "o3",
+          "created": "2025-04-09T19:01:48.000Z"
+        },
+        {
+          "id": "o4-mini-2025-04-16",
+          "created": "2025-04-08T17:31:46.000Z"
+        },
+        {
+          "id": "o3-2025-04-16",
+          "created": "2025-04-08T17:28:21.000Z"
+        },
+        {
+          "id": "o1-pro",
+          "created": "2025-03-17T22:49:51.000Z"
+        },
+        {
+          "id": "o1-pro-2025-03-19",
+          "created": "2025-03-17T22:45:04.000Z"
+        },
+        {
+          "id": "computer-use-preview-2025-03-11",
+          "created": "2025-03-07T19:50:21.000Z"
+        },
+        {
+          "id": "gpt-4o-2024-11-20",
+          "created": "2025-02-12T03:39:03.000Z"
+        },
+        {
+          "id": "o3-mini-2025-01-31",
+          "created": "2025-01-27T20:36:40.000Z"
+        },
+        {
+          "id": "o3-mini",
+          "created": "2025-01-17T20:39:43.000Z"
+        },
+        {
+          "id": "computer-use-preview",
+          "created": "2024-12-20T00:47:57.000Z"
+        },
+        {
+          "id": "o1",
+          "created": "2024-12-16T19:03:36.000Z"
+        },
+        {
+          "id": "o1-2024-12-17",
+          "created": "2024-12-16T05:29:36.000Z"
+        },
+        {
+          "id": "gpt-4o-2024-08-06",
+          "created": "2024-08-04T23:38:39.000Z"
+        },
+        {
+          "id": "gpt-4o-mini",
+          "created": "2024-07-16T23:32:21.000Z"
+        },
+        {
+          "id": "gpt-4o-mini-2024-07-18",
+          "created": "2024-07-16T23:31:57.000Z"
+        },
+        {
+          "id": "gpt-4o-2024-05-13",
+          "created": "2024-05-10T19:08:52.000Z"
+        },
+        {
+          "id": "gpt-4o",
+          "created": "2024-05-10T18:50:49.000Z"
+        },
+        {
+          "id": "gpt-4-turbo-2024-04-09",
+          "created": "2024-04-08T18:41:17.000Z"
+        },
+        {
+          "id": "gpt-4-turbo",
+          "created": "2024-04-05T23:57:21.000Z"
+        },
+        {
+          "id": "gpt-3.5-turbo-0125",
+          "created": "2024-01-23T22:19:18.000Z"
+        },
+        {
+          "id": "gpt-3.5-turbo-1106",
+          "created": "2023-11-02T21:15:48.000Z"
+        },
+        {
+          "id": "gpt-4",
+          "created": "2023-06-27T16:13:31.000Z"
+        },
+        {
+          "id": "gpt-4-0613",
+          "created": "2023-06-12T16:54:56.000Z"
+        },
+        {
+          "id": "gpt-3.5-turbo-16k",
+          "created": "2023-05-10T22:35:02.000Z"
+        },
+        {
+          "id": "gpt-3.5-turbo",
+          "created": "2023-02-28T18:56:42.000Z"
+        }
       ]
     },
     "google": {
-      "source": "recorded-runs",
+      "source": "listed",
       "models": [
-        { "id": "gemini-3.8-flash", "created": null },
-        { "id": "gemini-3.1-pro-preview", "created": null }
+        {
+          "id": "nano-banana-pro-preview",
+          "created": null
+        },
+        {
+          "id": "lyria-3.5",
+          "created": null
+        },
+        {
+          "id": "lyria-3-pro-preview",
+          "created": null
+        },
+        {
+          "id": "lyria-3-clip-preview",
+          "created": null
+        },
+        {
+          "id": "gemma-4-31b-it",
+          "created": null
+        },
+        {
+          "id": "gemma-4-26b-a4b-it",
+          "created": null
+        },
+        {
+          "id": "gemini-robotics-er-2-preview",
+          "created": null
+        },
+        {
+          "id": "gemini-pro-latest",
+          "created": null
+        },
+        {
+          "id": "gemini-omni-flash-preview",
+          "created": null
+        },
+        {
+          "id": "gemini-omni-1.1-flash",
+          "created": null
+        },
+        {
+          "id": "gemini-flash-lite-latest",
+          "created": null
+        },
+        {
+          "id": "gemini-flash-latest",
+          "created": null
+        },
+        {
+          "id": "gemini-3.8-flash",
+          "created": null
+        },
+        {
+          "id": "gemini-3.7-flash",
+          "created": null
+        },
+        {
+          "id": "gemini-3.6-flash",
+          "created": null
+        },
+        {
+          "id": "gemini-3.5-flash-lite",
+          "created": null
+        },
+        {
+          "id": "gemini-3.5-flash",
+          "created": null
+        },
+        {
+          "id": "gemini-3.1-pro-preview-customtools",
+          "created": null
+        },
+        {
+          "id": "gemini-3.1-pro-preview",
+          "created": null
+        },
+        {
+          "id": "gemini-3.1-flash-lite-preview",
+          "created": null
+        },
+        {
+          "id": "gemini-3.1-flash-lite",
+          "created": null
+        },
+        {
+          "id": "gemini-3-flash-preview",
+          "created": null
+        },
+        {
+          "id": "gemini-2.5-pro",
+          "created": null
+        },
+        {
+          "id": "gemini-2.5-flash-lite",
+          "created": null
+        },
+        {
+          "id": "gemini-2.5-flash",
+          "created": null
+        },
+        {
+          "id": "gemini-2.5-computer-use-preview-10-2025",
+          "created": null
+        },
+        {
+          "id": "deep-research-pro-preview-12-2025",
+          "created": null
+        },
+        {
+          "id": "deep-research-preview-04-2026",
+          "created": null
+        },
+        {
+          "id": "deep-research-max-preview-04-2026",
+          "created": null
+        },
+        {
+          "id": "antigravity-preview-09-2026",
+          "created": null
+        },
+        {
+          "id": "antigravity-preview-05-2026",
+          "created": null
+        }
       ]
     },
     "moonshot": {
-      "source": "recorded-runs",
-      "models": [{ "id": "kimi-k3", "created": null }]
+      "source": "listed",
+      "models": [
+        {
+          "id": "kimi-k3",
+          "created": "2026-09-17T13:54:30.000Z"
+        },
+        {
+          "id": "kimi-k2.7-code-highspeed",
+          "created": "2026-09-17T13:54:30.000Z"
+        },
+        {
+          "id": "kimi-k2.7-code",
+          "created": "2026-09-17T13:54:30.000Z"
+        },
+        {
+          "id": "kimi-k2.6",
+          "created": "2026-09-17T13:54:30.000Z"
+        }
+      ]
     },
     "deepseek": {
-      "source": "recorded-runs",
-      "models": [{ "id": "deepseek-v4-pro", "created": null }]
+      "source": "listed",
+      "models": [
+        {
+          "id": "deepseek-v4-pro",
+          "created": null
+        },
+        {
+          "id": "deepseek-flash",
+          "created": null
+        }
+      ]
+    },
+    "qwen": {
+      "source": "listed",
+      "models": [
+        {
+          "id": "qwen3.8-omni-flash",
+          "created": "2026-09-17T16:40:58.000Z"
+        },
+        {
+          "id": "qwen3.6-plus",
+          "created": "2026-09-16T06:45:56.000Z"
+        },
+        {
+          "id": "qwen3.6-plus-2026-04-02",
+          "created": "2026-09-16T06:37:12.000Z"
+        },
+        {
+          "id": "glm-5.3",
+          "created": "2026-09-16T02:33:09.000Z"
+        },
+        {
+          "id": "deepseek-v4.1-flash",
+          "created": "2026-09-15T06:18:10.000Z"
+        },
+        {
+          "id": "deepseek-v4-pro-0813",
+          "created": "2026-09-14T09:27:16.000Z"
+        },
+        {
+          "id": "qwen3.5-397b-a17b",
+          "created": "2026-09-14T06:19:48.000Z"
+        },
+        {
+          "id": "glm-5.2-fast-preview",
+          "created": "2026-09-08T06:06:05.000Z"
+        },
+        {
+          "id": "deepseek-v4-flash-0731",
+          "created": "2026-09-04T01:51:20.000Z"
+        },
+        {
+          "id": "kimi-k2.7-code",
+          "created": "2026-09-02T15:32:50.000Z"
+        },
+        {
+          "id": "qwen3.8-max-0902",
+          "created": "2026-09-02T01:32:40.000Z"
+        },
+        {
+          "id": "kimi/kimi-k3",
+          "created": "2026-08-28T06:07:27.000Z"
+        },
+        {
+          "id": "qwen3.8-flash",
+          "created": "2026-08-26T16:18:50.000Z"
+        },
+        {
+          "id": "qwen3.8-2.4t-a95b",
+          "created": "2026-08-26T05:17:56.000Z"
+        },
+        {
+          "id": "qwen3.8-27b",
+          "created": "2026-08-26T02:47:05.000Z"
+        },
+        {
+          "id": "kimi-k3",
+          "created": "2026-08-25T08:03:49.000Z"
+        },
+        {
+          "id": "ZHIPU/GLM-5.3",
+          "created": "2026-08-18T05:09:16.000Z"
+        },
+        {
+          "id": "qwen3.7-max",
+          "created": "2026-08-11T04:00:43.000Z"
+        },
+        {
+          "id": "qwen3.7-plus-2026-05-26",
+          "created": "2026-08-10T14:28:45.000Z"
+        },
+        {
+          "id": "qwen3.7-plus",
+          "created": "2026-08-10T14:28:19.000Z"
+        },
+        {
+          "id": "qwen3.5-plus-2026-02-15",
+          "created": "2026-08-10T14:27:15.000Z"
+        },
+        {
+          "id": "qwen3.5-plus-2026-04-20",
+          "created": "2026-08-10T14:26:57.000Z"
+        },
+        {
+          "id": "qwen3.5-plus",
+          "created": "2026-08-10T14:26:44.000Z"
+        },
+        {
+          "id": "qwen3.8-max",
+          "created": "2026-08-07T10:23:02.000Z"
+        },
+        {
+          "id": "qwen3-vl-plus-2025-09-23",
+          "created": "2026-08-06T02:37:57.000Z"
+        },
+        {
+          "id": "qwen3.5-122b-a10b",
+          "created": "2026-08-04T12:12:48.000Z"
+        },
+        {
+          "id": "qwen3-vl-flash",
+          "created": "2026-08-03T09:48:38.000Z"
+        },
+        {
+          "id": "qwen3.5-flash",
+          "created": "2026-08-03T09:47:54.000Z"
+        },
+        {
+          "id": "qwen3.7-flash",
+          "created": "2026-08-03T09:47:00.000Z"
+        },
+        {
+          "id": "qwen-plus",
+          "created": "2026-08-03T09:46:16.000Z"
+        },
+        {
+          "id": "qwen-flash",
+          "created": "2026-08-03T09:43:33.000Z"
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "created": "2026-08-03T09:42:47.000Z"
+        },
+        {
+          "id": "deepseek-v4-flash",
+          "created": "2026-08-03T09:42:06.000Z"
+        },
+        {
+          "id": "qwen3.6-flash",
+          "created": "2026-08-03T09:41:07.000Z"
+        },
+        {
+          "id": "deepseek-v3.2",
+          "created": "2026-07-30T02:25:01.000Z"
+        },
+        {
+          "id": "qwen3.7-flash-2026-07-15",
+          "created": "2026-07-27T10:16:07.000Z"
+        },
+        {
+          "id": "glm-5.2",
+          "created": "2026-07-01T06:12:38.000Z"
+        },
+        {
+          "id": "glm-5.1",
+          "created": "2026-06-23T12:30:29.000Z"
+        },
+        {
+          "id": "qwen3.6-27b",
+          "created": "2026-06-23T09:34:00.000Z"
+        },
+        {
+          "id": "qwen3.6-max-preview",
+          "created": "2026-06-22T13:52:10.000Z"
+        },
+        {
+          "id": "qwen3-max",
+          "created": "2026-06-22T13:51:09.000Z"
+        },
+        {
+          "id": "qwen3.5-35b-a3b",
+          "created": "2026-06-22T13:45:21.000Z"
+        },
+        {
+          "id": "qwen3.7-max-2026-05-17",
+          "created": "2026-06-15T02:44:26.000Z"
+        },
+        {
+          "id": "qwen3.7-max-2026-05-20",
+          "created": "2026-06-15T02:42:44.000Z"
+        },
+        {
+          "id": "qwen3.7-max-2026-06-08",
+          "created": "2026-06-10T06:40:28.000Z"
+        },
+        {
+          "id": "qwen3.5-flash-2026-02-23",
+          "created": "2026-06-05T03:52:12.000Z"
+        },
+        {
+          "id": "qwen3-235b-a22b-thinking-2507",
+          "created": "2026-06-02T08:09:37.000Z"
+        },
+        {
+          "id": "qwen3.6-flash-2026-04-16",
+          "created": "2026-05-28T18:26:47.000Z"
+        },
+        {
+          "id": "qwen-max",
+          "created": "2026-05-28T02:18:23.000Z"
+        },
+        {
+          "id": "qwen3.5-omni-plus-2026-03-15",
+          "created": "2026-05-27T12:37:53.000Z"
+        },
+        {
+          "id": "qwen3.7-max-preview",
+          "created": "2026-05-25T09:46:49.000Z"
+        },
+        {
+          "id": "qwen3.5-omni-plus",
+          "created": "2026-05-22T08:31:40.000Z"
+        },
+        {
+          "id": "qwen3.6-35b-a3b",
+          "created": "2026-05-14T02:32:07.000Z"
+        },
+        {
+          "id": "qwen3-coder-plus",
+          "created": "2026-05-14T02:28:11.000Z"
+        },
+        {
+          "id": "qwen3-coder-next",
+          "created": "2026-05-14T02:27:40.000Z"
+        },
+        {
+          "id": "qwen3-coder-flash",
+          "created": "2026-05-14T02:26:48.000Z"
+        },
+        {
+          "id": "qwen3-vl-plus-2025-12-19",
+          "created": "2026-04-30T07:32:15.000Z"
+        },
+        {
+          "id": "qwen3-vl-plus",
+          "created": "2026-04-30T07:31:54.000Z"
+        },
+        {
+          "id": "qwen3-vl-flash-2025-10-15",
+          "created": "2026-04-30T07:30:25.000Z"
+        },
+        {
+          "id": "qwen3-vl-flash-2026-01-22",
+          "created": "2026-04-30T07:29:54.000Z"
+        },
+        {
+          "id": "qwen-flash-character",
+          "created": "2026-04-10T08:57:17.000Z"
+        },
+        {
+          "id": "qwen-plus-character",
+          "created": "2026-04-10T08:56:40.000Z"
+        },
+        {
+          "id": "qwen3.5-omni-flash-2026-03-15",
+          "created": "2026-04-09T15:25:16.000Z"
+        },
+        {
+          "id": "qwen3.5-omni-flash",
+          "created": "2026-04-09T15:24:41.000Z"
+        },
+        {
+          "id": "qwen3-livetranslate-flash-2025-12-01",
+          "created": "2026-03-20T07:27:41.000Z"
+        },
+        {
+          "id": "qwen3.5-27b",
+          "created": "2026-03-15T04:52:49.000Z"
+        },
+        {
+          "id": "qwen3-asr-flash-2026-02-10",
+          "created": "2026-03-03T09:29:29.000Z"
+        },
+        {
+          "id": "qwen-omni-turbo",
+          "created": "2026-02-11T08:53:33.000Z"
+        },
+        {
+          "id": "qwen-turbo",
+          "created": "2026-02-03T02:02:30.000Z"
+        },
+        {
+          "id": "qwen-vl-plus",
+          "created": "2026-02-03T01:53:58.000Z"
+        },
+        {
+          "id": "qwen-plus-2025-12-01",
+          "created": "2026-02-02T10:06:31.000Z"
+        },
+        {
+          "id": "qwen-plus-2025-01-25",
+          "created": "2026-02-02T10:02:43.000Z"
+        },
+        {
+          "id": "qwen3-8b",
+          "created": "2026-02-02T09:53:56.000Z"
+        },
+        {
+          "id": "qwen-plus-2025-04-28",
+          "created": "2026-02-02T06:56:58.000Z"
+        },
+        {
+          "id": "qwen3-32b",
+          "created": "2026-02-02T05:17:03.000Z"
+        },
+        {
+          "id": "qwen3-max-2026-01-23",
+          "created": "2026-01-27T02:43:53.000Z"
+        },
+        {
+          "id": "qwen3-max-preview",
+          "created": "2026-01-13T07:06:24.000Z"
+        },
+        {
+          "id": "qwen3-livetranslate-flash",
+          "created": "2025-12-03T04:44:32.000Z"
+        },
+        {
+          "id": "qwen3-omni-flash-2025-12-01",
+          "created": "2025-12-01T11:58:26.000Z"
+        },
+        {
+          "id": "qwen-mt-lite",
+          "created": "2025-12-01T09:44:22.000Z"
+        },
+        {
+          "id": "qwen-mt-flash",
+          "created": "2025-11-06T12:46:41.000Z"
+        },
+        {
+          "id": "ccai-pro",
+          "created": "2025-11-05T07:44:48.000Z"
+        },
+        {
+          "id": "tongyi-tingwu-slp",
+          "created": "2025-11-05T07:42:53.000Z"
+        },
+        {
+          "id": "qwen3-omni-30b-a3b-captioner",
+          "created": "2025-10-27T07:36:39.000Z"
+        },
+        {
+          "id": "qwen3-omni-flash-2025-09-15",
+          "created": "2025-10-27T07:35:25.000Z"
+        },
+        {
+          "id": "qwen3-omni-flash",
+          "created": "2025-10-27T07:35:02.000Z"
+        },
+        {
+          "id": "qwen3-coder-plus-2025-09-23",
+          "created": "2025-10-27T01:48:18.000Z"
+        },
+        {
+          "id": "qwen3-max-2025-09-23",
+          "created": "2025-10-27T01:46:39.000Z"
+        },
+        {
+          "id": "qwen-plus-latest",
+          "created": "2025-10-14T06:02:08.000Z"
+        },
+        {
+          "id": "qwq-plus-2025-03-05",
+          "created": "2025-10-14T06:01:03.000Z"
+        },
+        {
+          "id": "qwen-mt-turbo",
+          "created": "2025-10-14T06:00:38.000Z"
+        },
+        {
+          "id": "qwen-mt-plus",
+          "created": "2025-10-14T06:00:30.000Z"
+        },
+        {
+          "id": "qwen-coder-plus",
+          "created": "2025-10-14T06:00:02.000Z"
+        },
+        {
+          "id": "qwq-plus",
+          "created": "2025-10-14T05:59:53.000Z"
+        },
+        {
+          "id": "qvq-max",
+          "created": "2025-10-14T05:57:55.000Z"
+        },
+        {
+          "id": "qwen3-30b-a3b",
+          "created": "2025-10-14T03:50:36.000Z"
+        },
+        {
+          "id": "qwen3-235b-a22b",
+          "created": "2025-10-14T03:50:24.000Z"
+        },
+        {
+          "id": "qwen-plus-2025-07-14",
+          "created": "2025-10-14T03:44:22.000Z"
+        },
+        {
+          "id": "qwen3-coder-plus-2025-07-22",
+          "created": "2025-10-14T03:44:08.000Z"
+        },
+        {
+          "id": "qwen-vl-max",
+          "created": "2025-10-14T03:38:32.000Z"
+        },
+        {
+          "id": "qwen3-vl-235b-a22b-thinking",
+          "created": "2025-10-14T03:32:04.000Z"
+        },
+        {
+          "id": "qwen3-30b-a3b-thinking-2507",
+          "created": "2025-10-14T03:15:04.000Z"
+        },
+        {
+          "id": "qwen3-14b",
+          "created": "2025-10-14T03:12:22.000Z"
+        },
+        {
+          "id": "qwen3-next-80b-a3b-thinking",
+          "created": "2025-09-22T09:31:16.000Z"
+        },
+        {
+          "id": "qwen-plus-2025-09-11",
+          "created": "2025-09-12T03:03:18.000Z"
+        }
+      ]
     },
     "xai": {
-      "source": "recorded-runs",
-      "models": [{ "id": "grok-4.6", "created": null }]
+      "source": "listed",
+      "models": [
+        {
+          "id": "grok-4.6",
+          "created": "2026-08-06T00:00:00.000Z"
+        },
+        {
+          "id": "grok-4.5",
+          "created": "2026-06-29T00:00:00.000Z"
+        },
+        {
+          "id": "grok-imagine-video-1.5",
+          "created": "2026-05-27T00:00:00.000Z"
+        },
+        {
+          "id": "grok-4.3",
+          "created": "2026-04-17T00:00:00.000Z"
+        },
+        {
+          "id": "grok-build-0.1",
+          "created": "2026-04-16T00:00:00.000Z"
+        },
+        {
+          "id": "grok-4.20-multi-agent-0309",
+          "created": "2026-03-09T00:00:00.000Z"
+        },
+        {
+          "id": "grok-4.20-0309-reasoning",
+          "created": "2026-03-09T00:00:00.000Z"
+        },
+        {
+          "id": "grok-4.20-0309-non-reasoning",
+          "created": "2026-03-09T00:00:00.000Z"
+        },
+        {
+          "id": "grok-imagine-video",
+          "created": "2026-01-28T00:00:00.000Z"
+        }
+      ]
     },
     "meta": {
-      "source": "recorded-runs",
-      "models": [{ "id": "muse-spark-1.3", "created": null }]
+      "source": "listed",
+      "models": [
+        {
+          "id": "muse-spark-1.3-contributor",
+          "created": null
+        },
+        {
+          "id": "muse-spark-1.3",
+          "created": null
+        },
+        {
+          "id": "muse-spark-1.2-contributor",
+          "created": null
+        },
+        {
+          "id": "muse-spark-1.2",
+          "created": null
+        },
+        {
+          "id": "muse-spark-1.1",
+          "created": null
+        }
+      ]
     },
     "zai": {
-      "source": "recorded-runs",
-      "models": [{ "id": "glm-5.3", "created": null }]
+      "source": "listed",
+      "models": [
+        {
+          "id": "glm-5.3-flashx",
+          "created": "2026-08-13T16:00:00.000Z"
+        },
+        {
+          "id": "glm-5.3-flash",
+          "created": "2026-08-13T16:00:00.000Z"
+        },
+        {
+          "id": "glm-5.3",
+          "created": "2026-08-13T16:00:00.000Z"
+        },
+        {
+          "id": "glm-5.2",
+          "created": "2026-06-16T16:00:00.000Z"
+        },
+        {
+          "id": "glm-5.1",
+          "created": "2026-03-27T14:00:00.000Z"
+        },
+        {
+          "id": "glm-5-turbo",
+          "created": "2026-03-14T16:00:00.000Z"
+        },
+        {
+          "id": "glm-5",
+          "created": "2026-02-10T16:00:00.000Z"
+        },
+        {
+          "id": "glm-4.7",
+          "created": "2025-12-21T16:00:00.000Z"
+        },
+        {
+          "id": "glm-4.6",
+          "created": "2025-10-01T00:00:00.000Z"
+        },
+        {
+          "id": "glm-4.5-air",
+          "created": "2025-07-27T16:00:00.000Z"
+        },
+        {
+          "id": "glm-4.5",
+          "created": "2025-07-27T16:00:00.000Z"
+        }
+      ]
     }
   }
 }

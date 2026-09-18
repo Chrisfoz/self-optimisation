@@ -4,6 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { load } from "js-yaml";
+import "../../harness/providers/index.mjs";
+import { resolveProvider } from "../../harness/lib/llm-provider.mjs";
 import {
   configure,
   modelCatalogue,
@@ -91,9 +93,25 @@ test("the model catalogue merges the bundled list with a project's own snapshot"
   const shipped = modelCatalogue();
   assert.ok(shipped.counts.bundled > 0);
   assert.equal(shipped.counts.repository, 0);
-  // Every bundled ID names its own lab today, so none of them needs the
-  // console to write a provider line.
-  assert.ok(shipped.labs.every((lab) => lab.models.every((m) => m.needsLab === false)));
+  // `needsLab` must agree with where the id actually routes — asserted as an
+  // invariant rather than as a property of the bundled data. This used to
+  // read "every bundled ID names its own lab today, so none of them needs a
+  // provider line", which was true only of the 16 models seeded from recorded
+  // runs. A catalogue refreshed against the live labs carries 260, including
+  // the ids DashScope resells under another lab's name
+  // (`deepseek-v4.1-flash`, `glm-5.3`), and those DO need the line. The old
+  // assertion was describing the fixture, not the behaviour.
+  for (const lab of shipped.labs) {
+    for (const m of lab.models) {
+      let routesTo = null;
+      try { routesTo = resolveProvider(m.id); } catch { routesTo = null; }
+      assert.equal(
+        m.needsLab,
+        routesTo !== lab.name,
+        `${lab.name}/${m.id}: needsLab=${m.needsLab} but the id routes to ${routesTo ?? 'nowhere'}`,
+      );
+    }
+  }
 
   const live = modelCatalogue({
     snapshot: { openai: ["gpt-6-astra", "atlas-1"] },

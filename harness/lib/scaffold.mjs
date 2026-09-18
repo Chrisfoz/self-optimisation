@@ -45,7 +45,7 @@ const DISPATCH_TRIGGER = `  workflow_dispatch:
         type: choice
         options: ['', focused, ambitious]
       models:
-        description: 'Campaign mode: comma-separated model ids to run a generation on NOW, instead of waiting for a release. Recorded as campaign: true.'
+        description: 'Campaign mode: comma-separated model ids to run a generation on NOW, instead of waiting for a release. Use lab:model-id when the id does not name its own lab (e.g. qwen:deepseek-v4.1-flash). Recorded as campaign: true.'
         required: false
         type: string`;
 
@@ -104,7 +104,7 @@ const SHARED_TRIGGER = `  # Called by each project's own short workflow, which p
         type: string
         default: ''
       models:
-        description: 'Campaign mode: comma-separated model ids to run a generation on NOW, instead of waiting for a release. Recorded as campaign: true.'
+        description: 'Campaign mode: comma-separated model ids to run a generation on NOW, instead of waiting for a release. Use lab:model-id when the id does not name its own lab (e.g. qwen:deepseek-v4.1-flash). Recorded as campaign: true.'
         required: false
         type: string
         default: ''
