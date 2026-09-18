@@ -777,11 +777,22 @@ Most of what broke was the install path and the cost of runs, not the loop.
   `attempts.json` shows the implementer's input well below full context,
   or `cacheReadTokens` above zero on a retry, and the write-up says by how
   much.
-- [ ] **I9 — The digest says a waiting pull request is waiting.** Under
-  `human-approval-required` it still says "⚠️ NOT MERGED", and the
+- [x] **I9 — The digest says a waiting pull request is waiting.** Under
+  `human-approval-required` it still said "⚠️ NOT MERGED", and the
   plain-language version said "we don't know why". *Done when:* an approved
   generation with an open pull request gets a subject naming the pull request
   as waiting for review, with a test.
+  **Done.** Three outcomes now, not two: `📋 WAITING FOR YOU` sits between
+  merged and not-merged, keyed on the pull request URL being present — which
+  is absent by construction on the autonomous-merge path, because that step
+  is not in the generated file at all. `blockedByLine()` learned the same
+  thing and stops calling the default outcome "genuinely unclear". Both the
+  pull request and the workflow run are linked near the top of the email, in
+  the plain-language version and in the terse fallback, because a decision
+  that needs the reader to go and find the pull request is a decision that
+  happens next week. `scaffold.mjs` passes `PR_URL` into the digest step;
+  five tests in `tests/lib/notify.test.mjs` pin it, including that a real
+  gate failure still outranks a waiting pull request.
 - [ ] **I10 — Copied installs get an explicit dependency step.** The root
   `npm install js-yaml` is silently the project's own dependency install,
   with `--ignore-scripts`. *Done when:* the copied workflow runs

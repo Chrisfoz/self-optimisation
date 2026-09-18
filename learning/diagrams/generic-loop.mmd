@@ -29,11 +29,20 @@ flowchart TD
 
   push --> guard["11 · guard check<br/>ON THE AGENT BRANCH"]
   guard -->|"clean"| tests["12 · full test suites<br/>ON THE AGENT BRANCH"]
-  tests -->|"all green"| merge["13 · merge, tag, log"]
-  merge --> live["14 · verify the LIVE product<br/>actually carries the change"]
-  merge --> shots[("artefacts:<br/>screenshots, records")]
+
+  tests -->|"all green"| who{"13 · who merges?<br/>one choice, made once, at install —<br/>it is in the workflow file, not<br/>a decision any run gets to make"}
+
+  who -->|"human approval · DEFAULT"| pr["14a · open a pull request.<br/>every gate above has passed;<br/>the change is the owner's call"]
+  pr --> owner{"15 · a person decides"}
+  owner -->|"closed unmerged"| record
+  owner -->|"merged"| live
+
+  who -->|"autonomous merge · OPT-IN"| merge["14b · merge, tag, log"]
+  merge --> live["16 · verify the LIVE product<br/>actually carries the change"]
+
+  live --> shots[("artefacts:<br/>screenshots, records")]
   shots -.->|"shown next run"| pack
-  live --> done(["15 · report honestly"])
+  live --> done(["17 · report honestly — and email the owner,<br/>naming anything that is waiting on them<br/>and linking straight to it"])
 
   guard -->|"touched a frozen file"| held(["left unmerged,<br/>for a human to look at"])
   tests -->|"any check red"| held

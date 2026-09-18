@@ -10,8 +10,8 @@ it to be wrong in.
 
 | File | What it shows |
 |---|---|
-| `generic-loop.mmd` | **One lap of the loop**, project-neutral — including every way it can stop. |
-| `generic-guardrails.mmd` | **The six layers** a change passes through before anyone sees it. |
+| `generic-loop.mmd` | **One lap of the loop**, project-neutral — including every way it can stop, and the one choice the owner makes: who merges. |
+| `generic-guardrails.mmd` | **The six layers** a change passes through before anyone sees it — identical whether a person merges it or the loop does. |
 | `generic-context.mmd` | **What the model is shown, and what it may write.** Context in on the left, the double-enforced allowlist on the right. |
 | `worked-example-run.mmd` | The same loop as actually built in the reference implementation, with real job names and check counts. |
 | `worked-example-harness.mmd` | The same harness as actually built in the reference implementation, with token costs and per-provider dispatch. |

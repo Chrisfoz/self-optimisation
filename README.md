@@ -350,14 +350,23 @@ Three things the generated workflow needs that are easy to miss:
     General** has a *Pull Requests* section (merge commits, squash, rebase,
     auto-merge) that looks like the right place and isn't. Your account's own
     settings don't have this switch either.
-  - **Pick Read and write permissions and tick the box, then Save.** Read-only
-    also works, since the workflow asks for its own write permissions, but
-    Read and write is the choice people expect to make.
+  - **The tickbox is the part that matters; the radio above it does not.**
+    The generated workflow declares its own
+    `permissions: contents: write, pull-requests: write`, and an explicit
+    block overrides the repository default — so **Read repository contents
+    and packages permissions** (read-only) is enough, and is the tighter
+    choice, because the radio sets the default for *every other workflow in
+    the repository* that doesn't declare its own. **Read and write** also
+    works and is what most people pick. The tickbox is different: no workflow
+    can grant itself permission to create pull requests, so without it every
+    generation passes its gates and then cannot open one.
   - **Check it saved.** During the first real install, Read and write saved
     but the tickbox didn't, and nothing on the page said so. Check with
     `gh api repos/OWNER/REPO/actions/permissions/workflow`: you want
-    `"can_approve_pull_request_reviews":true`. Or set both at once with
-    `gh api -X PUT repos/OWNER/REPO/actions/permissions/workflow -f default_workflow_permissions=write -F can_approve_pull_request_reviews=true`.
+    `"can_approve_pull_request_reviews":true`. Or set both at once — this is
+    the same command the generated `SELF-IMPROVE-README.md` gives, keeping
+    the default read-only:
+    `gh api -X PUT repos/OWNER/REPO/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true`.
 - **A secret for every lab the workflow calls:** the watched labs and the
   labs your implement, review and rank models belong to. The generated
   `SELF-IMPROVE-README.md` lists exactly which. Add them under the

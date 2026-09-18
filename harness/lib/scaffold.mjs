@@ -736,6 +736,11 @@ function renderWorkflow(template, answers, shared) {
           RUN_URL: \${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}
           GATES: \${{ steps.gates.outputs.json }}
           MERGED: \${{ steps.gates.outputs.merged }}
+          # The pull request this run opened, so the email that asks for a
+          # decision can link to the thing being decided. Absent on the
+          # autonomous-merge path — that step is not in the file — where the
+          # expression resolves to '' and the digest says "merged" instead.
+          PR_URL: \${{ steps.pr.outputs.url }}
           SUGGEST_MODEL: \${{ steps.probe.outputs.model }}
           SUGGEST_PROVIDER: \${{ steps.probe.outputs.provider }}
           IMPLEMENT_MODEL: \${{ steps.improve.outputs.implement-model }}

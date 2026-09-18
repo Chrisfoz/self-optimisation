@@ -98,6 +98,63 @@ test('buildGenerationDigestEmail: plain-language path wraps the prose with a ban
   assert.match(email.body, /✅ review/);
 });
 
+test('blockedByLine: an open pull request is the answer, not a mystery', () => {
+  const gates = [{ name: 'test', result: 'success' }, { name: 'pull-request', result: 'success' }];
+  const line = blockedByLine({ merged: false, gates, pullRequestUrl: 'https://github.com/o/r/pull/7' });
+  assert.match(line, /waiting for YOU/);
+  assert.match(line, /pull\/7/);
+  assert.doesNotMatch(line, /genuinely unclear/);
+});
+
+test('blockedByLine: a real failure still wins over a waiting pull request', () => {
+  const gates = [{ name: 'test', result: 'failure' }];
+  const line = blockedByLine({ merged: false, gates, pullRequestUrl: 'https://github.com/o/r/pull/7' });
+  assert.match(line, /Blocked by the "test" gate/);
+});
+
+test('buildGenerationDigestEmail: an approved change with an open pull request is WAITING, not NOT MERGED', async () => {
+  const call = async () => ({ text: 'SUBJECT: A change is ready\nBODY:\nIt passed everything, and it is yours to merge.' });
+  const email = await buildGenerationDigestEmail(
+    {
+      ...BASE, genLabel: 'generation 004', scope: 'focused', merged: false,
+      summary: 'Tighten the loader', gates: [{ name: 'test', result: 'success' }],
+      pullRequestUrl: 'https://github.com/o/r/pull/7',
+      runUrl: 'https://github.com/o/r/actions/runs/9',
+    },
+    { call }
+  );
+  assert.match(email.body, /📋 WAITING FOR YOU — generation 004/);
+  assert.doesNotMatch(email.body, /NOT MERGED/);
+  // The whole point: the decision is one click from the email.
+  assert.match(email.body, /Review it:      https:\/\/github\.com\/o\/r\/pull\/7/);
+  assert.match(email.body, /Workflow run:   https:\/\/github\.com\/o\/r\/actions\/runs\/9/);
+});
+
+test('buildGenerationDigestEmail: the terse fallback also names the pull request as waiting', async () => {
+  const call = async () => { throw new Error('network died'); };
+  const email = await buildGenerationDigestEmail(
+    {
+      ...BASE, genLabel: 'generation 005', scope: 'focused', merged: false,
+      summary: 'Tighten the loader', gates: [{ name: 'test', result: 'success' }],
+      pullRequestUrl: 'https://github.com/o/r/pull/7',
+    },
+    { call }
+  );
+  assert.match(email.subject, /Waiting for your review: generation 005/);
+  assert.doesNotMatch(email.subject, /NOT MERGED/);
+  assert.match(email.body, /Review it:      https:\/\/github\.com\/o\/r\/pull\/7/);
+});
+
+test('buildGenerationDigestEmail: no pull request and not merged is still NOT MERGED', async () => {
+  const call = async () => { throw new Error('network died'); };
+  const email = await buildGenerationDigestEmail(
+    { ...BASE, genLabel: 'generation 006', scope: 'focused', merged: false, summary: 'Nothing shipped', gates: [{ name: 'test', result: 'failure' }] },
+    { call }
+  );
+  assert.match(email.subject, /NOT MERGED/);
+  assert.doesNotMatch(email.body, /Review it:/);
+});
+
 test('buildGenerationDigestEmail: falls back to the terse format when the model call throws', async () => {
   const call = async () => { throw new Error('network died'); };
   const email = await buildGenerationDigestEmail(
