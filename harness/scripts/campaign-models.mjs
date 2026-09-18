@@ -8,8 +8,13 @@
  *
  * Usage: node harness/scripts/campaign-models.mjs "gpt-5,claude-opus-5"
  *
+ * An entry may name the lab that serves it, as `lab:model-id`, for a model
+ * whose id does not name its own lab — a reseller's listing, most often
+ * (`qwen:deepseek-v4.1-flash`: DashScope serves it, deepseek.com does not).
+ *
  * Exits 1 when any id cannot be resolved to a registered lab — a campaign
- * on a misspelt model should fail here, loudly, not five minutes in.
+ * on a misspelt model, or on an unregistered lab name, should fail here,
+ * loudly, not five minutes in at the reachability probe.
  */
 
 import '../providers/index.mjs';
