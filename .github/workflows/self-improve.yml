@@ -88,6 +88,11 @@ on:
         required: false
         type: string
         default: ''
+      check_keys:
+        description: 'Check the API keys and stop. No model is called and nothing is spent. Runs INSTEAD of a generation.'
+        required: false
+        type: boolean
+        default: false
       runner:
         description: 'The runner image the loop runs on.'
         required: false
@@ -102,7 +107,87 @@ permissions:
 # workflow in the same group as its caller would wait for itself forever.
 
 jobs:
+  # A manual pre-flight for the keys themselves, separate from the loop.
+  # `validate.mjs` reports a key that is ABSENT; this asks whether the keys
+  # that ARE there work, and what money is behind them. Run it before turning
+  # the schedule on, and after rotating a key. It calls each lab's model
+  # listing and nothing else: no model is invoked, so it costs nothing.
+  # Never runs on the schedule — only when someone asks for it.
+  check-keys:
+    if: inputs.check_keys == 'true'
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      # The harness comes from the repository and commit this workflow file was
+      # called at (job.workflow_repository, job.workflow_sha), fetched by SHA
+      # and checked after checkout, so a project runs exactly the code it
+      # pinned and nothing a tag or branch could move under it. It lives under
+      # RUNNER_TEMP, outside the project, where the project's own tests,
+      # linters and commits never see it.
+      - name: Fetch the harness this workflow was called at
+        shell: bash
+        env:
+          HARNESS_REPOSITORY: ${{ job.workflow_repository }}
+          HARNESS_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$HARNESS_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::Could not tell which harness commit this workflow was called at."
+            exit 1
+          fi
+          if ! printf '%s' "$HARNESS_REPOSITORY" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'; then
+            echo "::error::Could not tell which repository this workflow was called from."
+            exit 1
+          fi
+          dir="$RUNNER_TEMP/self-optimisation"
+          git init -q "$dir"
+          git -C "$dir" fetch -q --depth 1 "https://github.com/$HARNESS_REPOSITORY" "$HARNESS_SHA"
+          git -C "$dir" -c advice.detachedHead=false checkout -q FETCH_HEAD
+          if [ "$(git -C "$dir" rev-parse HEAD)" != "$HARNESS_SHA" ]; then
+            echo "::error::The fetched harness is not the commit this workflow was called at."
+            exit 1
+          fi
+          echo "HARNESS_DIR=$dir/harness" >> "$GITHUB_ENV"
+
+      - name: Install harness dependencies
+        shell: bash
+        run: npm install --prefix "$RUNNER_TEMP/self-optimisation" --no-save --ignore-scripts js-yaml@5.3.0
+
+      # Read once, here, from the default branch this job checked out, before
+      # any agent change exists; every later step uses what this saves
+      # (harness/lib/workflow-config.mjs). Before the pause check, so a paused
+      # run still knows whether to send its digest. continue-on-error: an
+      # unreadable adapter stops the run at the validate step below, and
+      # reaches the digest the same way an invalid one does.
+      - name: Read this project's configuration
+        id: config
+        shell: bash
+        continue-on-error: true
+        run: node "$HARNESS_DIR"/scripts/workflow-config.mjs
+
+      - name: Check every configured key
+        shell: bash
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          META_API_KEY: ${{ secrets.META_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+        run: node "$HARNESS_DIR"/scripts/check-keys.mjs
+
   self-improve:
+    # The keys check is a separate errand: asking for it should not also
+    # spend a generation.
+    if: inputs.check_keys != 'true'
     runs-on: ${{ inputs.runner }}
     steps:
       # Actions pinned by commit SHA, not by tag, and the one npm package

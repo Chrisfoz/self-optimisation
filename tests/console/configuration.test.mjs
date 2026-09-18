@@ -259,6 +259,17 @@ test("project dependencies install before the pinned harness dependency, on setu
     );
     assert.ok(project >= 0 && project < harness);
     assert.match(steps[project].run, /npm ci/);
+
+    // ...and it goes in the job that runs the project's TESTS, not in the
+    // check-keys job, which carries the same setup steps, comes first in the
+    // file, and only ever calls lab APIs. Injecting at the first occurrence of
+    // the step name put it in the wrong one.
+    const checkKeys = load(files[WORKFLOW]).jobs["check-keys"];
+    assert.ok(checkKeys, "the generated workflow should still offer the key check");
+    assert.ok(
+      !checkKeys.steps.some((s) => s.name === "Install project dependencies"),
+      "the key check does not need the project's dependencies",
+    );
   }
 });
 

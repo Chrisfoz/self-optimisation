@@ -47,7 +47,12 @@ const DISPATCH_TRIGGER = `  workflow_dispatch:
       models:
         description: 'Campaign mode: comma-separated model ids to run a generation on NOW, instead of waiting for a release. Recorded as campaign: true.'
         required: false
-        type: string`;
+        type: string
+      check_keys:
+        description: 'Check the API keys and stop. No model is called and nothing is spent. Runs INSTEAD of a generation.'
+        required: false
+        type: boolean
+        default: false`;
 
 const CONCURRENCY_BLOCK = `# One run at a time, per repository. Two overlapping runs would compute the
 # same next generation number, race for the same branch and both push to
@@ -59,9 +64,23 @@ concurrency:
   cancel-in-progress: false`;
 
 // First line unindented: the template supplies the six spaces before the token.
+// `--prefix harness`, not a bare root install. Half of WORKPLAN I10, and the
+// half that is one line: a root `npm install` here is silently the PROJECT's
+// dependency install, and it has been tested doing real damage — a project
+// that depends on js-yaml 4 directly had its copy replaced for the rest of
+// the run (`yaml.safeLoad` became undefined), and a project with a hoisted
+// js-yaml 3 under @istanbuljs/load-nyc-config, which is the common jest
+// shape, had the same done to it. Installing into harness/node_modules
+// leaves the project's own tree alone, and Node still resolves it because
+// resolution walks up from harness/lib/. The shared workflow never had this
+// problem: it installs into its own directory under RUNNER_TEMP.
+//
+// What remains of I10 is the other half — running `evaluation.setup_commands`
+// before this step, so a project that needs its own dependencies installed
+// says so once rather than relying on this line to do it by accident.
 const COPIED_HARNESS_SETUP = `- name: Install harness dependencies
         shell: bash
-        run: npm install --no-save --ignore-scripts js-yaml@{{JS_YAML_VERSION}}`;
+        run: npm install --prefix harness --no-save --no-package-lock --ignore-scripts js-yaml@{{JS_YAML_VERSION}}`;
 
 /** The repository path of the shared workflow, in the harness's own repository. */
 export const SHARED_WORKFLOW_PATH = '.github/workflows/self-improve.yml';
@@ -108,6 +127,11 @@ const SHARED_TRIGGER = `  # Called by each project's own short workflow, which p
         required: false
         type: string
         default: ''
+      check_keys:
+        description: 'Check the API keys and stop. No model is called and nothing is spent. Runs INSTEAD of a generation.'
+        required: false
+        type: boolean
+        default: false
       runner:
         description: 'The runner image the loop runs on.'
         required: false
@@ -799,7 +823,10 @@ function renderWorkflow(template, answers, shared) {
   const configured = (name) => `\${${name}:?the project configuration was not read}`;
   out = out.replace('{{TRIGGERS}}', () => (shared ? SHARED_TRIGGER : `${scheduleBlock(answers)}\n${DISPATCH_TRIGGER}`));
   out = out.replace('{{CONCURRENCY_BLOCK}}', () => (shared ? SHARED_CONCURRENCY : CONCURRENCY_BLOCK));
-  out = out.replace('{{HARNESS_SETUP_STEPS}}', () => (shared ? SHARED_HARNESS_SETUP : COPIED_HARNESS_SETUP));
+  // replaceAll, not replace: the check-keys job needs the same setup steps,
+  // so this token appears twice in the template and filling only the first
+  // left a literal {{HARNESS_SETUP_STEPS}} in the generated YAML.
+  out = out.replaceAll('{{HARNESS_SETUP_STEPS}}', () => (shared ? SHARED_HARNESS_SETUP : COPIED_HARNESS_SETUP));
   // The configuration step writes project-config.json only when it read the
   // adapter cleanly, so a project whose adapter could not be read stops at
   // this gate, and reaches the digest the same way, as one that is invalid.
@@ -829,6 +856,14 @@ function renderWorkflow(template, answers, shared) {
   // template supplies the 6 spaces before the token, so this block's own
   // first line must not.
   out = out.replace('{{MERGE_STEPS}}', () => mergeSteps(answers, { shared }));
+  // The check-keys job needs the notify key too, since a blank one is the
+  // quietest failure this system has. Its own token rather than reusing
+  // notifyEnvLine: that one also carries every lab key, which this job's
+  // {{PROVIDER_ENV_LINES}} has already supplied.
+  out = out.replace(
+    /^[ ]*\{\{NOTIFY_ENV_LINE\}\}\n/m,
+    () => (answers.notify ? `          ${answers.notify.envKey}: ${'$'}{{ secrets.${answers.notify.envKey} }}\n` : ''),
+  );
   out = out.replace('{{NOTIFY_STEPS}}', () => notifySteps);
   return shared ? SHARED_HEADER + out : out;
 }
@@ -913,7 +948,8 @@ jobs:
     secrets: inherit
     with:
       scope: \${{ github.event.inputs.scope }}
-      models: \${{ github.event.inputs.models }}${runner === 'ubuntu-latest' ? '' : `\n      runner: ${runner}`}
+      models: \${{ github.event.inputs.models }}
+      check_keys: \${{ github.event.inputs.check_keys == 'true' }}${runner === 'ubuntu-latest' ? '' : `\n      runner: ${runner}`}
 `;
 }
 

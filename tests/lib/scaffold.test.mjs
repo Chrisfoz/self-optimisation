@@ -537,7 +537,10 @@ test('renderWorkflowTemplate: actions are pinned by commit SHA and js-yaml by ex
   assert.match(out, /uses: actions\/checkout@[0-9a-f]{40} # v4/);
   assert.match(out, /uses: actions\/setup-node@[0-9a-f]{40} # v4/);
   assert.doesNotMatch(out, /uses: actions\/[a-z-]+@v\d/);
-  assert.match(out, new RegExp(`npm install --no-save --ignore-scripts js-yaml@${JS_YAML_VERSION.replace(/\\./g, '\\\\.')}`));
+  // --prefix harness, so the harness's dependency cannot replace the
+  // PROJECT's own copy of js-yaml for the rest of the run (WORKPLAN I10).
+  assert.match(out, new RegExp(`npm install --prefix harness --no-save --no-package-lock --ignore-scripts js-yaml@${JS_YAML_VERSION.replace(/\\./g, '\\\\.')}`));
+  assert.doesNotMatch(out, /npm install --no-save --ignore-scripts js-yaml/, 'a bare root install is the bug');
   assert.match(JS_YAML_VERSION, /^\d+\.\d+\.\d+$/);
 });
 

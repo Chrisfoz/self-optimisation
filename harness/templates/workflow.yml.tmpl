@@ -59,7 +59,35 @@ permissions:
 {{CONCURRENCY_BLOCK}}
 
 jobs:
+  # A manual pre-flight for the keys themselves, separate from the loop.
+  # `validate.mjs` reports a key that is ABSENT; this asks whether the keys
+  # that ARE there work, and what money is behind them. Run it before turning
+  # the schedule on, and after rotating a key. It calls each lab's model
+  # listing and nothing else: no model is invoked, so it costs nothing.
+  # Never runs on the schedule — only when someone asks for it.
+  check-keys:
+    if: {{INPUTS}}.check_keys == 'true'
+    runs-on: {{RUNNER}}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '{{NODE_VERSION}}'
+
+      {{HARNESS_SETUP_STEPS}}
+
+      - name: Check every configured key
+        shell: bash
+        env:
+{{PROVIDER_ENV_LINES}}
+{{NOTIFY_ENV_LINE}}
+        run: node {{HARNESS}}/scripts/check-keys.mjs
+
   self-improve:
+    # The keys check is a separate errand: asking for it should not also
+    # spend a generation.
+    if: {{INPUTS}}.check_keys != 'true'
     runs-on: {{RUNNER}}
     steps:
       # Actions pinned by commit SHA, not by tag, and the one npm package

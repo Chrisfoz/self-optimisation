@@ -31,14 +31,21 @@ test('renderCallerWorkflow: calls the shared workflow at the pinned SHA, with th
   assert.equal(job.uses, `${SHARED_HARNESS_REPOSITORY}/${SHARED_WORKFLOW_PATH}@${SHA}`);
   assert.match(text, new RegExp(`@${SHA} # v0\\.1\\.0\\n`));
   assert.equal(job['secrets'], 'inherit');
-  assert.deepEqual(job.with, { scope: '${{ github.event.inputs.scope }}', models: '${{ github.event.inputs.models }}' });
+  // check_keys is compared to 'true' here rather than passed through raw:
+  // the shared workflow declares it as a boolean input, and a dispatch
+  // input arrives as the STRING 'true'.
+  assert.deepEqual(job.with, {
+    scope: '${{ github.event.inputs.scope }}',
+    models: '${{ github.event.inputs.models }}',
+    check_keys: "${{ github.event.inputs.check_keys == 'true' }}",
+  });
   assert.equal(job.steps, undefined, 'no steps of its own');
 });
 
 test('renderCallerWorkflow: holds the schedule, the Run button and the concurrency group', () => {
   const doc = loadYaml(renderCallerWorkflow(answers()));
   assert.deepEqual(doc.on.schedule, [{ cron: '0 0 1 * *' }]);
-  assert.deepEqual(Object.keys(doc.on.workflow_dispatch.inputs), ['scope', 'models']);
+  assert.deepEqual(Object.keys(doc.on.workflow_dispatch.inputs), ['scope', 'models', 'check_keys']);
   assert.equal(doc.concurrency.group, 'self-improvement-${{ github.repository }}');
   assert.equal(doc.concurrency['cancel-in-progress'], false);
   const unscheduled = loadYaml(renderCallerWorkflow(answers({ includeSchedule: false })));
