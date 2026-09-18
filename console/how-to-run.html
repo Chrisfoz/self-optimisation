@@ -405,24 +405,42 @@ me the real error rather than working around it.</pre>
       </li>
       <li>
         <h3>Add your API key</h3>
-        <div class="cmd"><span class="label">Mac / Linux</span><pre>cp harness/.env.example .env</pre></div>
-        <div class="cmd"><span class="label">Windows PowerShell</span><pre>Copy-Item harness\.env.example .env</pre></div>
+        <p class="notice warning">
+          <b>Check first: does your project already have a <code>.env</code>?</b>
+          Most real applications do — their own database URL, mail credentials,
+          their own model key. If yours does, <b>do not run the copy command
+          below as written</b>: it would overwrite that file. Copy to
+          <code>.env.harness.local</code> instead, and use
+          <code>--env-file=.env.harness.local</code> everywhere these steps say
+          <code>--env-file=.env</code>.
+        </p>
         <p>
-          Open <code>.env</code> and paste your key after the matching name, such
-          as <code>ANTHROPIC_API_KEY=sk-ant-…</code>. Leave the other lines blank.
+          Keeping them apart is the point, not a workaround: your web server has
+          no reason to hold nine labs' API keys, and the harness has no reason to
+          hold your database's service-role key.
+        </p>
+        <div class="cmd"><span class="label">Mac / Linux — no existing .env</span><pre>cp harness/.env.example .env</pre></div>
+        <div class="cmd"><span class="label">Mac / Linux — you already have one</span><pre>cp harness/.env.example .env.harness.local</pre></div>
+        <div class="cmd"><span class="label">Windows PowerShell</span><pre>Copy-Item harness\.env.example .env.harness.local</pre></div>
+        <p>
+          Open the file you created and paste your key after the matching name,
+          such as <code>ANTHROPIC_API_KEY=sk-ant-…</code>. Leave the other lines
+          blank.
         </p>
         <p class="notice warning">
-          <b>Never commit <code>.env</code>.</b> Add a line saying <code>.env</code>
-          to your project's <code>.gitignore</code> now. Anyone who sees your key
-          can spend your money.
+          <b>Now prove git is ignoring it.</b> Do not assume — a
+          <code>.gitignore</code> that lists <code>.env</code>,
+          <code>.env.local</code> and <code>.env.production.local</code>
+          individually, which is a common shape, does <b>not</b> cover
+          <code>.env.harness.local</code>. Run this; it must print a matching
+          rule, and print nothing at all from the second command:
         </p>
-        <p class="notice warning">
-          <b>Already have a <code>.env</code>?</b> Many apps keep their own secrets
-          there, and the copy command above would overwrite it. Copy to
-          <code>.env.harness.local</code> instead, make sure
-          <code>.gitignore</code> covers it (a <code>.env.*.local</code> line does),
-          and use <code>--env-file=.env.harness.local</code> wherever these steps
-          say <code>--env-file=.env</code>.
+        <div class="cmd"><pre>git check-ignore -v .env.harness.local
+git ls-files .env .env.harness.local</pre></div>
+        <p>
+          If the first prints nothing, add <code>.env.*.local</code> to your
+          <code>.gitignore</code> and run it again before you go any further.
+          Anyone who sees your key can spend your money.
         </p>
       </li>
       <li>
