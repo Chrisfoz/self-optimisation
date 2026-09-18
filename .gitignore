@@ -34,6 +34,11 @@ node_modules/
 # carrotgame's are project-local to that repo rather than this one.
 .claude/agents/
 
+# Kilo's worktrees — a full checkout of this repository per agent worktree,
+# a few megabytes each. Excluded here rather than only in .git/info/exclude,
+# which is local and does not travel with a clone.
+.kilo/
+
 # VS Code Local History extension — snapshots of files as they were edited,
 # including copies of .claude/agents/ which is itself ignored above.
 .history/

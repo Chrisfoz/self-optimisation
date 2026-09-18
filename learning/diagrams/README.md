@@ -2,9 +2,11 @@
 
 Eight diagrams, in [Mermaid](https://mermaid.js.org) source form so you can paste
 them straight into your own documents. **Five describe the harness. Three
-describe a proposal** — they are prefixed `proposed-` and are indexed
-separately below, because a drawing of something that does not exist is the
-easiest way to mislead someone about a system.
+describe a design that is now about a fifth built** — they are prefixed
+`proposed-` and are indexed separately below, because a drawing of something
+that does not exist is the easiest way to mislead someone about a system.
+That prefix is now a slight overstatement, which is the better direction for
+it to be wrong in.
 
 | File | What it shows |
 |---|---|
@@ -18,13 +20,18 @@ Start with the generic three. The worked examples are useful when you want to
 see what the abstractions look like once they've hit a real system — the number
 of failure exits in `worked-example-run.mmd` is itself the lesson.
 
-### Three more, for a design that is **not built**
+### Three more, for a design that is **four-tenths built**
 
-These belong to [`../../docs/Curiosity-Engine-Design.md`](../../docs/Curiosity-Engine-Design.md)
-and describe a proposal, not the system. Everything above describes what
-exists; everything in these three that is **dashed and warm-toned is
-proposed**, and everything solid is what runs today. Do not read them as
-documentation of the harness.
+These belong to [`../../docs/Curiosity-Engine-Design.md`](../../docs/Curiosity-Engine-Design.md),
+where all three are now embedded and render as pictures. Everything above
+describes what exists; in these three, everything **dashed and warm-toned is
+proposed**, and everything solid is what runs today. Four of the ten
+components have shipped and are drawn solid: **C1** the committed goal,
+**C2** the themes review CLI and its `UNKNOWN` field, **C8** escalation
+follow-through, and **C10** runtime evidence. The other six — C3, C4, C5,
+C6, C7, C9 — are dashed. A solid node may still carry a proposed extension
+in its label (`th` is `C2 · C3`, `fan` is `C3 · C8`); the label names both.
+Do not read the dashed nodes as documentation of the harness.
 
 | # | File | What it shows |
 |---|---|---|
@@ -48,9 +55,11 @@ than the reader's theme.
 
 **In GitHub, Notion, Obsidian, or most modern markdown tools:** paste the
 contents into a fenced block labelled `mermaid` and it renders automatically.
-The generic three are already embedded that way in
-[`../02-blueprint.md`](../02-blueprint.md) and
-[`../05-guardrails-and-trust.md`](../05-guardrails-and-trust.md).
+The generic three are already embedded that way, one each in
+[`../02-blueprint.md`](../02-blueprint.md),
+[`../04-context-recipe.md`](../04-context-recipe.md) and
+[`../05-guardrails-and-trust.md`](../05-guardrails-and-trust.md); the
+proposed three in [`../../docs/Curiosity-Engine-Design.md`](../../docs/Curiosity-Engine-Design.md).
 
 **In a plain HTML page or a slide deck:** render to flat SVG at author time
 rather than shipping the Mermaid library — it's ~3 MB, and diagrams that only

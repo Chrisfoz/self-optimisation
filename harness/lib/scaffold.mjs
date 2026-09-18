@@ -999,10 +999,21 @@ on:
 
 Model releases are the real trigger, not the calendar — a quiet period runs
 the detector and does nothing else. See \`learning/01-principles.md\`
-principle 1.`
+principle 1, in the harness repository.
+
+To pause every run without uninstalling anything, set the repository
+variable \`SELF_IMPROVE_PAUSED\` to \`true\` (**Settings → Secrets and
+variables → Actions → Variables**). The workflow checks it first and stops
+before spending anything. Set it back to \`false\`, or delete it, to resume.`
       : `Runs on \`${answers.cadenceCron || '0 0 1 * *'}\` (cron, UTC). Model releases are
 the real trigger, not the calendar — a quiet period runs the detector and
-does nothing else. See \`learning/01-principles.md\` principle 1.`;
+does nothing else. See \`learning/01-principles.md\` principle 1, in the
+harness repository.
+
+To pause every run without uninstalling anything, set the repository
+variable \`SELF_IMPROVE_PAUSED\` to \`true\` (**Settings → Secrets and
+variables → Actions → Variables**). The workflow checks it first and stops
+before spending anything. Set it back to \`false\`, or delete it, to resume.`;
 
   return `# Self-Improvement — what init just installed
 

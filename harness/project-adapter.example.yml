@@ -166,6 +166,8 @@ roles:
     # provider: anthropic      # only needed when the id doesn't name its own lab
   review:
     model: claude-opus-5       # pinned — this gate does not rotate
+    # effort: medium          # Anthropic models only, same scale as implement above:
+    #                         # low | medium | high | xhigh | max. Read at run time.
   rank:
     # Only called when more than one lab proposed this run. LEAVE UNSET (or
     # null) to have the run pick a model from a DIFFERENT family than the

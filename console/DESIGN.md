@@ -19,7 +19,9 @@ The pages are `about.html`, `how-to-run.html` (step-by-step local setup),
 `privacy.html`, with shared styling in `console.css` and browser behaviour in
 `app.mjs`. None carries its own header or footer: each lives once in
 [`partials/`](partials/), and the server inlines it wherever a page has an
-`<!-- include:nav -->` or `<!-- include:footer -->` marker.
+`<!-- include:nav -->` or `<!-- include:footer -->` marker. The site icon is
+`favicon.svg`, served from the asset table in `server.mjs` and linked into
+every page by `renderPage()`, so it is set in one place rather than per page.
 
 ## 1. The idea, restated
 

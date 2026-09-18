@@ -30,7 +30,14 @@ flowchart TD
   axiom["the asymmetry IS the design:<br/>looking is cheap and should be easy to authorise,<br/>committing is expensive and stays hard"]
   axiom ~~~ what
 
+  legendA["solid = built today<br/>C n = the spec in docs/curiosity/"]
+  legendB["dashed = proposed by the curiosity design"]
+  legendA ~~~ legendB
+
   classDef proposed fill:#F3E3D4,stroke:#C08552,stroke-width:2px,stroke-dasharray:5 4;
+  classDef legend fill:#F6F8F9,stroke:#9FB0BE,stroke-width:1px;
   classDef note fill:#F6F8F9,stroke:#9FB0BE,stroke-width:1px;
-  class free,look,spike,open,inert,retired,silent,ask,order,ship proposed;
+  class legendB proposed;
+  class legendA legend;
+  class free,look,spike,open,inert,retired proposed;
   class axiom note;

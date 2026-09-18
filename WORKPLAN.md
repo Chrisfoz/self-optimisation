@@ -25,6 +25,16 @@ merging or closing one of its pull requests and the next cycle reading that
 back — three are open in `Chrisfoz/icd-mapper-harness-campaign`. After that,
 2.1a: a larger repository, to force the `context.strategy: scoped` question.
 
+**Before the next copied install, read Tier 7.** It holds the newest open
+items (I8–I13), and **I10** is directly in the path of one: a copied install's
+generated workflow still runs `npm install js-yaml` at the target repository's
+root, which during the NetworkinAI install silently became that project's own
+dependency install. Nothing in the README, the example adapter or the
+generated `SELF-IMPROVE-README.md` warns about it yet. (The *local* install
+path was a second instance of the same problem and is now fixed: README Step 1
+installs js-yaml with `--prefix harness`, because `scaffold.mjs` imports it at
+load and `init.mjs` therefore cannot run without it.)
+
 *2026-09-17:* the first install into an existing project
 ([`docs/campaigns/2026-09-17-networkinai-install.md`](docs/campaigns/2026-09-17-networkinai-install.md))
 gives 2.1a its first data point. 1.03 million characters of editable source
@@ -124,6 +134,11 @@ format is validated only against the fixtures it was written against
   *Done when:* a `gen-001/attempts.json` with `spend.estimatedCalls: 0`
   is committed to a public example repository, and the workflow run (or
   `rehearse.mjs` invocation) that produced it is linked from `README.md`.
+  **What is left here is a publishing decision, not engineering.** Four such
+  records exist and are committed — but in this repository, which is private,
+  and the Actions runs were in a private campaign repository. This item
+  cannot be ticked until something is public; nothing more needs building
+  for it.
 
 ---
 
@@ -280,7 +295,7 @@ architecture. All of it blocks Tier 3.
   `project-adapter.yml` — cadence is baked into the workflow's cron at scaffold
   time. That may be the right answer permanently; if so, say so in the schema
   rather than leaving them labelled RESERVED as though work were pending.
-  *See:* `harness/project-adapter.example.yml:232`, and `console/DESIGN.md`
+  *See:* `harness/project-adapter.example.yml` §RECORDED/RESERVED, and `console/DESIGN.md`
   §2.3 for the LIVE/RESERVED accounting.
   *Done when:* each field is either read by something or relabelled with the
   reason it never will be.
@@ -356,7 +371,14 @@ gaps are solved by better documentation — they are missing code.
   published library (`verify_strategy: registry`). The paper's RQ5 says
   three; the console needs the demand signal; and one project cannot
   separate "the harness is portable" from "this project was easy".
-  *Done when:* three rehearsal reports exist, each naming what broke.
+  *Done when:* three rehearsal reports exist, each naming what broke — **in
+  those three shapes**, which is the part the count alone does not check.
+  Four write-ups now exist (germ-fighter, icd-mapper, icd-mapper on Actions,
+  and the NetworkinAI install), so the *count* is met. The Python CLI shape
+  is covered by icd-mapper. NetworkinAI is a large web app but `full-dump`
+  still fit, so it does not settle the `scoped` question. **The missing shape
+  is a published library with `verify_strategy: registry`** — that, not a
+  fourth report, is what closes this.
 
 - [x] **2.5 — Campaign mode, for accumulating evidence on purpose.**
   **Done.** The generated workflow's `models` dispatch input runs a
@@ -367,7 +389,7 @@ gaps are solved by better documentation — they are missing code.
   the product loop; evaluating the harness needs a faster clock.
 
 - [ ] **2.2 — Implement `context.strategy: scoped`.**
-  It has no implementation at all; `harness/cli/init.mjs:168` warns the user to
+  It has no implementation at all; `harness/cli/init.mjs`'s `scoped` warning tells the user to
   their face when they pick it. `context-pack.mjs` sends every editable file in
   full because carrotgame's editable surface is ~7 files. §8.2 names the two
   candidate shapes: a lightweight per-ecosystem symbol index, or a two-pass
@@ -426,9 +448,11 @@ gaps are solved by better documentation — they are missing code.
 
 Phase 0 of `console/DESIGN.md` §5 is **effectively done** — the generator
 exists as pure functions with tests — and as of 3.1 the document says so.
-What phase 0 is still missing is `validateAnswers()` (§2.1): the invariant
-checks over an answers object, which neither the CLI nor the console has.
-That is a prerequisite for 3.3, not for 3.2.
+The `validateAnswers()` half (§2.1) — the invariant checks over an answers
+object — has since shipped too, as `harness/lib/validate.mjs`'s
+`validateAdapter()`; `console/DESIGN.md` §"Phase 0" says so at length. So
+3.3's remaining prerequisite is narrower than this preamble used to claim:
+wrap the generator and its validator in a browser form.
 
 - [x] **3.1 — Update `console/DESIGN.md` to the code that exists.**
   Correct §2.1, and point Phase 0 at `scaffold.mjs`/`init.mjs` by their real
@@ -450,19 +474,29 @@ That is a prerequisite for 3.3, not for 3.2.
   One function: holds one secret, mints a token, proxies the call it was asked
   for. §5 is explicit that "almost no backend" stopped being accurate the
   moment §8.5 was adopted.
+  *Done when:* a privileged GitHub call is made with a token minted
+  server-side from the App's private key, that key never reaches the browser,
+  and a test proves the browser path cannot obtain it.
   *Depends on:* Tier 1 — the console must not generate a workflow whose merge
   model contradicts its own §Step 7.
 
 - [ ] **3.3 — Build the console front end.**
-  All nine steps, sealed-box secrets, the PR, dispatch, and the run view
-  (§8.4). `console/mockup.html` is the clickable sketch to build against.
+  All ten steps, sealed-box secrets, the PR, dispatch, and the run view
+  (§8.4). `console/mockup.html` started as the clickable sketch and is now
+  the working installer itself, served at `/console`.
+  *Done when:* all ten steps accept real input, the generated bundle passes
+  `validateAdapter()`, and a setup pull request has been opened against a
+  real repository by a live authenticated run. The first two are true;
+  `console/IMPLEMENTATION.md` is explicit that the third has not happened,
+  which is why this stays unticked.
   *Depends on:* 3.2.
 
 ---
 
 ## Tier 4 — curiosity
 
-Ten specs in `docs/curiosity/`, **none built**. Every one is additive to a loop
+Ten specs in `docs/curiosity/`; **four built** — C1 (4.6), C2's `UNKNOWN`
+field (4.0), C8 (4.1) and C10 (4.2). Every one is additive to a loop
 that already runs, and renders nothing when its input is absent. Don't treat
 this tier as optional-forever work — it is the answer to "the loop gets better
 at fixing and never gets curious" — but do respect its own gate.
@@ -666,7 +700,8 @@ the real campaigns that tested the fixes, in
   `engines` is `>=22.11.0`; CI runs that exact minimum and current LTS;
   `tests/lib/ci-config.test.mjs` fails if the four places a version is
   stated disagree. *Done when:* CI is green on the declared minimum —
-  **true**, 631/631 on 22.11.0 and 24, none skipped.
+  **true**, 631/631 on 22.11.0 and 24 at the time, none skipped. `npm test`
+  prints the current count.
 - [x] **R2 — The generated workflow's blockers.** The probe step had no
   keys; the gate-summary helper exited 1 under `bash -e` on the unrendered
   merge path (both modes) and wrote multi-line JSON to `GITHUB_OUTPUT`; the

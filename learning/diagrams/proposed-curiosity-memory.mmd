@@ -50,7 +50,14 @@ flowchart TB
   note["this is the mechanism principle 21 has been missing:<br/>'constraints never expire, hints should' is currently<br/>an intention, because nothing in the harness decays anything"]
   note ~~~ t3
 
+  legendA["solid = built today<br/>C n = the spec in docs/curiosity/"]
+  legendB["dashed = proposed by the curiosity design"]
+  legendA ~~~ legendB
+
   classDef proposed fill:#F3E3D4,stroke:#C08552,stroke-width:2px,stroke-dasharray:5 4;
+  classDef legend fill:#F6F8F9,stroke:#9FB0BE,stroke-width:1px;
   classDef note fill:#F6F8F9,stroke:#9FB0BE,stroke-width:1px;
-  class unknown,ques,cited,paid,retire,rederived,drop,prin,t3,stuck,resurf proposed;
+  class legendB proposed;
+  class legendA legend;
+  class ques,cited,paid,retire,rederived,drop,prin,t3 proposed;
   class note note;

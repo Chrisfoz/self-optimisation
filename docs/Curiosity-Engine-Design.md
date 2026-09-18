@@ -29,8 +29,8 @@ changes about a run.
 | # | Diagram | What it answers |
 |---|---|---|
 | **D1** | [`proposed-curiosity-run.mmd`](../learning/diagrams/proposed-curiosity-run.mmd) | One lap, end to end. Where the three run modes are chosen, where questions are harvested, and what a spike does differently. Embedded below. |
-| **D2** | [`proposed-curiosity-memory.mmd`](../learning/diagrams/proposed-curiosity-memory.mmd) | What happens *between* laps — the three tiers of §5.5, promotion by re-derivation, and what gets forgotten. |
-| **D3** | [`proposed-curiosity-authorisation.mmd`](../learning/diagrams/proposed-curiosity-authorisation.mmd) | What authorises what — §2.5 and §4.5 drawn: looking is cheap, committing is expensive, and silence stops being scored as rejection. |
+| **D2** | [`proposed-curiosity-memory.mmd`](../learning/diagrams/proposed-curiosity-memory.mmd) | What happens *between* laps — the three tiers of §5.5, promotion by re-derivation, and what gets forgotten. Embedded in §5.5. |
+| **D3** | [`proposed-curiosity-authorisation.mmd`](../learning/diagrams/proposed-curiosity-authorisation.mmd) | What authorises what — §2.5 and §4.5 drawn: looking is cheap, committing is expensive, and silence stops being scored as rejection. Embedded in §4.5. |
 
 ### The components, and where each is specified
 
@@ -137,13 +137,13 @@ flowchart TD
   ep -.->|"read back next run"| pack
   th -.->|"read back next run — and it is what<br/>the NEXT mode decision reads"| pack
 
-  legendA["solid = built today<br/>C n = the spec in docs/curiosity/"]
+  legendA["solid = built today<br/>C n = the spec in docs/curiosity/<br/>a solid node may still carry a proposed extension —<br/>its label names both specs"]
   legendB["dashed = proposed by the curiosity design"]
   legendA ~~~ legendB
 
   classDef proposed fill:#F3E3D4,stroke:#C08552,stroke-width:2px,stroke-dasharray:5 4;
   classDef legend fill:#F6F8F9,stroke:#9FB0BE,stroke-width:1px;
-  class cons,inv,amb,res,find,doc,prin,runlog,harv proposed;
+  class inv,amb,res,find,doc,prin,harv proposed;
   class legendB proposed;
   class legendA legend;
 ```
@@ -690,6 +690,56 @@ exactly, with a higher stake than player feedback ever had. So:
 The asymmetry is the design. Looking is cheap and should be easy to
 authorise; committing is expensive and should stay hard.
 
+**D3** draws the same asymmetry, with what has since been built shown solid
+— C8's re-surfacing, the owner's decision and the work order it queues are
+real; the spike path above them is not.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
+flowchart TD
+  raise["a model raises something<br/>during an ordinary run"] --> what{"what kind of thing?"}
+
+  what -->|"an OPEN QUESTION —<br/>something it could not determine<br/>from the context it was given"| free["C3 · opening it is FREE<br/>any model, any run, no gate"]
+  what -->|"an ESCALATION —<br/>change something it may not edit"| bar
+  what -->|"a change to a frozen rule"| never(["human only. forever.<br/>no amount of consensus unlocks this"])
+
+  free --> look{"C5 · authorised to LOOK?<br/>spend one generation investigating"}
+  look -->|"ONE model, high conviction —<br/>OR corroboration ≥ 2"| spike["C5 · SPIKE<br/>outcome: investigated<br/>writes a sourced findings-NNN.md"]
+  look -->|"below that"| open["stays open,<br/>re-ranked at each cadence"]
+  open --> inert{"C3 · C9 · cited by nothing<br/>within N generations?"}
+  inert -->|"yes"| retired(["retired with a reason"])
+  inert -->|"no, still live"| open
+
+  spike ==>|"the other models now react to<br/>EVIDENCE rather than to a hunch"| bar
+
+  bar{"C8 · 3 distinct models<br/>across 2 labs?"}
+  bar -->|"not yet"| silent{"C8 · stuck below the bar<br/>for N generations?"}
+  silent -->|"no, still accumulating"| accum(["waits. more runs, more models"])
+  silent -->|"yes"| ask["C8 · re-surface explicitly to the next fan-out:<br/>agree · disagree · irrelevant?<br/>silence stops being scored as rejection"]
+  ask --> bar
+
+  bar -->|"reached"| owner{"THE OWNER DECIDES<br/>shown the case, the backers, the dissenters —<br/>and the minority report of<br/>high-conviction items nobody backed"}
+  owner -->|"declined"| settled(["settled. shown to future models<br/>with the reason, never re-argued"])
+  owner -->|"accepted"| order[("C8 · WORK ORDER<br/>assigned to the next<br/>ambitious-scope generation")]
+
+  order --> ship["implemented, reviewed, guarded and tested<br/>exactly like any other change.<br/>curiosity never bypasses a gate —<br/>it only decides what they point at"]
+
+  axiom["the asymmetry IS the design:<br/>looking is cheap and should be easy to authorise,<br/>committing is expensive and stays hard"]
+  axiom ~~~ what
+
+  legendA["solid = built today<br/>C n = the spec in docs/curiosity/"]
+  legendB["dashed = proposed by the curiosity design"]
+  legendA ~~~ legendB
+
+  classDef proposed fill:#F3E3D4,stroke:#C08552,stroke-width:2px,stroke-dasharray:5 4;
+  classDef legend fill:#F6F8F9,stroke:#9FB0BE,stroke-width:1px;
+  classDef note fill:#F6F8F9,stroke:#9FB0BE,stroke-width:1px;
+  class legendB proposed;
+  class legendA legend;
+  class free,look,spike,open,inert,retired proposed;
+  class axiom note;
+```
+
 ---
 
 ## 5. Scoring, honestly
@@ -792,6 +842,75 @@ project does not have, plus the rule that moves things between tiers.
 | **Episodic** | `docs/generations/gen-NNN/attempts.json` — every attempt, every rejection, every crash | **Built.** Never pruned; `buildGenerationIndex()` keeps all of it compactly, and nothing is ever dropped. |
 | **Thematic** | Themes reviews, escalation ledger, (proposed) curiosity ledger | **Partial.** Accumulates. Only the *latest* themes review is loaded — forgetting by accident rather than by rule. Escalations never expire. |
 | **Principled** | The handful of things that keep turning out to be true | **Missing as a tier.** `learning/01-principles.md` is hand-written by a human. |
+
+**D2** is what happens between laps: the three tiers above, promotion by
+re-derivation, and the one thing here that forgets on purpose.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontSize":"13px","primaryColor":"#E4E8EC","primaryTextColor":"#14212B","primaryBorderColor":"#9FB0BE","lineColor":"#4A5C6A","secondaryColor":"#DCE7F0","tertiaryColor":"#F3E3D4","clusterBkg":"#F6F8F9","clusterBorder":"#9FB0BE","edgeLabelBackground":"#EDF0F2","textColor":"#14212B"}}}%%
+flowchart TB
+  subgraph t1["TIER 1 · EPISODIC — never pruned, cheap to store, expensive to read"]
+    gens[("docs/generations/gen-NNN/attempts.json<br/>approved · abandoned · rejected-by-review · crashed<br/>the failures are the densest material here")]
+  end
+
+  fan["C3 · C8 · every run's fan-out<br/>ESCALATION + OPEN QUESTION,<br/>harvested from winners and losers"]
+
+  gens -->|"every N generations,<br/>read N at once — not one at a time"| trev["C2 · THE REVIEW PASS<br/>a fresh model reads the whole window<br/>and is asked what no single record can answer"]
+
+  trev --> noticed["NOTICED<br/>the association —<br/>what keeps co-occurring"]
+  trev --> means["MEANS<br/>the abstraction —<br/>the principle that explains why"]
+  trev --> unknown["C2 · UNKNOWN<br/>the frontier of the abstraction —<br/>what the principle exposes<br/>and does not answer"]
+
+  subgraph t2["TIER 2 · THEMATIC — accumulates, and is meant to decay"]
+    themes[("themes/review-NNN.json")]
+    esc[("escalations/ledger.json")]
+    ques[("C3 · curiosity/ledger.json")]
+  end
+
+  noticed --> themes
+  means --> themes
+  unknown --> ques
+  fan --> ques
+  fan --> esc
+
+  themes --> rederived{"C7 · did a LATER review,<br/>reading a DIFFERENT window,<br/>arrive at this again?"}
+  rederived -->|"yes — independent re-derivation"| prin
+  rederived -->|"no review ever restated it"| drop(["falls out. it was an observation<br/>about ten generations,<br/>not a truth about the project"])
+
+  ques --> cited{"C9 · did any generation<br/>cite it within N?"}
+  cited -->|"yes, and the proposal survived review"| paid["retrospective label:<br/>this question paid off"]
+  cited -->|"never touched"| retire(["retired with a reason —<br/>plausible, and inert"])
+  paid -->|"counts toward promoting<br/>the theme it came from"| rederived
+
+  esc --> stuck{"C8 · below the consensus bar<br/>for N generations?"}
+  stuck -->|"yes"| resurf["re-surface it explicitly:<br/>agree · disagree · irrelevant?<br/>so silence stops counting as a no"]
+  resurf --> esc
+
+  subgraph t3["TIER 3 · PRINCIPLES — permanent standing context"]
+    prin[("C7 · the handful of things that keep<br/>turning out to be true.<br/>promotion criterion = the consensus logic,<br/>with the axis rotated from models to time")]
+  end
+
+  prin -.-> out
+  themes -.-> out
+  esc -.-> out
+  ques -.-> out
+  out(["the context pack —<br/>every future generation"])
+
+  note["this is the mechanism principle 21 has been missing:<br/>'constraints never expire, hints should' is currently<br/>an intention, because nothing in the harness decays anything"]
+  note ~~~ t3
+
+  legendA["solid = built today<br/>C n = the spec in docs/curiosity/"]
+  legendB["dashed = proposed by the curiosity design"]
+  legendA ~~~ legendB
+
+  classDef proposed fill:#F3E3D4,stroke:#C08552,stroke-width:2px,stroke-dasharray:5 4;
+  classDef legend fill:#F6F8F9,stroke:#9FB0BE,stroke-width:1px;
+  classDef note fill:#F6F8F9,stroke:#9FB0BE,stroke-width:1px;
+  class legendB proposed;
+  class legendA legend;
+  class ques,cited,paid,retire,rederived,drop,prin,t3 proposed;
+  class note note;
+```
 
 **The promotion rule: independent re-derivation.**
 
