@@ -1,9 +1,13 @@
 # Portable Harness — Design Document
 
-**Status:** planning only. Nothing described here has been moved or built yet.
-This document exists to get agreement on *what* moves from `carrotgame`,
-*how* it gets genericised, and *what* the new repo's own README should promise
-a user, before any file crosses over.
+**Status:** built. This document was written before any file crossed over,
+and it is now the historical record of the port: *what* moved from
+`carrotgame`, *how* it was genericised, and *what* the new repo's README
+should promise a user. §7's kernel-mapping table carries the per-component
+marks, and §10's build order is done through step 5.
+[`WORKPLAN.md`](WORKPLAN.md) is the live plan; [`README.md`](README.md)'s
+Status table is the live per-component status. Where the three disagree,
+this document is the one to distrust.
 
 **Scope note, added once other work landed alongside this one:** everything
 below tracks the harness port specifically — the ten-component kernel and
@@ -208,8 +212,9 @@ Two more pieces exist now that weren't in the original sketch above, both
 added in response to actually using the harness rather than only designing
 it: a root **`package.json`** (`type: module`, zero dependencies, one script
 — `npm test`) and **`tests/lib/`**, converting the throwaway smoke checks
-used to verify each Bucket B port into a permanent suite (258 checks as of
-this writing — 256 in `tests/lib/`, one per-module, plus 2 in `tests/e2e/`,
+used to verify each Bucket B port into a permanent suite (258 checks when
+this was written, and `npm test` prints the current number — 256 in
+`tests/lib/`, one per-module, plus 2 in `tests/e2e/`,
 which drives the whole chain in the real generated-workflow order against a
 real git remote; see README.md's "Testing this harness itself"). This is deliberately a *second, separate* test surface from
 the one a target project's own adapter points `evaluation.test_commands` at
@@ -278,7 +283,7 @@ rather than for someone reading harness source.
 
 | Paper component (§3) | carrotgame implementation | Harness module (proposed) |
 |---|---|---|
-| 3.1 Project Constitution | `.claude/agents/self-improvement.md` (brief) + `EDITABLE_FILES` in `edit-format.mjs` + `check-guarded-paths.mjs` config | ✅ **Real, and now enforced end to end** — `harness/lib/adapter.mjs` parses `project-adapter.yml` (the one file in the harness with an npm dependency, `js-yaml`, loaded lazily so a project without an adapter file never needs it installed). `constitution.allowed_paths`/`create_only_paths` are compiled into `edit-format.mjs`'s allowlist by `run-generation.mjs` and enforced against every edit, then again by `check-guarded-paths.mjs` in CI. The brief half shipped too: `harness/templates/agent-brief.md.tmpl` and `reviewer-brief.md.tmpl`, copied into place by `init`. `project.goal` (the committed goal) sits above the brief, the reviewer judges against it, and the guard refuses a diff that edits it. `harness/lib/validate.mjs` checks the whole thing structurally before a run starts. |
+| 3.1 Project Constitution | `.claude/agents/self-improvement.md` (brief) + `EDITABLE_FILES` in `edit-format.mjs` + `check-guarded-paths.mjs` config | ✅ **Real, and now enforced end to end** — `harness/lib/adapter.mjs` parses `project-adapter.yml` (one of the two files in the harness with an npm dependency, `js-yaml`, loaded lazily here so a project without an adapter file never needs it installed — `scaffold.mjs` is the other, and imports it at load, so `init.mjs` does need it present). `constitution.allowed_paths`/`create_only_paths` are compiled into `edit-format.mjs`'s allowlist by `run-generation.mjs` and enforced against every edit, then again by `check-guarded-paths.mjs` in CI. The brief half shipped too: `harness/templates/agent-brief.md.tmpl` and `reviewer-brief.md.tmpl`, copied into place by `init`. `project.goal` (the committed goal) sits above the brief, the reviewer judges against it, and the guard refuses a diff that edits it. `harness/lib/validate.mjs` checks the whole thing structurally before a run starts. |
 | 3.2 Context Compiler | `scripts/lib/context-pack.mjs` | `harness/lib/context-pack.mjs` |
 | 3.3 Model-Release Detector | `scripts/check-model-releases.mjs` + `.agent/model-snapshot.json` | `harness/scripts/check-model-releases.mjs` |
 | 3.4 Provider/Model Router | `scripts/lib/llm-provider.mjs` | `harness/lib/llm-provider.mjs` + `harness/providers/*` |

@@ -15,6 +15,15 @@
   .guide h2 { font-size: clamp(26px, 3vw, 34px); margin-bottom: 12px; }
   .guide h3 { font-size: 18px; margin-bottom: 6px; }
   .guide > section { padding-block: 44px; border-top: 1px solid var(--line); }
+  /* The fast path: first thing after the lead, because handing the job to a
+     coding agent is what most people actually do. Tinted so it reads as the
+     shortcut it is, not as step one of the manual walkthrough. */
+  .agent-first { background: #fff; border: 1px solid var(--line); border-radius: 14px;
+    padding: 28px 28px 24px; margin-top: 28px; border-top: 1px solid var(--line); }
+  .agent-first > h2 { margin-top: 6px; }
+  .agent-first .cmd pre { font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px; padding-right: 16px; padding-top: 10px; }
+  .agent-first .cmd .copy { position: static; float: right; margin: 8px 8px 0 12px; }
   .lead { font-size: 19px; max-width: 660px; }
   .halves { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 22px 0 6px; }
   .half { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
@@ -74,6 +83,63 @@
     steps in order and copy each command exactly. You'll have it running in
     about ten minutes.
   </p>
+
+  <section id="agent" class="agent-first">
+    <p class="eyebrow">THE FAST PATH — START HERE</p>
+    <h2>Hand it to your coding agent</h2>
+    <p>
+      Most people installing this already work with Claude Code, Cursor,
+      Copilot or something like them. That is the quickest way to do it, and
+      it is what this page is written for: an agent can follow these steps as
+      well as you can. Open <b>your own project</b> in your agent and paste
+      this in.
+    </p>
+    <div class="cmd">
+      <span class="label">Paste this into your coding agent</span>
+      <pre>Help me install the self-optimisation harness into this project. It gives each newly
+released AI model a turn at proposing one improvement to my code, gates every change
+behind an independent AI review, a protected-path check and my own tests, and then
+opens a pull request for me to decide on.
+
+Work through this in order. Stop where it says CHECK WITH ME and wait for my answer.
+
+1. Read https://github.com/Chrisfoz/self-optimisation - README.md first, then
+   harness/project-adapter.example.yml, which is the annotated schema for every setting.
+2. Check `node --version` is 22.11 or newer. Stop if it isn't.
+3. Copy the repository's `harness/` folder into the root of this project, then run:
+     npm install --prefix harness --no-save --no-package-lock js-yaml@5.3.0
+   Use `--prefix harness` exactly as written. Do NOT install js-yaml at this project's
+   top level: it has been tested to silently replace a project's own copy.
+4. CHECK WITH ME on two things before you run the installer, because they are mine to
+   decide and not yours to infer from the code: (a) which paths a model may edit and
+   which are frozen, and (b) the one-sentence goal this project is trying to achieve.
+5. Run `node harness/cli/init.mjs` and answer the rest from what you can actually see
+   in this codebase - my real test command, my real default branch, real paths.
+6. Fill in .claude/agents/improve.md and .claude/agents/review.md from this codebase.
+   Replace every [placeholder]. Only name files that really exist.
+7. Run `node harness/scripts/validate.mjs` and fix everything it reports.
+8. Never create, read out, or commit .env. Tell me which API keys to add and where,
+   and I will add them myself.
+9. CHECK WITH ME, then do one practice run: `node harness/scripts/rehearse.mjs`. Show me
+   what it proposed, what the reviewer said, and what it cost, before anything is
+   scheduled on GitHub Actions.
+
+Keep everything on a branch and do not merge to my default branch. If a step fails, show
+me the real error rather than working around it.</pre>
+    </div>
+    <p class="notice">
+      <b>What to expect.</b> It should stop and ask you twice: once about what
+      may change and what your goal is, and once before it spends anything on
+      a practice run. Those two are the decisions that stay yours. Everything
+      else it can read out of your codebase.
+    </p>
+    <p>
+      Prefer to do it yourself, or want to understand what the agent is doing?
+      The rest of this page is the same thing, one step at a time. There are
+      also shorter prompts for single jobs — running the website, adding a
+      page — in <a href="#ask">Ask your AI assistant</a>.
+    </p>
+  </section>
 
   <section>
     <h2>What you're downloading</h2>
@@ -495,6 +561,37 @@
         <code>docs/generations/REPORT.md</code> has the same records as metrics.
       </li>
       <li>
+        <b>You know what the workflow installs on GitHub.</b> A copied install's
+        generated workflow runs
+        <code>npm install --no-save --ignore-scripts js-yaml@5.3.0</code> at
+        your repository's <b>root</b>, inside the Actions run. Nothing on your
+        own computer is touched, and your <code>package.json</code> and lock
+        file are not modified — but two things are worth knowing, both tested
+        rather than guessed:
+        <ul>
+          <li>
+            If your project depends on <b>js-yaml 4 or earlier directly</b>,
+            the run's copy becomes 5.3.0, so your tests run against a version
+            you didn't choose. Tested consequence: <code>yaml.safeLoad</code>
+            becomes <code>undefined</code>. A transitive js-yaml (jest's, for
+            example) is nested by npm and is unaffected.
+          </li>
+          <li>
+            <code>--ignore-scripts</code> means <b>install scripts do not
+            run</b>, so anything your build generates that way is missing when
+            the tests run.
+          </li>
+        </ul>
+        If either applies to you, change that one line in your generated
+        <code>.github/workflows/self-improve.yml</code> to
+        <code>npm install --prefix harness --no-save --no-package-lock
+        js-yaml@5.3.0</code> — the same isolation the local install uses; Node
+        resolves it from <code>harness/node_modules</code> either way. The
+        shared-workflow install already does this and is unaffected. This is a
+        known rough edge, tracked as <b>I10</b>, and the harness will do it for
+        you in a future version.
+      </li>
+      <li>
         <b>You know when it runs.</b> On the 1st of each month, or straight away
         from <b>Actions → Self-improvement loop → Run workflow</b>. Leave the
         models box empty to wait for a new release, or name models to run on
@@ -594,6 +691,24 @@
         and switching it on is itself a change you have to approve — after a
         practice run has passed. What happens after a merge is
         <code>deployment.verify_strategy</code>.
+        <br /><br />
+        This is one choice, made once, at install time
+        (<code>constitution.approval_class</code>), and it is rendered into the
+        generated workflow as ordinary YAML: only one of the two paths exists
+        in your workflow file, so which one you got is answerable by reading
+        it. No run decides this for itself — which matters, because the branch
+        a run works on is a branch a model has been writing to. To change it
+        later, edit <code>project-adapter.yml</code> and regenerate with
+        <code>node harness/cli/init.mjs --from-adapter --force</code>.
+        <br /><br />
+        <b>How you find out.</b> If you configured
+        <code>notify:</code>, every run emails you. When a change is waiting
+        for your decision the email is headed <b>📋 WAITING FOR YOU</b>, not
+        "not merged", and it carries the pull request link and the workflow run
+        link near the top — the decision should take one tap from your inbox.
+        Without <code>notify:</code> there is no email, and the run history page
+        at <code>docs/generations/index.html</code> lists anything waiting on
+        you at the top instead.
       </li>
       <li>
         <b>Whether a seat can be earned.</b>

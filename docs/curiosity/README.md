@@ -5,8 +5,8 @@ The design argument lives in
 [`../Curiosity-Engine-Design.md`](../Curiosity-Engine-Design.md); these are
 the build instructions.
 
-**Status: four of ten built** (C1, C2 phase A — the `UNKNOWN` field — C8
-and C10, as of 2026-09-02); the rest wait on the A′ go/no-go, which
+**Status: four of ten built** — C1, C2 (both halves: the CLI, and phase A's
+`UNKNOWN` field), C8 and C10. The other six wait on the A′ go/no-go, which
 `WORKPLAN.md` 4.3a proposes running on carrotgame's existing history.
 Every spec here describes a change to a harness that runs today, and each
 names the file it touches and what already exists there. Where a spec says a thing is LIVE, something reads it
@@ -38,22 +38,25 @@ picture and a document on this page are the same thing.
 
 ## If you are picking one up cold
 
-Two are independent of everything else and can be built today, against the
-harness as it stands:
+**Start by reading what already runs.** The two that were independent of
+everything else have both shipped, and they are the worked examples for how
+an additive component lands here:
 
-- **[C8](C8-escalation-follow-through.md)** is the smallest and the highest
-  value. An escalation that reaches consensus and is accepted currently
-  changes a `status` field and schedules no work. Wiring acceptance to a
-  work order produces this project's first genuine outcome label: *did the
-  thing three models agreed on actually work?*
-- **[C10](C10-runtime-evidence.md)** is pure context-pack work and improves
+- **[C8](C8-escalation-follow-through.md)** was the smallest and the highest
+  value. An escalation that reached consensus and was accepted used to change
+  a `status` field and schedule no work; acceptance now queues a work order
+  that a later run is handed and reports back on, which is this project's
+  first genuine outcome label: *did the thing three models agreed on actually
+  work?*
+- **[C10](C10-runtime-evidence.md)** was pure context-pack work and improves
   every proposal the harness makes, curiosity or not.
 
-Everything else runs through **[C2](C2-themes-review-cli.md)**, which is the
-prerequisite the repository already owes itself — `generate-themes.mjs` holds
-a prompt and a parser that no CLI calls, and
-`memory.themes_review.cadence_generations` is parsed, unit-tested and read
-by nothing.
+**[C2](C2-themes-review-cli.md)**, which everything else runs through, has
+shipped too: `harness/scripts/generate-themes-review.mjs` is the CLI that
+`generate-themes.mjs`'s prompt and parser were waiting for,
+`memory.themes_review.cadence_generations` is what decides when it is due,
+and the generated workflow runs it after a generation that produced changes.
+Phase A, the `UNKNOWN` field, is live in the suggestion prompt.
 
 **Do not build C3 before running A′.** The go/no-go experiment is in
 [C9](C9-retrospective-scoring.md) §"Phase A′, the cheap version": if the

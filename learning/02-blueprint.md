@@ -39,11 +39,22 @@ flowchart TD
 
   push --> guard["11 · guard check<br/>ON THE AGENT BRANCH"]
   guard -->|"clean"| tests["12 · full test suites<br/>ON THE AGENT BRANCH"]
-  tests -->|"all green"| merge["13 · merge, tag, log"]
-  merge --> live["14 · verify the LIVE product<br/>actually carries the change"]
-  merge --> shots[("artefacts:<br/>screenshots, records")]
+
+  tests -->|"all green"| who{"13 · who merges?<br/>one choice, made once, at install.<br/>no run decides it for itself — the branch<br/>a run works on is one a model wrote to"}
+
+  who -->|"human approval · DEFAULT"| pr["14a · open a pull request.<br/>every gate above has passed;<br/>the change is the owner's call"]
+  pr --> done
+  who -->|"autonomous merge · OPT-IN"| merge["14b · merge, tag, log"]
+  merge --> live["15 · verify the LIVE product<br/>actually carries the change.<br/>only on this path: on the other,<br/>nothing has shipped yet"]
+  live --> done
+
+  live --> shots[("artefacts:<br/>screenshots, records")]
   shots -.->|"shown next run"| pack
-  live --> done(["15 · report honestly"])
+  done(["16 · report honestly — and email the owner,<br/>naming anything that is waiting on them<br/>and linking straight to it"])
+
+  done -.->|"later, outside this run"| owner{"a person decides"}
+  owner -->|"merged, or closed unmerged"| fate[("the pull request's fate")]
+  fate -.->|"read back at the TOP of the next run,<br/>closed unmerged breaks the streak"| pack
 
   guard -->|"touched a frozen file"| held(["left unmerged,<br/>for a human to look at"])
   tests -->|"any check red"| held
@@ -234,9 +245,24 @@ only to branches the agent owns.
 Your existing test suites, run **against the agent's branch**. Go and check that
 they really are. Then break something on purpose and confirm they go red.
 
-### 12. The merge and the record
+### 12. Who merges, and the record
 
-On green: merge, tag the generation (`gen-001`, `gen-002` …), store the
+On green, the change has passed every gate — and **that is not the same as
+deciding to ship it.** Make that a single choice, made once, at install, and
+put it in the workflow file rather than in a script:
+
+- **A person merges (make this your default).** Open a pull request and stop.
+  Every gate has already passed, so the pull request is not asking anyone to
+  re-check the work; it is asking the one question the gates cannot answer —
+  *do we want this?* Tell the owner by email, and put the link in the email:
+  a decision that needs someone to go and find the pull request is a decision
+  that happens next week. A pull request the owner closes is information too,
+  so record it and tell the next run.
+- **The loop merges (opt in, later, deliberately).** Only once the owner has
+  watched enough runs to trust the gates, and ideally only for a project where
+  a bad merge is cheap to revert.
+
+Then, either way: tag the generation (`gen-001`, `gen-002` …), store the
 artefacts — screenshots, the proposal, the attempt record — and append one entry
 to a log.
 

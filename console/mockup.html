@@ -21,6 +21,28 @@
       ><button class="button" id="reset-button">Reset project</button>
     </div>
   </div>
+  <aside class="quickstart" aria-labelledby="quickstart-heading">
+    <div>
+      <p class="eyebrow" id="quickstart-heading">Quick start — prefer the terminal?</p>
+      <p>
+        This console only generates configuration; GitHub Actions runs it. If
+        you're comfortable in a repository, the whole install is three commands
+        in your own project, needs no sign-in, and gives you exactly what the
+        ten steps below would.
+      </p>
+      <pre><code>cp -r ../self-optimisation/harness ./harness
+npm install --prefix harness --no-save --no-package-lock js-yaml@5.3.0
+node harness/cli/init.mjs</code></pre>
+      <p class="quickstart-note">
+        Use <code>--prefix harness</code> exactly as written — a top-level
+        install can replace your project's own js-yaml. Node 22.11+.
+      </p>
+    </div>
+    <div class="button-row">
+      <a class="button" href="/how-to-run">Full walkthrough ↗</a
+      ><a class="button" href="/how-to-run#agent">Prompt for your coding agent ↗</a>
+    </div>
+  </aside>
   <p id="global-status" class="status" role="status" aria-live="polite"></p>
   <div id="setup-view" class="wizard-grid">
     <div class="sidebar">

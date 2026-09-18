@@ -62,12 +62,12 @@ flowchart TD
   ep -.->|"read back next run"| pack
   th -.->|"read back next run — and it is what<br/>the NEXT mode decision reads"| pack
 
-  legendA["solid = built today<br/>C n = the spec in docs/curiosity/"]
+  legendA["solid = built today<br/>C n = the spec in docs/curiosity/<br/>a solid node may still carry a proposed extension —<br/>its label names both specs"]
   legendB["dashed = proposed by the curiosity design"]
   legendA ~~~ legendB
 
   classDef proposed fill:#F3E3D4,stroke:#C08552,stroke-width:2px,stroke-dasharray:5 4;
   classDef legend fill:#F6F8F9,stroke:#9FB0BE,stroke-width:1px;
-  class cons,inv,amb,res,find,doc,prin,runlog,harv proposed;
+  class inv,amb,res,find,doc,prin,harv proposed;
   class legendB proposed;
   class legendA legend;

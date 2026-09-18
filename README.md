@@ -38,7 +38,7 @@ read back into its record — and found four more, also fixed.
 the read-back of a *merged or closed* pull request has not happened in a real
 run, and the Actions runs are in a private repository rather than a public
 example. See [`WORKPLAN.md`](WORKPLAN.md) Tier 6. See
-[`ARCHITECTURE.md`](ARCHITECTURE.md) for the two diagrams, and
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for the five diagrams, and
 [Status in detail](#status-in-detail) for the per-component table.
 
 ---
@@ -99,15 +99,37 @@ cp -r /tmp/self-optimisation/harness ./harness
 (On Windows PowerShell, replace `/tmp/self-optimisation` with a path like
 `$env:TEMP\self-optimisation`, and `cp -r` with `Copy-Item -Recurse`.)
 
-That's the whole install. Almost everything in `harness/` uses only Node's
-own built-ins (`https`, `fs`, `path`, `node:test`) — the provider router,
-edit-format, detector and reachability probe need no `npm install` at all.
-The one exception is `harness/lib/adapter.mjs`, which parses
-`project-adapter.yml` and needs a real YAML parser to do it (`js-yaml`,
-plus one small transitive dependency of its own) — deliberately scoped to
-that single file rather than left implicit; every other kernel component
-works with zero dependencies whether or not you ever run `npm install`.
-You do need **Node.js 22.11 or newer** (the first 22.x LTS). `--env-file`
+Copying the folder is not quite the whole install. Almost everything in
+`harness/` uses only Node's own built-ins (`https`, `fs`, `path`,
+`node:test`) — the provider router, edit-format, detector and reachability
+probe need no `npm install` at all. **Two** files need a real YAML parser
+(`js-yaml`, plus one small transitive dependency of its own), and the
+difference between them decides whether you can skip this step:
+
+- `harness/lib/adapter.mjs` imports it **lazily**, inside the function that
+  parses `project-adapter.yml`. A command that never reads an adapter never
+  needs it.
+- `harness/lib/scaffold.mjs` imports it **at load**, because it writes YAML.
+  `harness/cli/init.mjs` imports `scaffold.mjs`, so **Step 7 below fails with
+  `Cannot find package 'js-yaml'` unless you run this first**:
+
+```bash
+npm install --prefix harness --no-save --no-package-lock js-yaml@5.3.0
+```
+
+That installs it into `harness/node_modules`, where only the harness looks
+for it; your project's own `package.json`, lock file and installed packages
+are left alone. Make sure your `.gitignore` covers `node_modules/`.
+
+> **Don't install it at your project's top level.** Tested, a top-level
+> install can quietly swap your project's own copy of js-yaml for this one,
+> breaking code that uses the older API; delete packages you installed by
+> hand; and, in a project with no `package.json`, install into the nearest
+> parent folder that has one, which can be your home folder. A later
+> `npm ci` also removes it again.
+
+Every other kernel component works with zero dependencies whether or not you
+ever run `npm install`. You do need **Node.js 22.11 or newer** (the first 22.x LTS). `--env-file`
 and the built-in test runner, both used below and both chosen specifically to
 avoid needing a dependency for either, are older than that — but `npm test`
 passes a glob to `node --test`, which Node 20 reads as a literal filename,
@@ -328,14 +350,23 @@ Three things the generated workflow needs that are easy to miss:
     General** has a *Pull Requests* section (merge commits, squash, rebase,
     auto-merge) that looks like the right place and isn't. Your account's own
     settings don't have this switch either.
-  - **Pick Read and write permissions and tick the box, then Save.** Read-only
-    also works, since the workflow asks for its own write permissions, but
-    Read and write is the choice people expect to make.
+  - **The tickbox is the part that matters; the radio above it does not.**
+    The generated workflow declares its own
+    `permissions: contents: write, pull-requests: write`, and an explicit
+    block overrides the repository default — so **Read repository contents
+    and packages permissions** (read-only) is enough, and is the tighter
+    choice, because the radio sets the default for *every other workflow in
+    the repository* that doesn't declare its own. **Read and write** also
+    works and is what most people pick. The tickbox is different: no workflow
+    can grant itself permission to create pull requests, so without it every
+    generation passes its gates and then cannot open one.
   - **Check it saved.** During the first real install, Read and write saved
     but the tickbox didn't, and nothing on the page said so. Check with
     `gh api repos/OWNER/REPO/actions/permissions/workflow`: you want
-    `"can_approve_pull_request_reviews":true`. Or set both at once with
-    `gh api -X PUT repos/OWNER/REPO/actions/permissions/workflow -f default_workflow_permissions=write -F can_approve_pull_request_reviews=true`.
+    `"can_approve_pull_request_reviews":true`. Or set both at once — this is
+    the same command the generated `SELF-IMPROVE-README.md` gives, keeping
+    the default read-only:
+    `gh api -X PUT repos/OWNER/REPO/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true`.
 - **A secret for every lab the workflow calls:** the watched labs and the
   labs your implement, review and rank models belong to. The generated
   `SELF-IMPROVE-README.md` lists exactly which. Add them under the
@@ -525,7 +556,7 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Bounded patch executor (`harness/lib/edit-format.mjs`) | ✅ Built, tested |
 | Model-release detector (`harness/lib/model-release-detector.mjs`) | ✅ Built, tested |
 | Reachability probe (`harness/lib/probe-models.mjs`) | ✅ Built, tested |
-| Adapter loader (`harness/lib/adapter.mjs`, reads `project-adapter.yml`) | ✅ Built, tested — the one file in the harness with an npm dependency (`js-yaml`), scoped deliberately narrowly |
+| Adapter loader (`harness/lib/adapter.mjs`, reads `project-adapter.yml`) | ✅ Built, tested — one of the two files in the harness with an npm dependency (`js-yaml`), and the one that loads it lazily, so a command that never reads an adapter never needs it installed |
 | Adapter validation (`harness/lib/validate.mjs`, `harness/scripts/validate.mjs`) | ✅ Built, tested — every editable path exists, allowed paths never overlap frozen or append-only ones, `.github/**` is frozen unless deliberately overridden, brief files exist and are flagged for unfilled `[placeholder]`s, every watched or pinned lab is registered and warned about if its key is missing. Run by `init` (advisory), `rehearse` (blocking), and as the generated workflow's own first step — a failure reaches the digest as its own no-generation reason, never as a quiet cycle |
 | Local rehearsal (`harness/lib/rehearse.mjs`, `harness/scripts/rehearse.mjs`) | ✅ Built, tested — the same chain the generated workflow runs (validate → preflight → detect or campaign → probe → a local `agent/gen-NNN` branch → the real orchestrator → guard → tests), as a thin sequencer over the same CLIs the workflow calls, so it can never drift from what the workflow does. Never pushes, opens a pull request, or merges; deterministic and network-free with no lab key configured |
 | Context compiler (`harness/lib/context-pack.mjs`) | ✅ Built, tested (7 of 9 functions — screenshots/scorecard stay project-specific plugins) — wired: `run-generation.mjs` calls its builders to assemble every prompt |
@@ -555,6 +586,7 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Campaign mode (`harness/lib/campaign.mjs`, the workflow's `models` input) | ✅ Built, tested — a generation now, on models named by hand, recorded as `campaign: true` |
 | The committed goal (`project.goal`, [`docs/curiosity/C1`](docs/curiosity/C1-committed-goal.md)) and the themes review's `UNKNOWN` field ([`C2`](docs/curiosity/C2-themes-review-cli.md) phase A) | ✅ Built, tested — the goal sits above the brief, the reviewer rejects drift from it, the guard refuses a diff that edits it; a review may name open questions, rendered as their own section and dropped when none |
 | Kill switch, version stamp, pinned supply chain | ✅ Built, tested — `SELF_IMPROVE_PAUSED` repository variable; `harness/VERSION` in every adapter and record; actions by SHA, `js-yaml` exact with scripts disabled |
+| Shared-workflow installation (`harness/lib/workflow-config.mjs`, `harness/scripts/render-shared-workflow.mjs`, `renderCallerWorkflow()`) | ✅ Built, tested — instead of copying `harness/`, the target repository gets a small caller workflow that calls this repository's `.github/workflows/self-improve.yml` at a pinned commit. Note the behavioural difference: in this mode `evaluation.test_commands` and `setup_commands` are LIVE (the shared workflow runs them) rather than RECORDED |
 | `templates/` — generated workflow (`harness/templates/workflow.yml.tmpl`), agent brief, reviewer brief | ✅ Built, tested (`tests/lib/scaffold.test.mjs` parses every strategy combination's generated YAML back to confirm it's valid); guard config has no separate template — it's `constitution.*` in `project-adapter.yml` itself |
 
 `Portable-Harness-Design.md` §10 has the full build order and reasoning for
@@ -567,6 +599,7 @@ what comes next and why.
 | If you want... | Read |
 |---|---|
 | What's actually built here, as a picture — and the reference implementation's real 7-job workflow alongside it | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
+| The design rules a change to this repository has to keep — the dependency rule, the three-way status agreement, where a new file goes | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 | The concepts, principles, and incidents this is built from — written to be lifted into any project | [`learning/`](learning/), starting with [`learning/README.md`](learning/README.md) |
 | Copy-paste templates (agent brief, reviewer brief, guard config, edit format) | [`learning/06-starter-kit.md`](learning/06-starter-kit.md) |
 | What's being ported from the reference implementation, what needs genericising, and the proposed repo/CLI structure | [`Portable-Harness-Design.md`](Portable-Harness-Design.md) |
@@ -601,7 +634,7 @@ status marks below don't read as contradictions:
    loop end to end (autonomous merge, and the deployment verification that
    follows it, are the opt-in path). `harness/scripts/rehearse.mjs` runs the
    same chain locally on demand, so this stage can be exercised without
-   waiting for a release — see the two diagrams in
+   waiting for a release — see the diagrams in
    [`ARCHITECTURE.md`](ARCHITECTURE.md). This is the only one of the three
    stages that runs unattended today.
 3. **Learn** (🚧 partly built): `docs/curiosity/` designs a second, slower
@@ -687,8 +720,19 @@ to a real incident rather than stated as a bare rule.
 ```
 self_optimisation/
 ├── README.md                        # this file
-├── Portable-Harness-Design.md       # what ports, what's generic, what's next
+├── ARCHITECTURE.md                  # five diagrams: the project, the loop, inside the loop
+├── WORKPLAN.md                      # the sequenced plan of record — what's next
+├── CONTRIBUTING.md                  # the design rules a change here has to keep
+├── Portable-Harness-Design.md       # the historical record of the port from carrotgame
 ├── Model-Release-Driven-Software-Improvement-Paper-Outline.md
+├── railway.json                     # one host's deploy config for console/; any host
+│                                     # that runs `npm start` works
+├── .github/
+│   └── workflows/
+│       └── self-improve.yml         # NOT this repo improving itself — this is THE SHARED
+│                                     # WORKFLOW, rendered from harness/templates/ by
+│                                     # scripts/render-shared-workflow.mjs, and what a
+│                                     # `--shared` install calls at a pinned commit
 ├── package.json                     # one dependency (js-yaml, for adapter.mjs/
 │                                     # scaffold.mjs only); `npm test` runs harness/'s own suite
 ├── docs/                            # research corpus, the design documents,
@@ -697,9 +741,11 @@ self_optimisation/
 │                                     # pass, 4 of its 10 components built, the rest gated on A'
 ├── console/                         # working ten-step installer, HTTP API,
 │                                     # GitHub App flow, pages and deployment guide;
-│                                     # how-to-run.html is the local setup guide, and
+│                                     # how-to-run.html is the local setup guide,
 │                                     # partials/ holds the header and footer every
-│                                     # page includes; optional legacy Supabase
+│                                     # page includes, and favicon.svg is the site
+│                                     # icon, served from the asset table in
+│                                     # server.mjs; optional legacy Supabase
 │                                     # schema, not required
 ├── tests/                           # tests for the harness's OWN code (see above)
 │   ├── lib/                         # one file per harness/lib/ module
@@ -724,7 +770,7 @@ self_optimisation/
     │   ├── llm-provider.mjs           # provider-blind registry, transport, retry/headroom
     │   ├── edit-format.mjs            # SEARCH/REPLACE parser, allowlist supplied by the caller
     │   ├── orchestrator.mjs           # runGeneration() — the four stages, composed
-    │   └── adapter.mjs                # the only file that knows what YAML is
+    │   └── adapter.mjs                # parses YAML (lazily; scaffold.mjs writes it)
     ├── scripts/                       # CLI wrappers — own the filesystem/env/stdio
     │   ├── validate.mjs               # check the adapter before anything is spent
     │   ├── rehearse.mjs               # the whole chain, locally, on a real branch
@@ -756,6 +802,6 @@ counts: point at the command, don't hand-copy the number
 ([`learning/01-principles.md`](learning/01-principles.md) principle 23).
 
 `Portable-Harness-Design.md` §10 has the build order and its revision log;
-`ARCHITECTURE.md` has the two diagrams showing how these pieces actually
+`ARCHITECTURE.md` has the diagrams showing how these pieces actually
 run.
 

@@ -1,6 +1,12 @@
 # C2 — The themes review CLI, and the `UNKNOWN` field
 
-**Status:** PROPOSED (the CLI) · **Phase:** 0 → A · **Depends on:** real generation records · **Blocks:** C3, C7
+**Status:** BUILT (both halves) · **Phase:** 0 → A · **Depends on:** real generation records · **Blocks:** C3, C7
+
+Phase 0, the CLI, shipped as `harness/scripts/generate-themes-review.mjs`
+(WORKPLAN 1.4), and the generated workflow runs it after a generation that
+produced changes. Phase A, the `UNKNOWN` field, shipped as WORKPLAN 4.0.
+The sections below are kept in the tense they were specified in; the file
+table at the end says what each change became.
 **Drawn in:** [D2](../../learning/diagrams/proposed-curiosity-memory.mmd), nodes `trev` and `unknown`
 
 ---
@@ -26,7 +32,7 @@ the abstraction — what the principle implies that no generation has tested.
 One prompt field, one parse rule, one prompt section. That is the entire
 curiosity change at this stage.
 
-## Phase 0 — `scripts/generate-themes-review.mjs`
+## Phase 0 — `scripts/generate-themes-review.mjs` (built)
 
 A CLI in the shape of every other one here: read the adapter, assemble input
 from the repo, call one model, parse, write, emit GitHub outputs.
@@ -141,7 +147,7 @@ escalations.
 | `harness/lib/generate-themes.mjs` | Third field in the prompt; `UNKNOWN` capture and `MEANS` boundary fix in the parser |
 | `harness/lib/themes.mjs` | `buildOpenQuestionsBrief()`; `loadLatestThemesReview()` unchanged |
 | `harness/lib/orchestrator.mjs` | One `section()` at the user-prompt assembly |
-| `harness/scripts/generate-themes-review.mjs` | **New file** — phase 0 |
+| `harness/scripts/generate-themes-review.mjs` | **Built** — phase 0, the new file |
 | `harness/scripts/run-generation.mjs` | Pass the new block into `context.openQuestions` |
 | `examples/workflows/watch-releases.yml` | A step that runs the CLI after a generation completes |
 

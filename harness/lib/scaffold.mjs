@@ -78,8 +78,18 @@ const SHARED_HEADER = `# THE SHARED WORKFLOW. Rendered from harness/templates/wo
 # that caller). It fetches the harness from the repository and commit it was
 # called at, reads each project's project-adapter.yml once from the default
 # branch, and then runs the same steps a copied-in workflow runs. The notes
-# below were written for the copied-in file and hold here too, with that
-# difference.
+# below were written for the copied-in file and hold here too, with two
+# differences worth stating before you read them:
+#
+#   * The MERGE MODEL. Note 1 below says exactly one of the two paths is
+#     rendered into the file. That is true of a copied-in workflow and NOT
+#     true of this one: both paths are here, each gated on APPROVAL_CLASS,
+#     which the config step reads from the calling project's own
+#     project-adapter.yml on every run. The field is guarded — a generation
+#     cannot edit it — but in this file the answer is in that project's
+#     adapter rather than in the YAML you are reading.
+#   * The project values. A copied-in workflow has them baked in; this one
+#     reads them per run from the project it was called by.
 #
 `;
 
@@ -736,6 +746,11 @@ function renderWorkflow(template, answers, shared) {
           RUN_URL: \${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}
           GATES: \${{ steps.gates.outputs.json }}
           MERGED: \${{ steps.gates.outputs.merged }}
+          # The pull request this run opened, so the email that asks for a
+          # decision can link to the thing being decided. Absent on the
+          # autonomous-merge path — that step is not in the file — where the
+          # expression resolves to '' and the digest says "merged" instead.
+          PR_URL: \${{ steps.pr.outputs.url }}
           SUGGEST_MODEL: \${{ steps.probe.outputs.model }}
           SUGGEST_PROVIDER: \${{ steps.probe.outputs.provider }}
           IMPLEMENT_MODEL: \${{ steps.improve.outputs.implement-model }}
@@ -999,10 +1014,21 @@ on:
 
 Model releases are the real trigger, not the calendar — a quiet period runs
 the detector and does nothing else. See \`learning/01-principles.md\`
-principle 1.`
+principle 1, in the harness repository.
+
+To pause every run without uninstalling anything, set the repository
+variable \`SELF_IMPROVE_PAUSED\` to \`true\` (**Settings → Secrets and
+variables → Actions → Variables**). The workflow checks it first and stops
+before spending anything. Set it back to \`false\`, or delete it, to resume.`
       : `Runs on \`${answers.cadenceCron || '0 0 1 * *'}\` (cron, UTC). Model releases are
 the real trigger, not the calendar — a quiet period runs the detector and
-does nothing else. See \`learning/01-principles.md\` principle 1.`;
+does nothing else. See \`learning/01-principles.md\` principle 1, in the
+harness repository.
+
+To pause every run without uninstalling anything, set the repository
+variable \`SELF_IMPROVE_PAUSED\` to \`true\` (**Settings → Secrets and
+variables → Actions → Variables**). The workflow checks it first and stops
+before spending anything. Set it back to \`false\`, or delete it, to resume.`;
 
   return `# Self-Improvement — what init just installed
 

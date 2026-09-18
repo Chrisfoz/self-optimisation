@@ -29,11 +29,22 @@ flowchart TD
 
   push --> guard["11 · guard check<br/>ON THE AGENT BRANCH"]
   guard -->|"clean"| tests["12 · full test suites<br/>ON THE AGENT BRANCH"]
-  tests -->|"all green"| merge["13 · merge, tag, log"]
-  merge --> live["14 · verify the LIVE product<br/>actually carries the change"]
-  merge --> shots[("artefacts:<br/>screenshots, records")]
+
+  tests -->|"all green"| who{"13 · who merges?<br/>one choice, made once, at install.<br/>no run decides it for itself — the branch<br/>a run works on is one a model wrote to"}
+
+  who -->|"human approval · DEFAULT"| pr["14a · open a pull request.<br/>every gate above has passed;<br/>the change is the owner's call"]
+  pr --> done
+  who -->|"autonomous merge · OPT-IN"| merge["14b · merge, tag, log"]
+  merge --> live["15 · verify the LIVE product<br/>actually carries the change.<br/>only on this path: on the other,<br/>nothing has shipped yet"]
+  live --> done
+
+  live --> shots[("artefacts:<br/>screenshots, records")]
   shots -.->|"shown next run"| pack
-  live --> done(["15 · report honestly"])
+  done(["16 · report honestly — and email the owner,<br/>naming anything that is waiting on them<br/>and linking straight to it"])
+
+  done -.->|"later, outside this run"| owner{"a person decides"}
+  owner -->|"merged, or closed unmerged"| fate[("the pull request's fate")]
+  fate -.->|"read back at the TOP of the next run,<br/>closed unmerged breaks the streak"| pack
 
   guard -->|"touched a frozen file"| held(["left unmerged,<br/>for a human to look at"])
   tests -->|"any check red"| held

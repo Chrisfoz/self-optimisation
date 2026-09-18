@@ -170,6 +170,11 @@ const email = await buildGenerationDigestEmail(
     implementModel: process.env.IMPLEMENT_MODEL,
     selfImplemented: process.env.SELF_IMPLEMENTED === 'true',
     summary: process.env.SUMMARY,
+    // Empty on the autonomous-merge path, where the pull-request step does
+    // not exist in the generated workflow at all and the expression
+    // resolves to ''. `waiting` in notify.mjs keys off exactly that.
+    pullRequestUrl: process.env.PR_URL || undefined,
+    runUrl: process.env.RUN_URL || undefined,
     gates,
     briefFeedback: process.env.BRIEF_FEEDBACK,
     escalationsOpened: Number(process.env.ESC_OPENED || 0),

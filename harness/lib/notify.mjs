@@ -121,18 +121,46 @@ export function gatesBlock(gates) {
 }
 
 /**
- * Why merge did or did not happen — computed from real gate results, never
- * asked of a model. Walks the gates in order and reports the first one
- * that didn't succeed, using that gate's own `note` if it supplied one
- * (the way a project explains "this gate is unrelated to the AI review",
- * matching the reference implementation's own guard-vs-review distinction).
+ * Why merge did or did not happen — computed from real gate results and the
+ * run's own pull request, never asked of a model. Walks the gates in order
+ * and reports the first one that didn't succeed, using that gate's own
+ * `note` if it supplied one (the way a project explains "this gate is
+ * unrelated to the AI review", matching the reference implementation's own
+ * guard-vs-review distinction). Only when nothing failed does an open pull
+ * request get to explain the outcome — a failing gate always outranks it,
+ * because "it's waiting for you" is the wrong thing to tell someone whose
+ * run actually broke.
  *
- * @param {{merged: boolean, gates: Array<{name: string, result: string, note?: string}>}} opts
+ * @param {{merged: boolean, gates: Array<{name: string, result: string, note?: string}>, pullRequestUrl?: string}} opts
  */
-export function blockedByLine({ merged, gates }) {
+/**
+ * A URL safe to put in an email, or null. Same rule as run-history.mjs's
+ * `safeUrl()` and for the same reason, kept local rather than imported so
+ * the notification path stays independent of the page renderer: `gh pr
+ * create` emitting anything but a URL as its last line should degrade to
+ * "no link", never to a link that goes somewhere else.
+ */
+function emailUrl(url) {
+  if (typeof url !== 'string') return null;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
+export function blockedByLine({ merged, gates, pullRequestUrl }) {
   if (merged) return 'It merged — nothing was blocked.';
   const firstFailure = gates.find((g) => g.result !== 'success' && g.result !== 'skipped');
   if (firstFailure) return firstFailure.note || `Blocked by the "${firstFailure.name}" gate.`;
+  // Nothing failed and it did not merge: under the default merge model that
+  // is not a mystery, it is the design. Without this branch the digest told
+  // the owner "we don't know why" about the one outcome the whole
+  // pull-request path exists to produce.
+  if (pullRequestUrl) {
+    return `Nothing was blocked. Every gate passed and the change is waiting for YOU — it is an open pull request (${pullRequestUrl}), and this project merges only when a person says so.`;
+  }
   return 'Not merged, and none of the individual gate results explain why — describe this as genuinely unclear rather than guessing a cause.';
 }
 
@@ -186,6 +214,10 @@ async function composeWithFallback({ systemPrompt, userPrompt, buildFallback, di
  *   argued hard for and nobody engaged with never reaches them — and that is
  *   precisely the item a human spots faster than three models will. Omitted
  *   entirely when there is nothing to report, which is the common case.
+ * @param {string} [r.pullRequestUrl]  The pull request this run opened, when
+ *   the project uses `human-approval-required`. Its presence is what makes
+ *   an unmerged run "waiting for you" rather than "not merged".
+ * @param {string} [r.runUrl]  The workflow run, for anyone who wants the log.
  * @param {string} [r.attemptsJson] @param {string} [r.proposalMd]  Raw file contents, if available.
  * @param {string} r.recipientName @param {string} r.projectDescription
  * @param {string[]} [r.calibrationExamples]
@@ -193,8 +225,35 @@ async function composeWithFallback({ systemPrompt, userPrompt, buildFallback, di
  * @param {{call?: Function, log?: (msg: string) => void}} [deps]
  */
 export async function buildGenerationDigestEmail(r, deps = {}) {
-  const statusWord = r.merged ? '✅ MERGED' : '⚠️ NOT MERGED';
+  // Three outcomes, not two. "⚠️ NOT MERGED" on a run that passed every gate
+  // and opened a pull request reads as a failure, and it is the opposite:
+  // under `human-approval-required` — the default — it is the loop finishing
+  // its job and handing the decision over. An owner who learns to skim
+  // "NOT MERGED" as "nothing for me" stops opening the one email that is
+  // entirely for them.
+  const pullRequestUrl = emailUrl(r.pullRequestUrl);
+  const runUrl = emailUrl(r.runUrl);
+  // A gate can still fail AFTER the pull request is opened — `records` is the
+  // live example: it runs `always()`, is continue-on-error, and loses a push
+  // race to the default branch now and then. Without this clause such a run
+  // was headed "waiting for you" and told the model "every gate passed",
+  // while blockedByLine() in the same prompt said "blocked by the records
+  // gate". Contradictory computed facts are the one thing this file exists
+  // to prevent, so `waiting` obeys the precedence blockedByLine() already
+  // uses: a real failure outranks an open pull request.
+  const blockingGate = (r.gates || []).find((g) => g.result !== 'success' && g.result !== 'skipped');
+  const waiting = !r.merged && Boolean(pullRequestUrl) && !blockingGate;
+  const statusWord = r.merged ? '✅ MERGED' : waiting ? '📋 WAITING FOR YOU' : '⚠️ NOT MERGED';
   const bannerLine = `${statusWord} — ${r.genLabel} (${r.scope} scope)`;
+  // The decision needs one click, from the email, on a phone. Anything that
+  // makes the owner go and find the pull request is a reason to do it later.
+  // Keyed on the URL alone, not on `waiting`: a run that opened a pull
+  // request and then had a later gate fail still gets the link — it just
+  // gets an honest banner above it.
+  const linkLines = [
+    ...(pullRequestUrl ? [`Review it:      ${pullRequestUrl}`] : []),
+    ...(runUrl ? [`Workflow run:   ${runUrl}`] : []),
+  ];
   const creditLines = [
     `Suggested by:   ${r.suggestModel || 'n/a'} (${r.suggestProvider || 'n/a'})`,
     `Implemented by: ${r.implementModel || 'n/a'}${r.selfImplemented ? '  ← the suggesting model wrote its own edits' : ''}`,
@@ -205,10 +264,13 @@ export async function buildGenerationDigestEmail(r, deps = {}) {
   const spendLine = spendKnown ? `Spent: ${r.spendTokens.toLocaleString()} tokens across every model call this generation made` : null;
 
   const buildFallback = () => ({
-    subject: `${statusWord}: ${r.genLabel} — ${r.summary || 'no change approved'}`.slice(0, 200),
+    subject: (waiting
+      ? `Waiting for your review: ${r.genLabel} — ${r.summary || 'a change passed every gate'}`
+      : `${statusWord}: ${r.genLabel} — ${r.summary || 'no change approved'}`).slice(0, 200),
     body: [
       bannerLine, ``, ...creditLines,
-      `Change: ${r.summary || '(no change was approved)'}`, ``,
+      `Change: ${r.summary || '(no change was approved)'}`,
+      ...(linkLines.length ? [``, ...linkLines] : []), ``,
       gatesBlock(r.gates), ``,
       `What the suggesting model said about its own brief:`, `  ${r.briefFeedback || '(none given)'}`, ``,
       escalationsLine,
@@ -225,7 +287,10 @@ export async function buildGenerationDigestEmail(r, deps = {}) {
     `Implemented by: ${r.implementModel || 'n/a'}${r.selfImplemented ? ' — the suggesting model wrote its own edits itself' : ''}`,
     `Summary as recorded: ${r.summary || '(no change was approved)'}`,
     `Gate results: ${r.gates.map((g) => `${g.name}=${g.result}`).join(', ')}`,
-    `Why merge did or did not happen (computed from the real job results, not a guess — trust this over any inference from the gate list): ${blockedByLine({ merged: r.merged, gates: r.gates })}`,
+    `Why merge did or did not happen (computed from the real job results, not a guess — trust this over any inference from the gate list): ${blockedByLine({ merged: r.merged, gates: r.gates, pullRequestUrl })}`,
+    waiting
+      ? `THIS RUN IS WAITING ON THE READER. Every gate passed and a pull request is open at ${pullRequestUrl}. Say so plainly and early — what the change is, and that merging it is their call. Do not describe this as a failure or as "not merged", and do not speculate about why it did not merge.`
+      : '',
     `What the suggesting model said about its own brief: ${r.briefFeedback || '(none given)'}`,
     `New escalations opened this run: ${r.escalationsOpened || 0}`,
     `Escalations that reached consensus this run: ${r.escalationsFlagged || 0} (sent as a separate notice if any)`,
@@ -245,7 +310,8 @@ export async function buildGenerationDigestEmail(r, deps = {}) {
   return {
     subject: composed.subject.slice(0, 200),
     body: [
-      bannerLine, ``, ...creditLines, ``, composed.body, ``,
+      bannerLine, ``, ...creditLines,
+      ...(linkLines.length ? [``, ...linkLines] : []), ``, composed.body, ``,
       gatesBlock(r.gates), ``, escalationsLine,
       ...(spendLine ? [spendLine] : []),
       // Appended after the model-written body rather than folded into it:

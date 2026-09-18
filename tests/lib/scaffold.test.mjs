@@ -301,6 +301,33 @@ test('renderWorkflowTemplate: the pull-request path records the PR URL into the 
   assert.equal(step.env.PR_URL, '${{ steps.pr.outputs.url }}');
 });
 
+// The digest step's PR_URL is the whole of I9 in production: delete that one
+// line and every test still passes while every real install silently goes
+// back to telling its owner "⚠️ NOT MERGED" forever. send-digest.mjs's own
+// header records the last time a missing env line failed exactly this
+// quietly, so this gate exists to be able to fail.
+const NOTIFY = { provider: 'sendgrid', envKey: 'SENDGRID_API_KEY', recipient: 'you@example.com', fromEmail: 'bot@example.com' };
+const digestStep = (answers) =>
+  loadYaml(renderWorkflowTemplate(template, answers))
+    .jobs['self-improve'].steps.find((s) => /Send the generation digest/.test(s.name));
+
+test('renderWorkflowTemplate: the digest step is told the pull request URL, so the email can link it', () => {
+  const step = digestStep(baseAnswers({ notify: NOTIFY }));
+  assert.ok(step, 'expected a digest step when notify is configured');
+  assert.equal(step.env.PR_URL, '${{ steps.pr.outputs.url }}');
+  assert.equal(step.env.RUN_URL, '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}');
+});
+
+test('renderWorkflowTemplate: autonomous-merge still renders PR_URL, which resolves to empty with no pr step', () => {
+  const answers = baseAnswers({ notify: NOTIFY, approvalClass: 'autonomous-merge' });
+  const step = digestStep(answers);
+  assert.equal(step.env.PR_URL, '${{ steps.pr.outputs.url }}');
+  // The contract the empty string depends on: that step is genuinely absent,
+  // so the expression has nothing to resolve to and the digest says "merged".
+  const names = loadYaml(renderWorkflowTemplate(template, answers)).jobs['self-improve'].steps.map((s) => s.name);
+  assert.ok(!names.some((n) => /Open a pull request/.test(n)), 'autonomous-merge must render no pr step');
+});
+
 test('renderWorkflowTemplate: the pull-request path asks for pull-requests: write, the merge path does not', () => {
   const pr = loadYaml(renderWorkflowTemplate(template, baseAnswers()));
   assert.deepEqual(pr.permissions, { contents: 'write', 'pull-requests': 'write' });
