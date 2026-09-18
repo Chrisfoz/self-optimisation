@@ -828,6 +828,19 @@ Most of what broke was the install path and the cost of runs, not the loop.
   with `--ignore-scripts`. *Done when:* the copied workflow runs
   `evaluation.setup_commands` and then an isolated harness install, and a
   project with no setup commands is told what to add.
+  **Half done.** The isolation half shipped while installing into Hospital of
+  the Future, because it is one line and that project has js-yaml 3.14.2
+  hoisted under `@istanbuljs/load-nyc-config` — the ordinary jest shape —
+  which a root install would have replaced for the rest of every run. The
+  generated copied workflow now installs with `--prefix harness
+  --no-save --no-package-lock`, and `tests/lib/scaffold.test.mjs` fails on a
+  bare root install. It was hand-edited into that install's workflow first,
+  and regenerating promptly overwrote it — twice, once per job — which is the
+  argument against leaving it as a per-install hand-edit.
+  **What is left** is the other half: running `evaluation.setup_commands`
+  before that step, so a project that needs its own dependencies installed
+  says so once rather than relying on the harness's install line to do it by
+  accident.
 - [ ] **I11 — A key check in the harness, with balance where a lab allows
   it.** NetworkinAI's own `scripts/verify-harness-keys.mjs` does the catalogue
   check. DeepSeek (`GET /user/balance`) and Moonshot

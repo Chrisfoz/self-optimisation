@@ -467,10 +467,20 @@ function workflowFor(answers, setupCommands) {
   if (!setupCommands.length) return workflow;
   // Project package managers can remove a --no-save harness dependency. Run the
   // project's dependency setup FIRST, then the existing pinned harness install.
+  // Anchored to the self-improve JOB, not merely to the first occurrence of
+  // the step name. The generated workflow has a second job — check-keys —
+  // which carries the same setup steps and comes first in the file.
+  // Injecting at the first match put the project's dependency install into
+  // the job that only ever calls lab APIs, and left the job that runs the
+  // project's tests without it.
+  const jobStart = workflow.indexOf("\n  self-improve:");
+  if (jobStart === -1) throw new Error("generated workflow has no self-improve job");
   const marker = "      - name: Install harness dependencies";
   const setup =
     "      - name: Install project dependencies\n        shell: bash\n        run: |\n" +
     setupCommands.map((c) => "          " + c).join("\n") +
     "\n\n";
-  return workflow.replace(marker, () => setup + marker);
+  const at = workflow.indexOf(marker, jobStart);
+  if (at === -1) throw new Error("self-improve job has no harness install step");
+  return workflow.slice(0, at) + setup + workflow.slice(at);
 }

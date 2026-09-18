@@ -31,7 +31,7 @@ test('the committed shared workflow is exactly what the template renders', () =>
 
 test('it is only ever called: workflow_call inputs, no schedule, no dispatch, no concurrency of its own', () => {
   assert.deepEqual(Object.keys(doc.on), ['workflow_call']);
-  assert.deepEqual(Object.keys(doc.on.workflow_call.inputs), ['scope', 'models', 'runner']);
+  assert.deepEqual(Object.keys(doc.on.workflow_call.inputs), ['scope', 'models', 'check_keys', 'runner']);
   // A called workflow in its caller's concurrency group waits for itself forever.
   assert.ok(!('concurrency' in doc));
   assert.equal(doc.jobs['self-improve']['runs-on'], '${{ inputs.runner }}');
