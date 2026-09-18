@@ -792,7 +792,26 @@ Most of what broke was the install path and the cost of runs, not the loop.
   that needs the reader to go and find the pull request is a decision that
   happens next week. `scaffold.mjs` passes `PR_URL` into the digest step;
   five tests in `tests/lib/notify.test.mjs` pin it, including that a real
-  gate failure still outranks a waiting pull request.
+  gate failure still outranks a waiting pull request — `waiting` uses the
+  same precedence `blockedByLine()` does, so a `records` gate that fails on a
+  push race *after* the pull request is open cannot produce a "waiting for
+  you" banner above a gate block showing a failure. The URL is validated as
+  an https URL before it is printed (`run-history.mjs`'s rule, kept local),
+  so a non-URL degrades to no link rather than a link to somewhere else, and
+  `tests/lib/scaffold.test.mjs` pins the env line that makes the whole thing
+  work in production — the one line whose deletion left all 862 tests green.
+- [ ] **I14 — A failed `gh pr create` is reported as a successful gate.**
+  Found reviewing I9. The pull-request step runs
+  `url=$(gh pr create ... | tail -n 1)`, so the step's exit status is
+  `tail`'s, not `gh`'s: a pull request that failed to open still reports
+  `pull-request=success` in the gate list. I9's own wiring fails safe — the
+  URL is empty, so the digest says NOT MERGED rather than inventing a link —
+  but `blockedByLine()` then finds no failing gate and tells the owner the
+  outcome is "genuinely unclear" on a run whose one visible outcome
+  demonstrably failed. Missing permissions are the likeliest cause, which is
+  the thing an installer most needs named. *Done when:* the step captures
+  `gh`'s own exit status (a temporary file, or `PIPESTATUS`), a failure is a
+  failed gate, and a test covers it.
 - [ ] **I10 — Copied installs get an explicit dependency step.** The root
   `npm install js-yaml` is silently the project's own dependency install,
   with `--ignore-scripts`. *Done when:* the copied workflow runs

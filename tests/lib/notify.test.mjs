@@ -145,6 +145,63 @@ test('buildGenerationDigestEmail: the terse fallback also names the pull request
   assert.match(email.body, /Review it:      https:\/\/github\.com\/o\/r\/pull\/7/);
 });
 
+test('buildGenerationDigestEmail: a gate that failed after the pull request opened outranks "waiting"', async () => {
+  // `records` runs always() and continue-on-error, so it can fail on a push
+  // race long after the pull request exists. The owner must not be told
+  // "every gate passed" in the same email whose gate block shows a failure.
+  let seen = '';
+  const call = async ({ user }) => { seen = user; throw new Error('no model'); };
+  const email = await buildGenerationDigestEmail(
+    {
+      ...BASE, genLabel: 'generation 007', scope: 'focused', merged: false,
+      summary: 'Tighten the loader',
+      gates: [{ name: 'tests', result: 'success' }, { name: 'records', result: 'failure' }],
+      pullRequestUrl: 'https://github.com/o/r/pull/7',
+    },
+    { call }
+  );
+  assert.doesNotMatch(email.body, /WAITING FOR YOU/);
+  assert.match(email.body, /NOT MERGED/);
+  assert.doesNotMatch(seen, /THIS RUN IS WAITING ON THE READER/);
+  assert.match(seen, /Blocked by the "records" gate/);
+  // The link still goes out — the reader may well want to look at it.
+  assert.match(email.body, /Review it:/);
+});
+
+test('buildGenerationDigestEmail: the waiting instruction actually reaches the prompt', async () => {
+  let seen = '';
+  const call = async ({ user }) => {
+    seen = user;
+    return { text: 'SUBJECT: Ready for you\nBODY:\nEverything passed and it is yours to merge now.' };
+  };
+  await buildGenerationDigestEmail(
+    {
+      ...BASE, genLabel: 'generation 008', scope: 'focused', merged: false,
+      summary: 'x', gates: [{ name: 'tests', result: 'success' }],
+      pullRequestUrl: 'https://github.com/o/r/pull/7',
+    },
+    { call }
+  );
+  assert.match(seen, /THIS RUN IS WAITING ON THE READER/);
+  assert.match(seen, /pull\/7/);
+});
+
+test('buildGenerationDigestEmail: a pull request URL that is not an https URL is dropped, not printed', async () => {
+  const call = async () => { throw new Error('no model'); };
+  const email = await buildGenerationDigestEmail(
+    {
+      ...BASE, genLabel: 'generation 009', scope: 'focused', merged: false,
+      summary: 'x', gates: [{ name: 'tests', result: 'success' }],
+      pullRequestUrl: 'javascript:alert(3)',
+    },
+    { call }
+  );
+  assert.doesNotMatch(email.body, /Review it:/);
+  assert.doesNotMatch(email.body, /javascript:/);
+  // No usable link means no claim that something is waiting to be clicked.
+  assert.match(email.body, /NOT MERGED/);
+});
+
 test('buildGenerationDigestEmail: no pull request and not merged is still NOT MERGED', async () => {
   const call = async () => { throw new Error('network died'); };
   const email = await buildGenerationDigestEmail(

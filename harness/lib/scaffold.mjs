@@ -78,8 +78,18 @@ const SHARED_HEADER = `# THE SHARED WORKFLOW. Rendered from harness/templates/wo
 # that caller). It fetches the harness from the repository and commit it was
 # called at, reads each project's project-adapter.yml once from the default
 # branch, and then runs the same steps a copied-in workflow runs. The notes
-# below were written for the copied-in file and hold here too, with that
-# difference.
+# below were written for the copied-in file and hold here too, with two
+# differences worth stating before you read them:
+#
+#   * The MERGE MODEL. Note 1 below says exactly one of the two paths is
+#     rendered into the file. That is true of a copied-in workflow and NOT
+#     true of this one: both paths are here, each gated on APPROVAL_CLASS,
+#     which the config step reads from the calling project's own
+#     project-adapter.yml on every run. The field is guarded — a generation
+#     cannot edit it — but in this file the answer is in that project's
+#     adapter rather than in the YAML you are reading.
+#   * The project values. A copied-in workflow has them baked in; this one
+#     reads them per run from the project it was called by.
 #
 `;
 

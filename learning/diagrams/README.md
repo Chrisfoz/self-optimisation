@@ -2,7 +2,7 @@
 
 Eight diagrams, in [Mermaid](https://mermaid.js.org) source form so you can paste
 them straight into your own documents. **Five describe the harness. Three
-describe a design that is now about a fifth built** — they are prefixed
+describe a design that is four-tenths built** — they are prefixed
 `proposed-` and are indexed separately below, because a drawing of something
 that does not exist is the easiest way to mislead someone about a system.
 That prefix is now a slight overstatement, which is the better direction for
@@ -11,7 +11,7 @@ it to be wrong in.
 | File | What it shows |
 |---|---|
 | `generic-loop.mmd` | **One lap of the loop**, project-neutral — including every way it can stop, and the one choice the owner makes: who merges. |
-| `generic-guardrails.mmd` | **The six layers** a change passes through before anyone sees it — identical whether a person merges it or the loop does. |
+| `generic-guardrails.mmd` | **The six layers** a change passes through before anyone sees it. The first five are identical whether a person merges or the loop does; the sixth, the live check, only runs when the loop merged — a human merge happens after the run has ended. |
 | `generic-context.mmd` | **What the model is shown, and what it may write.** Context in on the left, the double-enforced allowlist on the right. |
 | `worked-example-run.mmd` | The same loop as actually built in the reference implementation, with real job names and check counts. |
 | `worked-example-harness.mmd` | The same harness as actually built in the reference implementation, with token costs and per-provider dispatch. |

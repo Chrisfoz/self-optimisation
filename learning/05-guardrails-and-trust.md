@@ -31,15 +31,14 @@ flowchart TB
   l5{"5 · full test suites<br/>ON THE AGENT BRANCH"} -->|"any red"| held
   l5 -->|"green"| who
 
-  who{"WHO MERGES?<br/>not a layer — the six gates are identical<br/>either way. this is only who acts on<br/>the result, chosen once at install"}
+  who{"WHO MERGES?<br/>not a layer — the five above are identical<br/>either way. only who acts on the result,<br/>chosen once at install"}
   who -->|"human approval · DEFAULT"| pr(["open a pull request.<br/>all five layers above have passed;<br/>a person decides, told by email,<br/>with the link"])
   who -->|"autonomous merge · OPT-IN"| merge(["merge · tag · log"])
 
-  pr -->|"a person closes it"| shut(["closed unmerged — recorded,<br/>and the next run is told"])
-  pr -->|"a person merges"| l6
+  pr -.->|"whatever the person does, the next run<br/>reads it back; closed unmerged<br/>breaks the streak"| shut[("the pull request's fate")]
   merge --> l6
 
-  l6{"6 · does the LIVE product<br/>carry the change?"} -->|"stale"| loud(["fail loudly —<br/>green gates, no delivery"])
+  l6{"6 · does the LIVE product<br/>carry the change?<br/>only reached when the loop merged —<br/>a human merge happens after the run ends"} -->|"stale"| loud(["fail loudly —<br/>green gates, no delivery"])
   l6 -->|"serving it"| done(["generation complete"])
 ```
 
