@@ -800,18 +800,29 @@ Most of what broke was the install path and the cost of runs, not the loop.
   so a non-URL degrades to no link rather than a link to somewhere else, and
   `tests/lib/scaffold.test.mjs` pins the env line that makes the whole thing
   work in production — the one line whose deletion left all 862 tests green.
-- [ ] **I14 — A failed `gh pr create` is reported as a successful gate.**
-  Found reviewing I9. The pull-request step runs
-  `url=$(gh pr create ... | tail -n 1)`, so the step's exit status is
-  `tail`'s, not `gh`'s: a pull request that failed to open still reports
-  `pull-request=success` in the gate list. I9's own wiring fails safe — the
-  URL is empty, so the digest says NOT MERGED rather than inventing a link —
-  but `blockedByLine()` then finds no failing gate and tells the owner the
-  outcome is "genuinely unclear" on a run whose one visible outcome
-  demonstrably failed. Missing permissions are the likeliest cause, which is
-  the thing an installer most needs named. *Done when:* the step captures
-  `gh`'s own exit status (a temporary file, or `PIPESTATUS`), a failure is a
-  failed gate, and a test covers it.
+- [x] **I14 — What the pull-request step does when `gh` does not return a
+  URL.** Raised as "the pipe to `tail` swallows gh's exit status, so a failed
+  pull request reports a successful gate". **That premise was wrong, and the
+  correction is the useful part of this item:** GitHub runs `shell: bash` as
+  `bash --noprofile --norc -eo pipefail`, and a plain `url=$(... | tail -n 1)`
+  assignment propagates the pipeline's status under `pipefail`. Run for real
+  against the generated step with a `gh` that exits 1: the step dies, writes
+  no output, and `continue-on-error` records `outcome: failure`, so the gate
+  list already says `pull-request failure` and the digest already names it.
+  Nothing was broken.
+  **The neighbouring case was broken.** `gh` exiting **0** without printing a
+  URL — a trailing warning line, or a version that prints the URL somewhere
+  other than last — left `$url` holding prose, which was written to
+  `GITHUB_OUTPUT` and from there into `attempts.json` and the run history page
+  as that generation's "pull request". Measured, not imagined: a `gh` that
+  echoes a warning and exits 0 produced `url=Warning: using default branch`.
+  **Done.** The step now refuses anything that is not an `https://` URL and
+  exits non-zero with the captured text in the log, which makes it a failed
+  gate with a reason rather than a broken link found weeks later. Three
+  outcomes of that step — opened, `gh` failed, `gh` returned no URL — are now
+  executed for real in `tests/scripts/workflow-shell.test.mjs` under GitHub's
+  own bash flags, including the pipefail behaviour that was load-bearing and
+  untested. Verified by removing the guard and watching the test fail.
 - [ ] **I10 — Copied installs get an explicit dependency step.** The root
   `npm install js-yaml` is silently the project's own dependency install,
   with `--ignore-scripts`. *Done when:* the copied workflow runs
