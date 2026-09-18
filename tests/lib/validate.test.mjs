@@ -42,6 +42,48 @@ test('a well-formed adapter over a matching repo produces no errors or warnings'
   assert.deepEqual(result, { errors: [], warnings: [] });
 });
 
+// WORKPLAN I10. A copied install has no step that installs the project's own
+// dependencies unless evaluation.setup_commands says so, and preflight runs
+// the project's real test command. The first real install on a jest project
+// exited 127 and skipped every generation before it started.
+test('warns when a copied install runs a test command that needs dependencies nothing installs', (t) => {
+  const { repoRoot, adapter } = validSetup();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  adapter.evaluation = { test_commands: ['npm run test:unit'] };
+  const { errors, warnings } = validateAdapter(adapter, { repoRoot, env: { ANTHROPIC_API_KEY: 'x' } });
+  assert.deepEqual(errors, [], 'a warning, not an error — the heuristic can be wrong');
+  const hit = warnings.find((w) => /setup_commands/.test(w));
+  assert.ok(hit, `expected a setup_commands warning, got: ${JSON.stringify(warnings)}`);
+  assert.match(hit, /exit 127/);
+  assert.match(hit, /npm ci --ignore-scripts/, 'it should name the fix, not just the problem');
+});
+
+test('no setup warning once setup_commands is filled in', (t) => {
+  const { repoRoot, adapter } = validSetup();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  adapter.evaluation = { test_commands: ['npm run test:unit'], setup_commands: ['npm ci --ignore-scripts'] };
+  const { warnings } = validateAdapter(adapter, { repoRoot, env: { ANTHROPIC_API_KEY: 'x' } });
+  assert.equal(warnings.filter((w) => /setup_commands/.test(w)).length, 0);
+});
+
+test('no setup warning for a suite that needs no install, or for a shared install', (t) => {
+  const { repoRoot, adapter } = validSetup();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  // Node's own test runner, Go: nothing to install. The harness must not
+  // invent a dependency step for these.
+  for (const cmd of ['node --test tests/', 'go test ./...']) {
+    adapter.evaluation = { test_commands: [cmd] };
+    const { warnings } = validateAdapter(adapter, { repoRoot, env: { ANTHROPIC_API_KEY: 'x' } });
+    assert.equal(warnings.filter((w) => /setup_commands/.test(w)).length, 0, cmd);
+  }
+  // A shared install runs setup_commands from the adapter on every run, so
+  // the copied-install gap does not apply to it.
+  adapter.evaluation = { test_commands: ['npm run test:unit'] };
+  adapter.harness = { shared: { repository: 'o/r', ref: 'a'.repeat(40) } };
+  const { warnings } = validateAdapter(adapter, { repoRoot, env: { ANTHROPIC_API_KEY: 'x' } });
+  assert.equal(warnings.filter((w) => /setup_commands/.test(w)).length, 0, 'shared');
+});
+
 test('rejects a non-object adapter without touching the filesystem', () => {
   const result = validateAdapter(null, { repoRoot: '/does/not/matter' });
   assert.equal(result.errors.length, 1);

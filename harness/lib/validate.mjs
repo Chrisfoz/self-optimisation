@@ -141,6 +141,31 @@ export function validateAdapter(adapter, { repoRoot = process.cwd(), env = proce
     warnings.push('constitution.frozen_paths does not appear to cover .github/** — an autonomous change could rewrite its own workflow definition. Add ".github/**" to frozen_paths, or list a path under .github/ in allowed_paths if that is deliberate.');
   }
 
+  // A test command that needs installed dependencies, in a COPIED install
+  // with nothing to install them. This is not theoretical: the first real
+  // install on a jest project had `npm run test:unit` as its preflight gate,
+  // no setup commands, and no other step that installs anything — preflight
+  // exited 127 (command not found) and every generation was skipped before
+  // it started. A shared install is exempt: it runs setup_commands from the
+  // adapter on every run.
+  //
+  // Heuristic on purpose, and it warns rather than fails: plenty of suites
+  // need no install at all (`node --test`, `go test`), and the harness should
+  // not invent a dependency step for them.
+  const testCommands = adapter?.evaluation?.test_commands ?? [];
+  const setupCommands = adapter?.evaluation?.setup_commands ?? [];
+  const NEEDS_INSTALL = /^\s*(npm|npx|yarn|pnpm|bun|jest|vitest|mocha|pytest|poetry|bundle|rake|mvn|gradle)\b/;
+  const needsInstall = testCommands.filter((c) => NEEDS_INSTALL.test(String(c)));
+  if (!adapter?.harness?.shared && needsInstall.length && !setupCommands.length) {
+    warnings.push(
+      `evaluation.test_commands runs "${needsInstall[0]}", which needs this project's dependencies installed, ` +
+      'but evaluation.setup_commands is empty and a copied installation has no other step that installs them. ' +
+      'Preflight will exit 127 and every generation will be skipped. Add the command your own CI uses ' +
+      '(for example `- npm ci --ignore-scripts`) under evaluation.setup_commands, then regenerate the workflow ' +
+      'with `node harness/cli/init.mjs --from-adapter --force`.'
+    );
+  }
+
   // Brief files: must exist (run-generation.mjs would otherwise fail at the
   // very start of a run), and a leftover [placeholder] is sent to a model
   // verbatim as part of its system prompt — a warning, not an error, since
