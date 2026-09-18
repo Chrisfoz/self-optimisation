@@ -311,6 +311,43 @@ const digestStep = (answers) =>
   loadYaml(renderWorkflowTemplate(template, answers))
     .jobs['self-improve'].steps.find((s) => /Send the generation digest/.test(s.name));
 
+// WORKPLAN I10. A copied installation has no step that installs the project's
+// own dependencies unless this one renders, and preflight runs the project's
+// real test command — the first real install on a jest project exited 127
+// (command not found) and skipped every generation before it started.
+test('renderWorkflowTemplate: a copied install installs the project dependencies, before the harness ones', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers({ setupCommands: ['npm ci --ignore-scripts'] }));
+  const steps = loadYaml(out).jobs['self-improve'].steps;
+  const project = steps.findIndex((s) => s.name === "Install the project's own dependencies");
+  const harness = steps.findIndex((s) => s.name === 'Install harness dependencies');
+  assert.ok(project >= 0, 'expected a project dependency step');
+  // Order matters: `npm ci` deletes node_modules, so the project goes first.
+  assert.ok(project < harness, 'project dependencies must install before the harness dependency');
+  assert.match(steps[project].run, /npm ci --ignore-scripts/);
+  // And not in the key check, which calls lab APIs and needs none of it.
+  assert.ok(
+    !loadYaml(out).jobs['check-keys'].steps.some((s) => s.name === "Install the project's own dependencies"),
+    'the key check does not need the project dependencies',
+  );
+});
+
+test('renderWorkflowTemplate: no setup commands renders no step at all, and leaves no token behind', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers());
+  assert.doesNotMatch(out, /PROJECT_SETUP_STEPS/, 'the token must be removed, not left in the YAML');
+  assert.doesNotMatch(out, /Install the project's own dependencies/);
+  // A `run:` with no commands is a YAML error — proves the whole line went.
+  loadYaml(out);
+});
+
+test('renderWorkflowTemplate: several setup commands each get their own line, correctly indented', () => {
+  const out = renderWorkflowTemplate(template, baseAnswers({
+    setupCommands: ['npm ci --ignore-scripts', 'npm run build'],
+  }));
+  const step = loadYaml(out).jobs['self-improve'].steps
+    .find((s) => s.name === "Install the project's own dependencies");
+  assert.equal(step.run, 'npm ci --ignore-scripts\nnpm run build\n');
+});
+
 test('renderWorkflowTemplate: the digest step is told the pull request URL, so the email can link it', () => {
   const step = digestStep(baseAnswers({ notify: NOTIFY }));
   assert.ok(step, 'expected a digest step when notify is configured');

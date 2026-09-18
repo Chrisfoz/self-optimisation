@@ -823,7 +823,7 @@ Most of what broke was the install path and the cost of runs, not the loop.
   executed for real in `tests/scripts/workflow-shell.test.mjs` under GitHub's
   own bash flags, including the pipefail behaviour that was load-bearing and
   untested. Verified by removing the guard and watching the test fail.
-- [ ] **I10 — Copied installs get an explicit dependency step.** The root
+- [x] **I10 — Copied installs get an explicit dependency step.** The root
   `npm install js-yaml` is silently the project's own dependency install,
   with `--ignore-scripts`. *Done when:* the copied workflow runs
   `evaluation.setup_commands` and then an isolated harness install, and a
@@ -837,10 +837,18 @@ Most of what broke was the install path and the cost of runs, not the loop.
   bare root install. It was hand-edited into that install's workflow first,
   and regenerating promptly overwrote it — twice, once per job — which is the
   argument against leaving it as a per-install hand-edit.
-  **What is left** is the other half: running `evaluation.setup_commands`
-  before that step, so a project that needs its own dependencies installed
-  says so once rather than relying on the harness's install line to do it by
-  accident.
+  **Done — the other half too**, forced by the first real campaign on Hospital
+  of the Future: preflight exited **127**, command not found, because a copied
+  workflow had no step that installs the project's own dependencies and its
+  test command is `npm run test:unit`. The gate worked exactly as designed —
+  it refused to spend, and the digest email said why — but no generation could
+  ever have run. `evaluation.setup_commands` now renders into the copied
+  workflow ahead of the harness install (`npm ci` deletes `node_modules`, so
+  the order is load-bearing), the step disappears entirely when a project
+  needs no install, and it never reaches the check-keys job, which calls lab
+  APIs and nothing else. `validate.mjs` warns when a test command needs
+  dependencies and nothing installs them, and names the fix. Both halves
+  verified by breaking them and watching the tests fail.
 - [ ] **I11 — A key check in the harness, with balance where a lab allows
   it.** NetworkinAI's own `scripts/verify-harness-keys.mjs` does the catalogue
   check. DeepSeek (`GET /user/balance`) and Moonshot

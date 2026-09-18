@@ -205,6 +205,14 @@ jobs:
         with:
           node-version: '22'
 
+      # The project's own dependencies, before anything runs its tests. A
+      # copied installation has no other step that does this, and preflight
+      # runs the project's real test command: without it, `npm test` exits 127
+      # (command not found), preflight fails, and every generation is skipped
+      # before it starts — a loop that mails "nothing happened" every cycle.
+      # Empty when a project needs no setup (a suite that runs on Node's own
+      # test runner with zero dependencies, say), in which case this whole
+      # step disappears from the file.
       # The harness comes from the repository and commit this workflow file was
       # called at (job.workflow_repository, job.workflow_sha), fetched by SHA
       # and checked after checkout, so a project runs exactly the code it

@@ -841,6 +841,29 @@ function renderWorkflow(template, answers, shared) {
   // so this token appears twice in the template and filling only the first
   // left a literal {{HARNESS_SETUP_STEPS}} in the generated YAML.
   out = out.replaceAll('{{HARNESS_SETUP_STEPS}}', () => (shared ? SHARED_HARNESS_SETUP : COPIED_HARNESS_SETUP));
+  // {{PROJECT_SETUP_STEPS}} — `evaluation.setup_commands`, for a COPIED
+  // installation. A shared installation already runs them, per run, from the
+  // project's adapter on the default branch (run-project-commands.mjs setup
+  // inside its preflight), so it renders nothing here and keeps its single
+  // source of truth. For a copied workflow this is the only step that
+  // installs what the project's own test command needs, and its absence is
+  // what WORKPLAN I10 was about: preflight exited 127 on a real install.
+  //
+  // Whole line removed when the list is empty, rather than left as an empty
+  // step: a `run:` with no commands is a YAML error, and a project whose
+  // suite needs no install should not carry a no-op step for ever.
+  out = out.replace(
+    /^\{\{PROJECT_SETUP_STEPS\}\}\n/m,
+    () => (!shared && answers.setupCommands?.length
+      ? [
+          "      - name: Install the project's own dependencies",
+          '        shell: bash',
+          '        run: |',
+          indentBlock(answers.setupCommands.join('\n'), 10),
+          '',
+        ].join('\n')
+      : ''),
+  );
   // The configuration step writes project-config.json only when it read the
   // adapter cleanly, so a project whose adapter could not be read stops at
   // this gate, and reaches the digest the same way, as one that is invalid.
