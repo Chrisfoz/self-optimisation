@@ -500,6 +500,53 @@ small {
   margin: 5px 0 0;
   font-size: 14px;
 }
+/* The console's escape hatch, above the wizard. Plenty of people who land
+   here already know their way around a repository and want the commands, not
+   ten steps — and the console cannot run anything for them anyway, so sending
+   them to the walkthrough is a better first answer than a sign-in button. */
+.quickstart {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 28px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+.quickstart > div:first-child {
+  max-width: 720px;
+}
+.quickstart p {
+  margin: 6px 0 0;
+  font-size: 14px;
+}
+.quickstart pre {
+  background: #102035;
+  color: #dce8fa;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0 0;
+  overflow-x: auto;
+  font: 13px/1.7 ui-monospace, monospace;
+}
+.quickstart pre code {
+  color: inherit;
+}
+.quickstart-note {
+  color: var(--muted);
+}
+.quickstart .button-row {
+  flex-wrap: wrap;
+}
+@media (max-width: 900px) {
+  .quickstart {
+    flex-direction: column;
+    gap: 16px;
+  }
+}
 .wizard-grid {
   display: grid;
   grid-template-columns: 230px minmax(0, 1fr) 340px;
