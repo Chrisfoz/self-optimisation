@@ -125,6 +125,46 @@ test('pull request: opens with the summary verbatim, and model text in SUMMARY i
   assert.ok(args.includes('docs/generations/gen-007/proposal.md'));
 });
 
+// The three ways this step can end, run for real rather than reasoned about.
+// The first two were checked by hand while investigating WORKPLAN I14, which
+// claimed the pipe to `tail` swallowed gh's exit status. It does not — GitHub
+// runs `shell: bash` with -eo pipefail — but that is load-bearing behaviour
+// with no test, and the assumption is exactly the kind that quietly stops
+// being true when someone changes a shell line.
+
+test('pull request: a failing gh kills the step, so the gate reports failure and no URL is written', opts, () => {
+  const { steps } = renderSteps(answers());
+  const gh = fakeTool('gh', 'echo "HTTP 403: Resource not accessible by integration" >&2\nexit 1');
+  const sandbox = fs.mkdtempSync(path.join(path.dirname(gh.dir), 'pr-fail-'));
+  const r = runStep(findStep(steps, 'pr'), {
+    cwd: sandbox,
+    pathPrepend: [gh.dir],
+    env: {
+      GH_TOKEN: 'x', BASE_BRANCH: 'main', BRANCH: 'agent/gen-007', GEN_NUMBER: '007',
+      SUMMARY: 's', RUN_URL: 'https://example/run/1', GENERATIONS_DIR: 'docs/generations',
+    },
+  });
+  assert.notEqual(r.status, 0, 'a failed gh pr create must fail the step');
+  assert.equal(r.outputs.url, undefined, 'no URL output when no pull request was opened');
+});
+
+test('pull request: gh exiting 0 without printing a URL is refused, not recorded as one', opts, () => {
+  const { steps } = renderSteps(answers());
+  const gh = fakeTool('gh', 'echo "Warning: using default branch"\nexit 0');
+  const sandbox = fs.mkdtempSync(path.join(path.dirname(gh.dir), 'pr-nourl-'));
+  const r = runStep(findStep(steps, 'pr'), {
+    cwd: sandbox,
+    pathPrepend: [gh.dir],
+    env: {
+      GH_TOKEN: 'x', BASE_BRANCH: 'main', BRANCH: 'agent/gen-007', GEN_NUMBER: '007',
+      SUMMARY: 's', RUN_URL: 'https://example/run/1', GENERATIONS_DIR: 'docs/generations',
+    },
+  });
+  assert.notEqual(r.status, 0, 'prose captured instead of a URL must fail the step');
+  assert.equal(r.outputs.url, undefined, 'a warning line must never be recorded as the pull request');
+  assert.match(r.stderr, /last line was not a URL/);
+});
+
 // --- credentials --------------------------------------------------------------------
 
 // Every step that runs a script which calls a model, and so needs a lab key.

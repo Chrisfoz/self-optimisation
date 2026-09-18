@@ -517,7 +517,21 @@ jobs:
             --head "$BRANCH" \
             --title "Generation $GEN_NUMBER: $SUMMARY" \
             --body "$body" | tail -n 1)
-          echo "url=$url" >> "$GITHUB_OUTPUT"
+          # gh exiting 0 is not the same as gh having printed a pull
+          # request URL. A trailing warning line, or a version that prints
+          # the URL somewhere other than last, leaves $url holding prose —
+          # which then reaches attempts.json and the run history page as
+          # this generation's "pull request". Tested: gh writing a warning
+          # and exiting 0 set url="Warning: using default branch".
+          # Refusing here makes it a failed gate with a reason in the log,
+          # which the digest reports; writing it makes a broken link the
+          # owner finds later. A FAILING gh needs no check of its own:
+          # shell: bash runs with -eo pipefail, so the assignment already
+          # dies and the step is already recorded as a failed gate.
+          case "$url" in
+            https://*) echo "url=$url" >> "$GITHUB_OUTPUT" ;;
+            *) echo "gh pr create exited 0 but its last line was not a URL: $url" >&2; exit 1 ;;
+          esac
 
       # The one field writeAttemptRecord() cannot fill in itself: the PR
       # has no URL until the step above returns one, by which point
