@@ -471,7 +471,13 @@ function writeFiles(answers) {
   for (const w of warnings) console.log(`   ⚠️  ${w}`);
   if (!errors.length && !warnings.length) console.log('   No issues found.');
   console.log(
-    '\nDone. Read SELF-IMPROVE-README.md next — it says exactly what still needs a human before the schedule should run unattended.' +
+    '\nDone. Two things next, in this order:\n' +
+    '\n  1. Prove your keys work — this is the cheapest failure to catch, and the\n' +
+    '     only one that otherwise surfaces mid-generation after money is spent:\n' +
+    '       node --env-file=harness/.env.harness.local harness/scripts/check-keys.mjs\n' +
+    '\n  2. Work through SELF-IMPROVE-CHECKLIST.md, then SELF-IMPROVE-README.md —\n' +
+    '     between them they say exactly what still needs a human before the\n' +
+    '     schedule should run unattended.' +
     (errors.length ? ' Fix the error(s) above first — `node harness/scripts/validate.mjs` re-checks them any time.' : '')
   );
 }

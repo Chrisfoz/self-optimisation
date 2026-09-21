@@ -1121,6 +1121,29 @@ ${workflowBullet}
   for this project is not something init can know. See the root README's
   "What only you can provide" table.
 
+## First, before anything else: prove your keys work
+
+\`\`\`bash
+node --env-file=harness/.env.harness.local harness/scripts/check-keys.mjs
+\`\`\`
+
+Every lab you configured should print \`key works\` and a model count. Do this
+before a rehearsal and before the first scheduled run, because the failures it
+catches are invisible until they are expensive:
+
+- a key that was never pasted in, or pasted with a stray space
+- a key that is **valid on an account with no payment method** — it fails as
+  \`402 billing_not_configured\` mid-generation, after the fan-out has already
+  been priced
+- a key that is set but empty, which is usually a duplicated line: \`--env-file\`
+  keeps the LAST assignment, so a second blank one silently wins
+- a notifier key that is blank, which is the quietest failure here — the digest
+  step succeeds and sends nothing
+
+The same check runs as the first step of every workflow run, so a lab that goes
+dark between runs is reported rather than discovered. Where a lab exposes a
+balance, it is printed too.
+
 ## Secrets this needs, in GitHub (Settings -> Secrets and variables -> Actions)
 
 ${secretLines || '(none — no providers or notifier were configured)'}
