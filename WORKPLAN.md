@@ -25,6 +25,17 @@ merging or closing one of its pull requests and the next cycle reading that
 back — three are open in `Chrisfoz/icd-mapper-harness-campaign`. After that,
 2.1a: a larger repository, to force the `context.strategy: scoped` question.
 
+*2026-09-18:* **the loop has produced a merged change on a second project.**
+Hospital of the Future, generation 001, campaign mode on `gemini-3.8-flash`:
+detect → probe → preflight → suggest → implement → review (rejected twice,
+approved on the third attempt) → guard → tests → pull request → record →
+digest email, all of it on GitHub Actions with real keys. The owner merged
+it. That closes the "a person's verdict" item below in substance — the
+read-back of that merge into the next cycle has not run yet. Three harness
+defects the install found are fixed and shipped (I9, I10, I11, plus the
+campaign `lab:model-id` form); the cost evidence it produced is recorded
+against 2.2, which is now the best-supported unbuilt item in this plan.
+
 **Before the next copied install, read Tier 7.** It holds the newest open
 items (I8–I13), and **I10** is directly in the path of one: a copied install's
 generated workflow still runs `npm install js-yaml` at the target repository's
@@ -398,6 +409,44 @@ gaps are solved by better documentation — they are missing code.
   *Depends on:* 2.1, which decides which shape is warranted.
   *Done when:* the strategy runs on the 2.1 project and `init` stops warning
   about it.
+
+  **2026-09-18 — the first real evidence, from a generation that shipped.**
+  Hospital of the Future, generation 001, campaign on `gemini-3.8-flash`
+  suggesting and `claude-opus-5` implementing and reviewing. It reached a
+  pull request with every gate passed, so this is the cost of a GOOD run
+  rather than a wasted one:
+
+  | | |
+  |---|---|
+  | Editable surface | ~1.66M characters, 98 files (`shared/vendor/three.min.js` already excluded) |
+  | Total tokens | 1,103,928 |
+  | Input | 1,050,350 — **95% of the run** |
+  | Output | 53,578 |
+  | Served from cache | 117,969 |
+  | Attempts | 3 (rejected, rejected, approved) |
+
+  Two things that argue for building this, and one that argues against
+  building it hastily:
+
+  - **Input dominates, and it is the same input every time.** One suggesting
+    model reading the whole editable surface is ~474k tokens before anything
+    is proposed; the run above spent a million on input to produce 53k of
+    output. On a project this size the budget cap (`2,000,000` here) is
+    reached by about four suggesting models, which caps `max_fanout` at 3 —
+    not by choice but by arithmetic. Scoped context is what would let a
+    project this size watch nine labs and fan out properly.
+  - **The reviewer re-reads full modified files, per attempt.** Three
+    attempts against a 310k-character file is the same file read three times
+    at Opus rates. A two-pass shape that narrows what the IMPLEMENTER and
+    REVIEWER see may matter as much as narrowing what the suggester sees.
+  - **But the run worked.** `full-dump` on 1.66M characters produced a
+    merged, on-goal change on the first campaign. The failure mode here is
+    cost and fan-out ceiling, not capability — so the shape should be chosen
+    against measured savings, not assumed. The prompt-cache read of 117,969
+    tokens is the other lever already partly working.
+
+  *See:* `docs/campaigns/` for the write-up, and the record itself in that
+  project's `docs/generations/gen-001/attempts.json`.
 
 - [ ] **2.3 — Verify Mac and Linux, and a non-`ubuntu-latest` runner.**
   §8.3: this has only ever been exercised on Windows. Node makes portability
