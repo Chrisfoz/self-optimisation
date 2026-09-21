@@ -11,8 +11,8 @@
  * is the live source and always wins in the merged picker; this file is the
  * fallback for the ten minutes before one exists.
  *
- *   node --env-file=.env harness/scripts/refresh-model-catalogue.mjs
- *   node --env-file=.env harness/scripts/refresh-model-catalogue.mjs --providers anthropic,openai
+ *   node --env-file=harness/.env.harness.local harness/scripts/refresh-model-catalogue.mjs
+ *   node --env-file=harness/.env.harness.local harness/scripts/refresh-model-catalogue.mjs --providers anthropic,openai
  *
  * A lab with no key is skipped, and a skipped lab KEEPS whatever it already
  * had in the file rather than being emptied — same rule the detector uses

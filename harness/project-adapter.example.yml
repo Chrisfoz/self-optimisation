@@ -46,7 +46,7 @@ project:
 providers:
   # Which labs to watch for new releases. Delete any you don't have a key
   # for — see the root README's "Getting started" for where keys go
-  # (.env locally, GitHub Secrets in CI). A bare name is enough; the env
+  # (harness/.env.harness.local locally, GitHub Secrets in CI). A bare name is enough; the env
   # var name shown here is only for a human reading the file — the harness
   # already knows each provider's real env var from harness/providers/*.mjs.
   watched:

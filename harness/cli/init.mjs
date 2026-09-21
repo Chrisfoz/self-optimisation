@@ -56,7 +56,7 @@ import { execFileSync } from 'node:child_process';
 import readline from 'node:readline/promises';
 import '../providers/index.mjs';
 import { getProvider, registeredProviders, resolveProvider } from '../lib/llm-provider.mjs';
-import { renderAdapterYaml, renderWorkflowTemplate, renderCallerWorkflow, renderReadme, buildAdapterObject, answersFromAdapter } from '../lib/scaffold.mjs';
+import { renderAdapterYaml, renderWorkflowTemplate, renderCallerWorkflow, renderReadme, renderChecklist, buildAdapterObject, answersFromAdapter } from '../lib/scaffold.mjs';
 import { harnessVersion, checkUpgrade } from '../lib/version.mjs';
 import { describeSeats } from '../lib/seats.mjs';
 import { normalizeAmbition, loadAdapter } from '../lib/adapter.mjs';
@@ -384,6 +384,68 @@ function writeIfAbsentOrForced(targetPath, content, label) {
   return true;
 }
 
+/**
+ * Lay down the local env file the harness reads its API keys from, so an
+ * import arrives ready for keys to be pasted in rather than needing the
+ * template found and copied by hand.
+ *
+ * Two deliberate choices, both learned the hard way:
+ *
+ *   - It is `.env.harness.local`, never `.env`. Most projects already keep a
+ *     `.env` at the root for the application itself, and the harness must not
+ *     collide with it or overwrite it — the web server has no reason to hold
+ *     nine labs' keys, and the harness has no reason to hold a database
+ *     service-role key.
+ *   - It lives at `harness/.env.harness.local`, beside the code that reads it,
+ *     so the harness stays self-contained and a project's root stays clean.
+ *     The cost is that a harness upgrade replaces this directory: preserve
+ *     this one file across a re-import (the upgrade note in
+ *     .env.harness.example says so too).
+ *
+ * Unlike every other write here this is skip-if-present even under --force:
+ * the file holds real keys once filled in, and no flag should overwrite it.
+ */
+/**
+ * `SELF-IMPROVE-CHECKLIST.md` — written once, then owned by the project.
+ *
+ * Skip-if-present even under --force, for the same reason as the env file
+ * below: once anyone has ticked a box this is a record of how far the
+ * installation actually got, and regenerating it silently un-ticks that
+ * record. The workflow and the README are derived artefacts and may be
+ * overwritten; this one accumulates state, so it may not.
+ */
+function writeChecklist(answers) {
+  const target = path.join(repoRoot, 'SELF-IMPROVE-CHECKLIST.md');
+  if (fs.existsSync(target)) {
+    const ticked = (fs.readFileSync(target, 'utf8').match(/- \[[xX]\]/g) || []).length;
+    console.log(
+      `   ⚠️  SELF-IMPROVE-CHECKLIST.md already exists${ticked ? ` (${ticked} item(s) already ticked)` : ''} — leaving it alone; --force does not apply.`
+    );
+    return;
+  }
+  fs.writeFileSync(target, renderChecklist(answers));
+  console.log('   ✅ wrote SELF-IMPROVE-CHECKLIST.md (work through it before the schedule runs)');
+}
+
+function writeEnvTemplate() {
+  const target = path.join(repoRoot, 'harness', '.env.harness.local');
+  if (fs.existsSync(target)) {
+    console.log('   ⚠️  harness/.env.harness.local already exists — leaving it alone (it holds real keys; --force does not apply).');
+    return;
+  }
+  const template = fs.readFileSync(path.join(harnessDir, '../.env.harness.example'), 'utf8');
+  fs.writeFileSync(target, template);
+
+  const ignorePath = path.join(repoRoot, '.gitignore');
+  const ignored = fs.existsSync(ignorePath) && /^\s*\.env\.\*\s*$|^\s*\.env\.harness\.local\s*$|^\s*\.env\.\*\.local\s*$/m.test(fs.readFileSync(ignorePath, 'utf8'));
+  console.log(`   ✅ wrote harness/.env.harness.local (placeholders — paste your keys in${ignored ? '; it is git-ignored' : ''})`);
+  if (!ignored) {
+    console.log('   ❗ .gitignore does not appear to cover harness/.env.harness.local — add a `.env.*` line');
+    console.log('      (plus `!.env.harness.example`) before you put a real key in it. Confirm with');
+    console.log('      `git check-ignore -v harness/.env.harness.local`.');
+  }
+}
+
 function writeFiles(answers) {
   // Rendered first, so a bad shared pin stops init before any file is written.
   const workflow = renderOrExit(answers);
@@ -399,6 +461,9 @@ function writeFiles(answers) {
   writeIfAbsentOrForced(answers.reviewerBriefPath, reviewerBriefTemplate, 'the reviewer brief');
 
   writeIfAbsentOrForced('SELF-IMPROVE-README.md', renderReadme(answers), 'the install README');
+  writeChecklist(answers);
+
+  writeEnvTemplate();
 
   console.log('\nChecking what was just written...');
   const { errors, warnings } = validateAdapter(buildAdapterObject(answers), { repoRoot, env: process.env, remoteDefaultBranch: remoteDefaultBranch(gitRunner(repoRoot)) });
@@ -439,6 +504,7 @@ async function fromAdapter() {
   }
   writeIfAbsentOrForced('.github/workflows/self-improve.yml', workflow, 'the generated workflow');
   writeIfAbsentOrForced('SELF-IMPROVE-README.md', renderReadme(answers), 'the install README');
+  writeChecklist(answers);
 
   const { errors, warnings } = validateAdapter(adapter, { repoRoot, env: process.env, remoteDefaultBranch: remoteDefaultBranch(gitRunner(repoRoot)) });
   for (const e of errors) console.log(`   ❌ ${e}`);

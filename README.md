@@ -167,30 +167,55 @@ Keep each key somewhere safe for a moment — the next two steps put copies of
 it in two different places, for two different purposes, and mixing them up
 is the single most common mistake here.
 
-### Step 3 — Local testing: `.env` (never committed)
+### Step 3 — Local testing: `harness/.env.harness.local` (never committed)
 
-Copy the example file into your project root (not inside `harness/`):
+Copy the example file, keeping the `.local` suffix:
 
 ```bash
-cp harness/.env.example .env
+cp harness/.env.harness.example harness/.env.harness.local
 ```
 
-Open `.env` and paste in the keys from Step 2, next to the matching
-variable name. Leave every line you don't have a key for blank or delete it
-— an unwatched provider costs nothing.
+`node harness/cli/init.mjs` also writes this file for you, and never
+overwrites one that already exists.
+
+**Why not `.env`.** Most real applications already keep a `.env` at their
+root — a database URL, a deploy token, their own model key — and copying
+over it destroys that file. The two are separate on purpose: your web
+server has no reason to hold nine labs' API keys, and this harness has no
+reason to hold your database's service-role key. `.env.harness.local`
+cannot collide with a project `.env`, whatever that project already does.
+
+Open `harness/.env.harness.local` and paste in the keys from Step 2, next
+to the matching variable name. Leave every line you don't have a key for
+blank or delete it — an unwatched provider costs nothing.
+
+**Put them in the `.local` file, not the `.example` one.**
+`harness/.env.harness.example` is tracked by git and holds placeholders
+only. Filling in the tracked one is how keys reach a commit, and the two
+filenames exist to keep that from happening.
 
 **This file must never be committed.** If you copied `harness/` into an
-existing project, add this to your `.gitignore` now, before you forget:
+existing project, add this to your `.gitignore` now, before you forget —
+`.env.*` with no leading slash, so it matches inside `harness/` too:
 
 ```
 .env
+.env.*
+!.env.harness.example
 ```
 
-Unlike most Node setups, this harness reads `.env` **without a dependency**
-— no `dotenv` package, no build step. Node loads it natively:
+Then prove it, rather than assuming:
 
 ```bash
-node --env-file=.env harness/scripts/check-model-releases.mjs
+git check-ignore -v harness/.env.harness.local   # must print a matching rule
+git ls-files harness/.env.harness.local          # must print nothing
+```
+
+Unlike most Node setups, this harness reads the file **without a
+dependency** — no `dotenv` package, no build step. Node loads it natively:
+
+```bash
+node --env-file=harness/.env.harness.local harness/scripts/check-model-releases.mjs
 ```
 
 That one flag is also why this step is identical on Windows, macOS, and
@@ -202,7 +227,7 @@ Linux: the file is parsed by Node itself, not by your shell, so there's no
 Run the detector against just the labs you added keys for:
 
 ```bash
-node --env-file=.env harness/scripts/check-model-releases.mjs --providers anthropic,openai
+node --env-file=harness/.env.harness.local harness/scripts/check-model-releases.mjs --providers anthropic,openai
 ```
 
 First run: every lab you named gets recorded as a **baseline** and nothing
@@ -222,7 +247,7 @@ way the reference implementation does. GitHub Actions runners are ephemeral
 without this file committed, every monthly run would see an empty snapshot
 and report every model in the catalogue as "new" simultaneously, every
 time. Don't add `.agent/` to `.gitignore`; that's the one directory in this
-walkthrough that's the opposite of `.env` — it holds no secrets and it
+walkthrough that's the opposite of `.env.harness.local` — it holds no secrets and it
 *must* travel with the repo. `examples/workflows/watch-releases.yml`
 already commits it automatically as part of the workflow (Step 6 below).
 
@@ -233,7 +258,7 @@ refresh the shorter list the console ships with instead — for a deploy of
 your own — run
 
 ```bash
-node --env-file=.env harness/scripts/refresh-model-catalogue.mjs
+node --env-file=harness/.env.harness.local harness/scripts/refresh-model-catalogue.mjs
 ```
 
 which lists every lab you hold a key for and rewrites
@@ -257,7 +282,7 @@ Once `project-adapter.yml`, `constitution.allowed_paths`, and the two brief
 files exist, `node harness/scripts/validate.mjs` checks the adapter for the
 config mistakes that would otherwise only surface mid-run — an editable
 path that doesn't exist, an allowlist that contradicts the frozen paths, an
-unregistered provider — and `node --env-file=.env harness/scripts/rehearse.mjs`
+unregistered provider — and `node --env-file=harness/.env.harness.local harness/scripts/rehearse.mjs`
 runs the *whole* loop locally on a real branch: detect or campaign, probe,
 preflight, the actual suggest → implement → review cycle, guard, your own
 tests — everything the generated workflow does except push, open a pull
@@ -269,7 +294,7 @@ than waiting for a new release.
 
 ### Step 5 — GitHub setup: repository secrets
 
-`.env` is for your machine only. For the detector to run on a schedule in
+`harness/.env.harness.local` is for your machine only. For the detector to run on a schedule in
 GitHub Actions, the same keys need to exist as **repository secrets** —
 a completely separate mechanism, deliberately: a secret lives encrypted on
 GitHub's side and is injected into a workflow run's environment; it is never
@@ -284,7 +309,7 @@ In your GitHub repository:
    `ANTHROPIC_API_KEY`) and paste the same key value from Step 2.
 4. Repeat for each lab you're watching.
 
-You're adding the *same values* as `.env`, into a *different place*, for a
+You're adding the *same values* as `harness/.env.harness.local`, into a *different place*, for a
 *different consumer* (GitHub's runners, not your own machine). Neither file
 references the other.
 
@@ -410,7 +435,7 @@ you fill it in today, checked against the code rather than assumed:
 
 | You provide | Where | What happens with it, right now |
 |---|---|---|
-| Provider API keys | `.env` locally, GitHub Secrets in CI | **Used immediately** — the detector calls the real API the moment a key is present (Step 2–5) |
+| Provider API keys | `harness/.env.harness.local` locally, GitHub Secrets in CI | **Used immediately** — the detector calls the real API the moment a key is present (Step 2–5) |
 | Which labs to watch | `project-adapter.yml` → `providers.watched` | **Used immediately** — read by `check-model-releases.mjs` on every run |
 | Frozen / append-only paths, frozen JSON fields, churn ceiling | `project-adapter.yml` → `constitution.frozen_paths` / `append_only_paths` / `frozen_fields` / `churn_ceiling` | **Used immediately** — `harness/scripts/check-guarded-paths.mjs` enforces these against a real git diff today |
 | Which paths an agent may edit or create | `project-adapter.yml` → `constitution.allowed_paths` / `create_only_paths` | **Used immediately** — `run-generation.mjs` compiles this into `edit-format.mjs`'s allowlist and enforces it against every edit the orchestrator produces |
@@ -445,7 +470,7 @@ mid-generation.
 Read this before assuming something that works on one platform works on all
 three.
 
-- **`.env` loading is identical everywhere** — see Step 3. This is a real
+- **env-file loading is identical everywhere** — see Step 3. This is a real
   design choice, not an accident: `node --env-file` sidesteps the classic
   `export` (bash) vs. `$env:VAR =` (PowerShell) split entirely, because Node
   parses the file, not your shell.
@@ -763,7 +788,7 @@ self_optimisation/
 │   └── workflows/
 │       └── watch-releases.yml       # copy-pasteable — see "Getting started" above
 └── harness/
-    ├── .env.example                 # copy to .env at your project root — see Step 3
+    ├── .env.harness.example         # copy to .env.harness.local beside it — see Step 3
     ├── lib/                           # pure logic — no process.exit, no stdio.
     │   │                               # `ls harness/lib/` for the current list; the
     │   │                               # load-bearing four, in dependency order:

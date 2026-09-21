@@ -13,8 +13,8 @@
  *
  * Run from a project's root:
  *
- *   node --env-file=.env.harness.local harness/scripts/check-keys.mjs
- *   node --env-file=.env harness/scripts/check-keys.mjs --providers anthropic,google
+ *   node --env-file=harness/.env.harness.local harness/scripts/check-keys.mjs
+ *   node --env-file=harness/.env.harness.local harness/scripts/check-keys.mjs --providers anthropic,google
  *
  * Options:
  *   --providers a,b   only these labs (default: every registered lab)
