@@ -722,3 +722,50 @@ test('renderChecklist: tells the owner that a leaked key is rotated, not merely 
   assert.match(text, /\*\*rotated\*\*/);
   assert.match(text, /does not remove it\s+from history/);
 });
+
+test('renderChecklist: the permission split comes first, before anything downstream of it', () => {
+  const text = renderChecklist(baseAnswers());
+  assert.match(text, /## 1\. What the agent may touch/);
+  assert.ok(
+    text.indexOf('## 1. What the agent may touch') < text.indexOf('## 2. The installation is complete'),
+    'the foundational decision is section 1'
+  );
+});
+
+test('renderChecklist: prints the four path lists as the config actually holds them', () => {
+  const text = renderChecklist(baseAnswers({
+    allowedPaths: ['grammar-game.html'],
+    createOnlyPaths: ['game/**', 'assets/**'],
+    appendOnlyPaths: ['tests/**'],
+    frozenPaths: ['.github/**', 'harness/**'],
+  }));
+  for (const p of ['grammar-game.html', 'game/**', 'assets/**', 'tests/**', '.github/**', 'harness/**']) {
+    assert.match(text, new RegExp('^- `' + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '`$', 'm'), p);
+  }
+});
+
+test('renderChecklist: an empty list says so rather than rendering a silent gap', () => {
+  const text = renderChecklist(baseAnswers({ createOnlyPaths: [], appendOnlyPaths: [] }));
+  assert.match(text, /_nothing — the agent may not add files_/);
+  assert.match(text, /_nothing_/);
+});
+
+test('renderChecklist: signing off the split is the owner\'s, and the mechanical checks are the agent\'s', () => {
+  const text = renderChecklist(baseAnswers());
+  const section = text.slice(text.indexOf('## 1.'), text.indexOf('## 2.'));
+  assert.match(section, /- \[ \] \*\*\(you\)\*\* \*\*You have read those four lists and they are what you meant\.\*\*/);
+  assert.match(section, /- \[ \] \*\*\(agent\)\*\* `\.github\/\*\*` is frozen/);
+  assert.match(section, /- \[ \] \*\*\(agent\)\*\* Both briefs describe the same split/);
+});
+
+test('renderChecklist: names the consequences an owner cannot revert their way out of', () => {
+  const text = renderChecklist(baseAnswers());
+  assert.match(text, /deployment config, infrastructure-as-code, CI definitions/);
+  assert.match(text, /not undone by\s+reverting the commit/);
+});
+
+test('renderChecklist: says start narrow, and that widening later is the normal path', () => {
+  const text = renderChecklist(baseAnswers());
+  assert.match(text, /promoting\s+that glob to `allowed_paths`/);
+  assert.match(text, /easier to grant a path than to un-ship a change to one/);
+});

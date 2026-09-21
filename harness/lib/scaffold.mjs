@@ -1222,6 +1222,17 @@ export function renderChecklist(answers) {
   const shared = answers.sharedHarness;
   const approvalClass = normalizeApprovalClass(answers.approvalClass);
 
+  // The permission split, printed as the config actually holds it. An owner
+  // signing off "the agent may edit these" needs to read the real list, not a
+  // description of one — this is the decision every other gate is downstream
+  // of, and the one nobody can make for them.
+  const pathList = (paths, empty) =>
+    (paths || []).length ? paths.map((x) => `- \`${x}\``).join('\n') : `_${empty}_`;
+  const allowed = pathList(answers.allowedPaths, 'nothing — the agent has nothing it may edit');
+  const createOnly = pathList(answers.createOnlyPaths, 'nothing — the agent may not add files');
+  const appendOnly = pathList(answers.appendOnlyPaths, 'nothing');
+  const frozen = pathList(answers.frozenPaths, 'nothing — see the warning below');
+
   return `# Self-improvement install checklist — ${answers.projectId || 'this project'}
 
 Every item below went wrong in a real installation at least once. Tick them
@@ -1236,7 +1247,70 @@ what is still outstanding.
 Nothing regenerates this file. A half-ticked checklist is a record of where
 you got to, so keep it in git and let it change in pull requests.
 
-## 1. The installation is complete and on \`${branch}\`
+## 1. What the agent may touch
+
+This is the foundational decision. Every other gate in this checklist is
+downstream of it: the allowlist is applied before a single edit is written,
+and the guard re-checks the same split in CI after the fact. Get this wrong
+and the rest of the list is guarding the wrong thing.
+
+Read the four lists below as they actually stand in \`project-adapter.yml\`.
+
+**Editable** — \`constitution.allowed_paths\`. The agent may rewrite these
+freely, and they are bundled into the prompt so it has read them first:
+
+${allowed}
+
+**Create-only** — \`constitution.create_only_paths\`. The agent may ADD a new
+file matching these; it may never modify one that already exists, including
+one it created on an earlier run:
+
+${createOnly}
+
+**Append-only** — \`constitution.append_only_paths\`. New files may be added;
+existing ones may not be changed or deleted. This is normally where the test
+suites live, because a model that can edit its own gate is not gated:
+
+${appendOnly}
+
+**Frozen** — \`constitution.frozen_paths\`. Never writable, by anything, ever:
+
+${frozen}
+
+- [ ] **(you)** **You have read those four lists and they are what you meant.**
+      Not "they look reasonable" — you have checked that nothing you would mind
+      losing is in the editable list, and that everything you would mind losing
+      is in the frozen one. An agent can render this list; only you can say it
+      is right, because only you know what this project cannot afford to break.
+- [ ] **(you)** Anything with real-world consequence outside this repository is
+      frozen: deployment config, infrastructure-as-code, CI definitions,
+      secrets handling, billing, anything that sends email or messages, and
+      anything that touches customer data. A change here is not undone by
+      reverting the commit.
+- [ ] **(you)** Your own safety net is frozen or append-only: the test suites,
+      their fixtures and their helpers, the guard script, and the workflow. An
+      agent that can weaken its own gate has no gate.
+- [ ] **(agent)** \`.github/**\` is frozen — including the workflow that runs
+      all this, which must not be able to rewrite its own schedule, its own
+      permissions or its own gates.
+- [ ] **(agent)** Both briefs describe the same split as \`project-adapter.yml\`.
+      The adapter is what a script enforces; the briefs are what the model is
+      told. When they disagree the model proposes work that the guard then
+      rejects in CI, generation after generation, for a reason baked in at
+      config time rather than found in the change.
+- [ ] **(agent)** No path is in two lists at once — nothing editable is also
+      frozen or append-only. \`node harness/scripts/validate.mjs\` reports this
+      as an error; it must report none.
+- [ ] **(agent)** Every editable path exists. A path the agent may edit but was
+      never shown is a file it can be asked to write blind. \`validate.mjs\`
+      checks this too; a directory that does not exist yet belongs in
+      create-only, not editable.
+- [ ] **(you)** You know how to widen this later, and that widening is the
+      normal path: once a real file exists under a create-only glob, promoting
+      that glob to \`allowed_paths\` lets later generations refine it. Start
+      narrow. It is far easier to grant a path than to un-ship a change to one.
+
+## 2. The installation is complete and on \`${branch}\`
 
 - [ ] **(agent)** \`project-adapter.yml\`, \`.github/workflows/self-improve.yml\`,
       \`${agentBrief}\`, \`${reviewerBrief}\` and \`SELF-IMPROVE-README.md\` all exist.
@@ -1252,7 +1326,7 @@ you got to, so keep it in git and let it change in pull requests.
 - [ ] **(agent)** Everything is merged into \`${branch}\`, and
       \`project.default_branch\` in \`project-adapter.yml\` names that same branch.
 
-## 2. No key is anywhere git can see it
+## 3. No key is anywhere git can see it
 
 - [ ] **(agent)** \`git ls-files harness/.env.harness.local .env .env.harness.local\`
       prints **nothing**.
@@ -1267,7 +1341,7 @@ you got to, so keep it in git and let it change in pull requests.
       not merely deleted. Removing it from the working tree does not remove it
       from history, or from anywhere a push already reached.
 
-## 3. GitHub has what the run needs
+## 4. GitHub has what the run needs
 
 - [ ] **(you)** A repository secret for every lab this installation calls:
       ${secretList}.
@@ -1287,7 +1361,7 @@ you got to, so keep it in git and let it change in pull requests.
       mid-run, and the run carries on without that lab. Set a monthly spending
       limit with each lab while you are there.
 
-## 4. You know what a run will do to your project
+## 5. You know what a run will do to your project
 
 - [ ] **(agent)** \`${testCommand}\` passes on \`${branch}\` right now. The harness
       judges a generation against this baseline; a suite that is already red
@@ -1301,9 +1375,9 @@ you got to, so keep it in git and let it change in pull requests.
       ? ` Changes reach \`${branch}\` with nobody asked first. Every generation is tagged \`gen-NNN\`, so it stays revertible.`
       : ' Every change waits for you in a pull request.'
   }
-- [ ] **(agent)** \`constitution.frozen_paths\` really does cover the things that
-      must not move: the workflow, the briefs, the guard script, test config,
-      deployment and security config.${
+- [ ] **(you)** Nothing in section 1's editable list can reach production by
+      itself. If it can, that is a deliberate choice you are making, not an
+      oversight.${
     shared
       ? ''
       : `
@@ -1314,7 +1388,7 @@ you got to, so keep it in git and let it change in pull requests.
       \`npm install --prefix harness --no-save --no-package-lock js-yaml@${JS_YAML_VERSION}\`.`
   }
 
-## 5. The practice run, before anything is scheduled
+## 6. The practice run, before anything is scheduled
 
 - [ ] **(you)** You have agreed to spend real tokens on a rehearsal.
 - [ ] **(agent)** \`node --env-file=harness/.env.harness.local harness/scripts/rehearse.mjs\`
@@ -1324,7 +1398,7 @@ you got to, so keep it in git and let it change in pull requests.
       which stopping is free.
 - [ ] **(you)** Only now, let the schedule run unattended.
 
-## 6. You know where to look afterwards
+## 7. You know where to look afterwards
 
 - [ ] **(you)** \`${answers.generationsDir || 'docs/generations'}/index.html\` — the run
       history, rebuilt and committed after every run, with pull requests waiting

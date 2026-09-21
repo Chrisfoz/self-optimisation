@@ -111,8 +111,16 @@ Work through this in order. Stop where it says CHECK WITH ME and wait for my ans
    Use `--prefix harness` exactly as written. Do NOT install js-yaml at this project's
    top level: it has been tested to silently replace a project's own copy.
 4. CHECK WITH ME on two things before you run the installer, because they are mine to
-   decide and not yours to infer from the code: (a) which paths a model may edit and
-   which are frozen, and (b) the one-sentence goal this project is trying to achieve.
+   decide and not yours to infer from the code.
+   (a) The permission split. Propose four lists and let me correct them: EDITABLE
+       (rewritten freely - must already exist), CREATE-ONLY (may add new files, never
+       modify), APPEND-ONLY (usually the test suites - a model that can edit its own
+       gate is not gated), FROZEN (never writable: the workflow, the briefs, the guard,
+       test config, and anything with consequences outside the repo - deploy config,
+       infrastructure, secrets, billing, anything that sends messages or touches
+       customer data). Start narrow; granting a path later is easy, un-shipping a
+       change to one is not.
+   (b) The one-sentence goal this project is trying to achieve.
 5. Run `node harness/cli/init.mjs` and answer the rest from what you can actually see
    in this codebase - my real test command, my real default branch, real paths.
 6. Fill in .claude/agents/improve.md and .claude/agents/review.md from this codebase.
