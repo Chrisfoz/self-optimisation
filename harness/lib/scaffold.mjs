@@ -1354,12 +1354,23 @@ ${frozen}
           ? 'This install merges by itself; the write permission is what lets it.'
           : 'Without the second tick, every generation passes its gates and then fails to open its pull request.'
       }
-      **Reload the page and confirm the tick stayed** — it has been seen not to
-      save silently.
+      This is the single most-missed setting in an installation, and the
+      tickbox has been seen not to save silently.
+- [ ] **(agent)** ...and confirmed, rather than remembered:
+      \`gh api repos/:owner/:repo/actions/permissions/workflow\` prints
+      \`"default_workflow_permissions": "write"\` **and**
+      \`"can_approve_pull_request_reviews": true\`. Both, not either. Reporting
+      that the owner said they saved it is not this check.
 - [ ] **(you)** Every lab has **credit**, not just a key. A valid key on an
       account with no payment method fails as \`402 billing_not_configured\`
       mid-run, and the run carries on without that lab. Set a monthly spending
       limit with each lab while you are there.
+- [ ] **(agent)** ...and every configured key actually reaches its lab:
+      \`node --env-file=harness/.env.harness.local harness/scripts/check-keys.mjs\`
+      reports every lab working, and no lab reports a zero or missing balance.
+      This is the earliest point a dead key or an unfunded account shows up —
+      the alternative is finding out mid-generation, after the fan-out has been
+      priced.
 
 ## 5. You know what a run will do to your project
 
