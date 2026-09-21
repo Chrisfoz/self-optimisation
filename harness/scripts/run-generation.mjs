@@ -41,7 +41,7 @@ import { getProvider, registeredProviders, pinModelProvider } from '../lib/llm-p
 import { runProjectTests, scrubEnv } from '../lib/test-runner.mjs';
 import { pickCrossFamilyRanker, describeSeats, promotionCandidate } from '../lib/seats.mjs';
 import { loadRecords } from '../lib/report.mjs';
-import { compileAllowlist } from '../lib/edit-format.mjs';
+import { compileAllowlist, expandEditablePaths } from '../lib/edit-format.mjs';
 import { globToRegExp } from '../lib/glob.mjs';
 import {
   buildSourceBundle, buildRepoManifest, buildTestIndex, buildArchitectureNotes,
@@ -121,8 +121,12 @@ if (suggestModels.length === 0) {
 }
 
 // --- config, adapter first, env overrides where the workflow already sets them ---
-const { allowedPaths: editableFiles, createOnlyPaths } = constitutionAllowlist(adapter);
-const allowlist = compileAllowlist({ allowedPaths: editableFiles, createOnlyPaths });
+const { allowedPaths: editablePaths, createOnlyPaths } = constitutionAllowlist(adapter);
+const allowlist = compileAllowlist({ allowedPaths: editablePaths, createOnlyPaths });
+// The allowlist matches patterns; the prompt needs real files. Expand once,
+// here, so every downstream use (source bundle, snapshots, the record of what
+// was editable) sees the same concrete list the model was actually shown.
+const editableFiles = expandEditablePaths(editablePaths, { repoRoot });
 const guard = guardConfig(adapter);
 const memory = memoryConfig(adapter);
 const briefs = briefPaths(adapter);

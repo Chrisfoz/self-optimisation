@@ -34,7 +34,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { globToRegExp } from './glob.mjs';
+import { globToRegExp, isGlob, expandGlob } from './glob.mjs';
 
 const EDIT_BLOCK = /<<<EDIT>>>[ \t]*\r?\nFILE:[ \t]*(.+?)[ \t]*\r?\n<<<SEARCH>>>[ \t]*\r?\n([\s\S]*?)\r?\n<<<REPLACE>>>[ \t]*\r?\n([\s\S]*?)\r?\n<<<END>>>/g;
 
@@ -62,21 +62,56 @@ const isTraversal = (p) => p.includes('..') || path.isAbsolute(p);
  * noticed. Compile once, pass the result everywhere.
  *
  * @param {object} config
- * @param {string[]} [config.allowedPaths]     Exact, editable file paths.
+ * @param {string[]} [config.allowedPaths]     Editable file paths. An entry
+ *   containing `*` is a pattern; anything else is an exact path.
  * @param {(string|RegExp)[]} [config.createOnlyPaths]  Glob strings (or raw
  *   RegExp, for parity with a hand-written pattern) a CREATE block may
  *   target — only at a path that does not already exist.
  */
 export function compileAllowlist({ allowedPaths = [], createOnlyPaths = [] } = {}) {
+  // The pattern slot below was reserved from the start and left empty:
+  // "a project with a directory of similarly-shaped source files plausibly
+  // will [need one]". It does now. A project that outgrows one file cannot
+  // enumerate every module by hand in YAML, and an allowlist nobody can keep
+  // current is worse than a pattern — it drifts, and the drift is silent.
+  //
+  // Whoever populates this must also expand the same patterns wherever the
+  // editable list becomes prompt context. A file the agent may edit is a file
+  // the agent must have read; a pattern that widens editing without widening
+  // the source bundle recreates exactly the incident that rule exists for.
+  // See expandEditablePaths() below, which is the one way to do that.
+  const exact = allowedPaths.filter((p) => !isGlob(p));
+  const patterns = allowedPaths.filter((p) => isGlob(p));
   return {
-    editableExact: new Set(allowedPaths.map(normalise)),
-    // Reserved for a future pattern-based editable surface. Carrotgame never
-    // needed one — everything editable there is an exact path — but the slot
-    // is here rather than assumed away, since a project with a directory of
-    // similarly-shaped source files (e.g. one file per level) plausibly will.
-    editablePatterns: [],
+    editableExact: new Set(exact.map(normalise)),
+    editablePatterns: patterns.map((p) => globToRegExp(p)),
     creatablePatterns: createOnlyPaths.map((p) => (p instanceof RegExp ? p : globToRegExp(p))),
   };
+}
+
+/**
+ * Turn `constitution.allowed_paths` into the concrete files that exist right
+ * now: exact entries pass through, patterns expand against the working tree.
+ *
+ * Every caller that treats the editable list as *content* — the source
+ * bundle, the inter-attempt snapshot, anything that reads the files — must
+ * go through this rather than the raw adapter list. Passing a pattern
+ * straight to a reader silently drops it (`read()` returns null for
+ * "game/**"), which would let a model edit a file it was never shown. That
+ * is the failure `learning/04-context-recipe.md` records, and a pattern-based
+ * surface is the easiest way to reintroduce it.
+ *
+ * @param {string[]} allowedPaths
+ * @param {{repoRoot?: string}} [opts]
+ * @returns {string[]} existing relative paths, de-duplicated, stable order
+ */
+export function expandEditablePaths(allowedPaths = [], { repoRoot = process.cwd() } = {}) {
+  const out = [];
+  for (const p of allowedPaths) {
+    if (isGlob(p)) out.push(...expandGlob(p, { repoRoot }));
+    else out.push(p);
+  }
+  return [...new Set(out)];
 }
 
 /** Is this path one the agent is allowed to edit in place? */
