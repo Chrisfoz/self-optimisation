@@ -947,10 +947,19 @@ for but cannot take.
   `gh` through `env:`. The example file is now that function's output for
   all nine labs, and `tests/lib/detector-workflow.test.mjs` fails if anyone
   edits one without the other.
-- [ ] **D5 — Detect project settings instead of asking.** *Done when:* `init`
+- [x] **D5 — Detect project settings instead of asking.** *Done when:* `init`
   proposes test commands, setup commands and editable paths from
   `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod` / `pom.xml` /
   `*.csproj` / `Makefile`, with a test per ecosystem.
+  **Done.** `harness/lib/detect-project.mjs` reads (never runs) the
+  manifests and proposes defaults; `tests/lib/detect-project.test.mjs` has a
+  fixture per ecosystem plus an `init --yes` run whose adapter comes out with
+  `src/**`, `npm test` and `npm ci --ignore-scripts` and no empty-paths error.
+  `init` also now asks for **setup commands** at all — before this, a CLI
+  install never wrote `evaluation.setup_commands`, so its copied workflow had
+  no dependency step unless the adapter was edited by hand (the I10 failure).
+  Install proposals carry `--ignore-scripts`, because the job holds a write
+  token; a project whose build needs install scripts removes the flag.
 - [ ] **D6 — A short setup path.** *Done when:* `init --quick` asks only labs,
   editable paths, test command and merge model, everything else takes its
   default, and the context-strategy question no longer offers `scoped`.

@@ -295,6 +295,11 @@ node harness/cli/init.mjs                              # asks, then writes proje
 node harness/cli/init.mjs --from-adapter --force       # later: regenerate the workflow from the adapter you edited
 ```
 
+Before asking, `init` reads your project's own files (`package.json`,
+`pyproject.toml`, `Cargo.toml`, `go.mod`, `pom.xml`, `*.csproj`, a
+`Makefile`) and proposes the editable paths, the test command and the
+command that installs what the tests need. Enter accepts a proposal.
+
 That one workflow is the whole loop, and it also watches for releases, so
 there is nothing else to install. If you want **only** the monthly notice that
 a new model has shipped — an issue in your repository, no adapter, no model

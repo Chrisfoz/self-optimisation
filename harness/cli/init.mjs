@@ -65,6 +65,7 @@ import { harnessVersion, checkUpgrade } from '../lib/version.mjs';
 import { describeSeats } from '../lib/seats.mjs';
 import { normalizeAmbition, loadAdapter } from '../lib/adapter.mjs';
 import { validateAdapter } from '../lib/validate.mjs';
+import { detectProject } from '../lib/detect-project.mjs';
 import { detectDefaultBranch, gitRunner, remoteDefaultBranch } from '../lib/git-default-branch.mjs';
 
 // path.join(..., '../x'), not import.meta.dirname — kept as the one idiom every
@@ -224,7 +225,15 @@ async function main() {
     console.log('Optional, but every proposal and every review is judged against it once it exists.\n');
     const goalStatement = await ask(rl, 'Goal (blank to skip)');
 
-    const allowedPathsRaw = await ask(rl, 'Editable paths (comma-separated globs, e.g. index.html,src/**/*.js)');
+    // Proposals from the repository itself (package.json, pyproject.toml,
+    // Cargo.toml, go.mod, pom.xml, *.csproj, Makefile): the defaults below,
+    // which Enter accepts and anything typed replaces.
+    const detected = detectProject(repoRoot);
+    if (detected.ecosystems.length) {
+      console.log(`\nDetected: ${detected.ecosystems.join(', ')}. The defaults below come from your project's own files — check them.\n`);
+    }
+
+    const allowedPathsRaw = await ask(rl, 'Editable paths (comma-separated globs, e.g. index.html,src/**/*.js)', { default: detected.allowedPaths.join(',') });
     const allowedPaths = splitList(allowedPathsRaw);
     if (allowedPaths.length === 0) {
       console.log('\n⚠️  No editable paths given — the agent will have nothing it may edit until you add some to constitution.allowed_paths by hand.\n');
@@ -237,8 +246,14 @@ async function main() {
     const appendOnlyPathsRaw = await ask(rl, 'Append-only paths — new files may be added, existing ones may not change (comma-separated globs)', { default: 'tests/**' });
     const appendOnlyPaths = splitList(appendOnlyPathsRaw);
 
-    const testCommandsRaw = await ask(rl, 'Test commands — one or more shell commands that must exit 0 (comma-separated)', { default: 'npm test' });
+    const testCommandsRaw = await ask(rl, 'Test commands — one or more shell commands that must exit 0 (comma-separated)', { default: detected.testCommands.join(',') || 'npm test' });
     const testCommands = splitList(testCommandsRaw);
+
+    // What the workflow runs before the tests, on a fresh runner. Without it a
+    // copied install's preflight cannot find the project's own test runner
+    // (WORKPLAN I10) — so it is asked here rather than left for the adapter.
+    const setupCommandsRaw = await ask(rl, 'Setup commands — install what the tests need on a fresh machine (comma-separated, blank for none)', { default: detected.setupCommands.join(',') });
+    const setupCommands = splitList(setupCommandsRaw);
 
     const known = registeredProviders();
     const { providerNames, providers } = await askProviders(rl);
@@ -388,7 +403,7 @@ async function main() {
       goalStatement: goalStatement || undefined,
       projectId, repository, defaultBranch,
       allowedPaths, createOnlyPaths: [], frozenPaths, appendOnlyPaths,
-      testCommands, providers, roleProviders, snapshotPath: '.agent/model-snapshot.json',
+      testCommands, setupCommands, providers, roleProviders, snapshotPath: '.agent/model-snapshot.json',
       implementModel, reviewModel, rankModel,
       approvalClass, cadenceCron, includeSchedule, runner, contextStrategy,
       agentBriefPath, reviewerBriefPath,
