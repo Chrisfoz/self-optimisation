@@ -556,6 +556,7 @@ self_optimisation/
 ├── railway.json                     # one host's deploy config for console/; any host
 │                                     # that runs `npm start` works
 ├── Dockerfile, .dockerignore         # console/ as an image — built and run in CI
+├── bin/self-optimisation.mjs        # the npx entry point: copy harness/ in, then init / upgrade / doctor
 ├── .devcontainer/                   # Node 22 + the GitHub CLI, for Codespaces
 ├── .github/
 │   └── workflows/

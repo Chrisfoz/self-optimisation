@@ -1041,10 +1041,24 @@ for but cannot take.
   the GitHub CLI. **Not done, both owner:** a deploy button (Railway's
   "deploy from GitHub" and Codespaces links only work for other people once
   the repository is public) and the template repository. Both move to D3.
-- [ ] **D1 — Run via `npx`.** *Done when:* `package.json` has a `bin` that
+- [x] **D1 — Run via `npx`.** *Done when:* `package.json` has a `bin` that
   copies `harness/` into the current project and runs `init`, `npm pack`
   contains exactly what an install needs, and a test runs the packed tarball.
   Publishing to npm is **owner**.
+  **Done, short of publishing.** `bin/self-optimisation.mjs` has `init`
+  (copy, then run init), `upgrade` (replace `harness/`, keep the key file,
+  regenerate from the adapter), `doctor` and `--version`. The package is 99
+  files: `bin/`, `harness/`, README and LICENSE, never a `.env` file or
+  `node_modules`; its version is `harness/VERSION`, with a test.
+  `tests/scripts/npx-package.test.mjs` packs the real tarball, extracts it,
+  and runs init → upgrade (a planted key survives, a stale file does not) →
+  doctor. It works from a clone today, and the README and INSTALL say how.
+  **Owner, before publishing:** the name (`self-optimisation` and
+  `self-optimisation-harness` were both unclaimed on 2026-09-26; `npx
+  self-optimisation init` needs the first), removing `"private": true`, and
+  bumping `harness/VERSION` — it has read 0.1.0 through every change so far,
+  although `version.mjs` says it is bumped on each, so `--check-upgrade`
+  cannot yet tell any two copies apart.
 - [ ] **D3 — Public repository, shared install by default.** **Owner:** the
   repository is private until the owner says otherwise. *Done when:* it is
   public and `init` defaults to `--shared` at the current release, the

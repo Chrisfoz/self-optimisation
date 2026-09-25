@@ -8,7 +8,7 @@ signups.
 
 ## Step 1 — Get the harness into your project
 
-There's no published package yet, so "install" means copying one folder.
+There's no published npm package yet, so "install" means copying one folder.
 From a terminal, inside your project's root:
 
 ```bash
@@ -18,6 +18,20 @@ cp -r /tmp/self-optimisation/harness ./harness
 
 (On Windows PowerShell, replace `/tmp/self-optimisation` with a path like
 `$env:TEMP\self-optimisation`, and `cp -r` with `Copy-Item -Recurse`.)
+
+Or let the clone do the copy and start Step 6 in one go — the same entry
+point an `npx` install will use once the package is published:
+
+```bash
+node /tmp/self-optimisation/bin/self-optimisation.mjs init --quick
+```
+
+It copies `harness/` in (never a key file), then runs `init` there. Later,
+`git -C /tmp/self-optimisation pull` and
+`node /tmp/self-optimisation/bin/self-optimisation.mjs upgrade` replace
+`harness/` with the new version, keep `harness/.env.harness.local`, and
+regenerate the workflow from your adapter. Local edits inside `harness/` are
+not kept: the upgrade is the new version, whole.
 
 Copying the folder is the whole install: there is no `npm install` step.
 Everything in `harness/` uses only Node's own built-ins, apart from one YAML

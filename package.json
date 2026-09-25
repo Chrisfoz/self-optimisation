@@ -1,9 +1,23 @@
 {
   "name": "self-optimisation-harness",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Portable harness for model-release-driven software improvement.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Chrisfoz/self-optimisation.git"
+  },
   "type": "module",
+  "bin": {
+    "self-optimisation-harness": "bin/self-optimisation.mjs"
+  },
+  "files": [
+    "bin/",
+    "harness/",
+    "!harness/.env.harness.local",
+    "!**/node_modules/"
+  ],
   "engines": {
     "node": ">=22.11.0"
   },

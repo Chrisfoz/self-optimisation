@@ -78,6 +78,9 @@ nothing merges by itself unless you chose that in step 2.
   (`gh auth login`); without it, it prints the two settings to make by hand.
 - **Only want a monthly issue when a new model ships?**
   `node harness/cli/init.mjs --detector-only` instead of step 2.
+- **Upgrading later:** `git -C /tmp/self-optimisation pull`, then
+  `node /tmp/self-optimisation/bin/self-optimisation.mjs upgrade` — it replaces
+  `harness/`, keeps your key file, and regenerates the workflow.
 - **Every step explained**, with the reasons and the failure each one
   prevents: [`docs/INSTALL.md`](docs/INSTALL.md).
 
