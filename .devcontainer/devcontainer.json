@@ -1,0 +1,17 @@
+{
+  // Opens this repository with Node 22 and the GitHub CLI ready — in a
+  // Codespace, or locally with the Dev Containers extension. The harness has
+  // no npm dependencies, so there is nothing to install: `npm start` runs the
+  // console on port 3000, and `npm test` runs the suite.
+  "name": "self-optimisation",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "features": {
+    // For `init --configure-github` and `doctor`'s GitHub checks.
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "console", "onAutoForward": "openBrowser" }
+  },
+  "postAttachCommand": "echo 'npm start → the console on port 3000 · npm test → the suite'"
+}

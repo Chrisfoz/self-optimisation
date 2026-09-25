@@ -555,6 +555,8 @@ self_optimisation/
 ├── Model-Release-Driven-Software-Improvement-Paper-Outline.md
 ├── railway.json                     # one host's deploy config for console/; any host
 │                                     # that runs `npm start` works
+├── Dockerfile, .dockerignore         # console/ as an image — built and run in CI
+├── .devcontainer/                   # Node 22 + the GitHub CLI, for Codespaces
 ├── .github/
 │   └── workflows/
 │       └── self-improve.yml         # NOT this repo improving itself — this is THE SHARED

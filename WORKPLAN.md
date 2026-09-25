@@ -1021,21 +1021,36 @@ for but cannot take.
   the end of `ARCHITECTURE.md`. Every relative link and anchor in the
   touched files was checked to resolve. The documents that named the old
   locations were updated with it: CONTRIBUTING's three-way status
-  agreement, the repo-steward, diagram-steward and code-review agents,
-  how-to-run's GitHub link, `console/DESIGN.md`, and two code comments.
+  agreement, the repo-steward, diagram-steward and code-review agent
+  definitions (local: `.claude/agents/` is git-ignored), how-to-run's GitHub
+  link, `console/DESIGN.md`, and two code comments.
   ARCHITECTURE's table gained rows for detection, GitHub setup and doctor,
   and `Portable-Harness-Design.md` a dated revision entry, so the three
   still agree.
 - [ ] **D10 — One-click console, and a template repository.** *Done when:*
   `console/` has a `Dockerfile` and a `.devcontainer`, and the README has a
   deploy button. The template repository itself is **owner** (it needs D3).
+  **Buildable half done; left unticked for the owner half.** A root
+  `Dockerfile` (the console reads `harness/` too, so it builds from the
+  root) copies only `package.json`, `harness/` and `console/`, runs as
+  `node`, and has a health check; `.dockerignore` keeps every `.env` file
+  out of the build context. CI's new `console-image` job plants a fake key
+  file, builds, fails if any env file reached the image, and waits for
+  `/healthz` — Docker was not running on the machine this was written on,
+  so that job is the first real build. `.devcontainer/` brings Node 22 and
+  the GitHub CLI. **Not done, both owner:** a deploy button (Railway's
+  "deploy from GitHub" and Codespaces links only work for other people once
+  the repository is public) and the template repository. Both move to D3.
 - [ ] **D1 — Run via `npx`.** *Done when:* `package.json` has a `bin` that
   copies `harness/` into the current project and runs `init`, `npm pack`
   contains exactly what an install needs, and a test runs the packed tarball.
   Publishing to npm is **owner**.
 - [ ] **D3 — Public repository, shared install by default.** **Owner:** the
   repository is private until the owner says otherwise. *Done when:* it is
-  public and `init` defaults to `--shared` at the current release.
+  public and `init` defaults to `--shared` at the current release, the
+  README has a deploy button for the console, and a template repository
+  holds the generated workflow, a filled-in example adapter and the brief
+  templates (D10's owner half).
 
 ## Housekeeping, whenever a nearby file is open
 

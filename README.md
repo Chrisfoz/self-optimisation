@@ -113,9 +113,20 @@ paste into Claude Code or Cursor, and fixes for the usual errors. The
 All ten installer steps, and downloading the files they generate, work
 locally with no further setup. Connecting the installer to GitHub, so it can
 read your repository and open the setup pull request, needs a GitHub App of
-your own; [`console/DEPLOYMENT.md`](console/DEPLOYMENT.md) covers it. To host
-the website somewhere else, `railway.json` is set up for Railway, and any
-host that runs `npm start` works, with `/healthz` as the health check.
+your own; [`console/DEPLOYMENT.md`](console/DEPLOYMENT.md) covers it.
+
+**Without installing Node:** open the repository in a GitHub Codespace (or
+locally with the Dev Containers extension) — [`.devcontainer/`](.devcontainer/)
+brings Node 22 and the GitHub CLI — or run the console as a container:
+
+```bash
+docker build -t self-optimisation-console .
+docker run -p 3000:3000 self-optimisation-console
+```
+
+To host it, `railway.json` is set up for Railway, the [`Dockerfile`](Dockerfile)
+suits any host that runs images, and any host that runs `npm start` works,
+with `/healthz` as the health check.
 
 ## Testing this harness itself
 
