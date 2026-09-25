@@ -1009,10 +1009,23 @@ for but cannot take.
   workflow declares its own permissions) and told autonomous-merge installs
   to change a setting they do not need. Corrected, with a test; the
   checklist now also ends section 6 on `doctor` reporting **Ready**.
-- [ ] **D8 — A README that starts with commands.** *Done when:* Getting
+- [x] **D8 — A README that starts with commands.** *Done when:* Getting
   Started is a short command list at the top, and the status tables, the
   bet, the layout tree and the design narrative live in `ARCHITECTURE.md` or
   `docs/`, linked rather than inline.
+  **Done.** The README went from 819 lines to about 210: what it is, a
+  five-command quickstart, running the console, testing, and where to go
+  next. The walkthrough (Steps 1–6, what only you can provide, OS notes)
+  moved verbatim to `docs/INSTALL.md` with its links rebased; the status
+  table, the three pieces, the bet, the shape and the layout tree moved to
+  the end of `ARCHITECTURE.md`. Every relative link and anchor in the
+  touched files was checked to resolve. The documents that named the old
+  locations were updated with it: CONTRIBUTING's three-way status
+  agreement, the repo-steward, diagram-steward and code-review agents,
+  how-to-run's GitHub link, `console/DESIGN.md`, and two code comments.
+  ARCHITECTURE's table gained rows for detection, GitHub setup and doctor,
+  and `Portable-Harness-Design.md` a dated revision entry, so the three
+  still agree.
 - [ ] **D10 — One-click console, and a template repository.** *Done when:*
   `console/` has a `Dockerfile` and a `.devcontainer`, and the README has a
   deploy button. The template repository itself is **owner** (it needs D3).

@@ -60,7 +60,7 @@ Two different people arrive at this differently, and this document has so
 far only been designing for one of them.
 
 **Path A — the repository.** Public, cloneable, already documented in
-`README.md`'s "Getting started": copy `harness/` into a project, fill in
+`docs/INSTALL.md` (the README's quickstart, at length): copy `harness/` into a project, fill in
 `project-adapter.yml` by hand or with a coding agent, run it in your own CI.
 No account, no console, no product — just a git repository someone can read
 end to end before trusting it with write access to their own project. This

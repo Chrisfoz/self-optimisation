@@ -139,7 +139,7 @@ agent, reads it and acts on it. Drift here isn't cosmetic.
   work that is not implemented; current console status is in `console/IMPLEMENTATION.md`. Any diagram, table, or sentence about them must
   make that unmistakable. In diagrams the convention is dashed and warm-toned
   for proposed, solid for real.
-- **Keep the three-way status agreement.** `README.md`'s Status table,
+- **Keep the three-way status agreement.** `ARCHITECTURE.md`'s Status table,
   `ARCHITECTURE.md`'s diagram and prose, and
   `Portable-Harness-Design.md`'s status/revision log describe the same facts.
   If they disagree, the stated tie-break is *trust whichever was edited most

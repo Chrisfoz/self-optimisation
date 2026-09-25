@@ -810,3 +810,24 @@ Keys are entered directly on GitHub; the console never accepts them. Live authen
 acceptance and deployment App configuration remain outstanding; automated GitHub
 integration tests use injected responses. See `console/IMPLEMENTATION.md` and
 `console/DEPLOYMENT.md` for the exact scope, evidence and remaining limitations.
+
+## Install-path revision — 26 September 2026
+
+Tier 8 of `WORKPLAN.md`, from the review in `suggestion.md`. The install is
+now five commands (README, "Quickstart"), and the reasoning moved to
+`docs/INSTALL.md`. What changed underneath:
+
+- **No dependency.** js-yaml is vendored at `harness/vendor/`, hash-pinned, so
+  copying `harness/` is the whole install and no generated workflow installs
+  anything from npm. §5's "copy these folders" is now literally true.
+- **`init` reads the project before asking** (`detect-project.mjs`), asks for
+  setup commands at all, and has a five-question `--quick` path. The
+  context-strategy question is gone: nothing read the answer.
+- **One workflow.** The hand-copied detector example is replaced by
+  `init --detector-only`, generated from one list of labs.
+- **GitHub settings through `gh`** (`init --configure-github`), and one
+  `doctor` command that checks an installation end to end.
+- **The README's status table, "How the three pieces fit together", "The bet"
+  and the repo layout moved to `ARCHITECTURE.md`.** The three-way status
+  agreement is now `ARCHITECTURE.md`'s table, `ARCHITECTURE.md`'s diagrams
+  and prose, and this document.

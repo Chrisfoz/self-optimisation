@@ -9,7 +9,7 @@
  * and a short `SELF-IMPROVE-README.md` explaining what just got installed.
  *
  * Run from a target project's root, AFTER `harness/` has already been
- * copied in (see the root README's "Getting started" step 1) — same
+ * copied in (the README's quickstart, step 1; docs/INSTALL.md) — same
  * convention as every other harness CLI:
  *
  *   node harness/cli/init.mjs
