@@ -5,3 +5,6 @@ harness/templates/*.tmpl text eol=lf
 # Vendored third-party code is kept byte for byte as published, on every
 # platform: tests/lib/vendor.test.mjs pins its hash.
 harness/vendor/** -text
+
+# The npx entry point runs on Unix through its shebang, which a CRLF breaks.
+bin/*.mjs text eol=lf
