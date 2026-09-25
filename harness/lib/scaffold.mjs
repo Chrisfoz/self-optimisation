@@ -1451,22 +1451,29 @@ ${frozen}
 
 - [ ] **(you)** A repository secret for every lab this installation calls:
       ${secretList}.
-      Settings → Secrets and variables → Actions. \`SELF-IMPROVE-README.md\`
-      lists which, and why each is needed.
-- [ ] **(you)** Workflow permissions saved: **Read and write**, with **Allow
-      GitHub Actions to create and approve pull requests** ticked, at
-      Settings → Actions → General. ${
+      Settings → Secrets and variables → Actions, or, with the GitHub CLI
+      signed in, \`node harness/cli/init.mjs --configure-github\` uploads them
+      from your env file. \`SELF-IMPROVE-README.md\` lists which, and why each
+      is needed.${
         approvalClass === 'autonomous-merge'
-          ? 'This install merges by itself; the write permission is what lets it.'
-          : 'Without the second tick, every generation passes its gates and then fails to open its pull request.'
-      }
-      This is the single most-missed setting in an installation, and the
-      tickbox has been seen not to save silently.
+          ? `
+- [ ] **(you)** Nothing to change in Settings → Actions → General. This install
+      merges by itself and never opens a pull request, and the workflow
+      declares its own \`contents: write\`, so the repository's default
+      permission can stay read-only.`
+          : `
+- [ ] **(you)** **Allow GitHub Actions to create and approve pull requests** is
+      ticked at Settings → Actions → General (Workflow permissions, at the
+      bottom), or \`--configure-github\` above has ticked it. Without it, every
+      generation passes its gates and then fails to open its pull request. The
+      radio above it can stay on read-only: the workflow declares its own
+      permissions. This is the single most-missed setting in an installation,
+      and the tickbox has been seen not to save silently.
 - [ ] **(agent)** ...and confirmed, rather than remembered:
       \`gh api repos/:owner/:repo/actions/permissions/workflow\` prints
-      \`"default_workflow_permissions": "write"\` **and**
-      \`"can_approve_pull_request_reviews": true\`. Both, not either. Reporting
-      that the owner said they saved it is not this check.
+      \`"can_approve_pull_request_reviews": true\`. Reporting that the owner
+      said they saved it is not this check.`
+      }
 - [ ] **(you)** Every lab has **credit**, not just a key. A valid key on an
       account with no payment method fails as \`402 billing_not_configured\`
       mid-run, and the run carries on without that lab. Set a monthly spending
@@ -1498,6 +1505,9 @@ ${frozen}
 
 ## 6. The practice run, before anything is scheduled
 
+- [ ] **(agent)** \`node harness/scripts/doctor.mjs\` ends with **Ready** — the
+      adapter, the workflow, the env file, the keys, the snapshot${shared ? '' : ', the harness version'}
+      and GitHub's secrets and permission, in one pass.
 - [ ] **(you)** You have agreed to spend real tokens on a rehearsal.
 - [ ] **(agent)** \`node --env-file=harness/.env.harness.local harness/scripts/rehearse.mjs\`
       has been run once, by hand.

@@ -991,10 +991,24 @@ for but cannot take.
   The response shapes were checked read-only against this repository. Not
   yet run end to end against a real repository's settings — that write is
   the first real install's to make.
-- [ ] **D7 — One `doctor` command.** *Done when:* `harness/scripts/doctor.mjs`
+- [x] **D7 — One `doctor` command.** *Done when:* `harness/scripts/doctor.mjs`
   checks Node, env file present and git-ignored, keys working, GitHub secrets
   and permission (via `gh`), snapshot committed, adapter valid and harness
   current, and each failure prints the command that fixes it.
+  **Done.** `harness/lib/doctor.mjs` runs nine checks in the order a person
+  fixes them, stops after the adapter when there is none, and takes every
+  side-effecting dependency as an argument; the script wires in the real
+  ones and runs `check-keys.mjs --json` itself, so "this key works" has one
+  definition. `--offline` calls nothing outside the machine (tested). A
+  git-ignored snapshot fails; an uncommitted one only warns, since the first
+  run commits it. `tests/lib/doctor.test.mjs` breaks one thing per test, and
+  runs the real script on a fresh copied install.
+  **Found on the way:** the generated checklist required
+  `default_workflow_permissions: "write"` "both, not either", which
+  contradicted the README (read-only suffices and is tighter, since the
+  workflow declares its own permissions) and told autonomous-merge installs
+  to change a setting they do not need. Corrected, with a test; the
+  checklist now also ends section 6 on `doctor` reporting **Ready**.
 - [ ] **D8 — A README that starts with commands.** *Done when:* Getting
   Started is a short command list at the top, and the status tables, the
   bet, the layout tree and the design narrative live in `ARCHITECTURE.md` or

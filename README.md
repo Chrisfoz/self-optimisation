@@ -313,6 +313,19 @@ asking. Everything else — the pinned models, the schedule, the frozen paths,
 deployment checks, email — takes its default and stays editable in
 `project-adapter.yml`. Plain `init` asks all of it.
 
+When you think you're done, ask:
+
+```bash
+node harness/scripts/doctor.mjs            # add --offline to skip every network call
+```
+
+It checks Node, the adapter, the workflow, that the env file exists and is
+git-ignored, that every key is present and accepted by its lab, the model
+snapshot, the repository's secrets and pull-request permission (when the
+GitHub CLI is signed in), and whether your copy of the harness is current.
+Each failure prints the command that fixes it; it ends with **Ready** when
+nothing does.
+
 Before asking, `init` reads your project's own files (`package.json`,
 `pyproject.toml`, `Cargo.toml`, `go.mod`, `pom.xml`, `*.csproj`, a
 `Makefile`) and proposes the editable paths, the test command and the

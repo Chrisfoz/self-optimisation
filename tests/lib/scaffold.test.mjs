@@ -704,6 +704,25 @@ test('renderChecklist: says which merge model was installed, in its own words', 
   assert.match(auto, /nobody asked first/);
 });
 
+test('renderChecklist: asks for the PR tickbox only on the PR path, and never for a write default', () => {
+  const pr = renderChecklist(baseAnswers());
+  assert.match(pr, /Allow GitHub Actions to create and approve pull requests\*\* is\s+ticked/);
+  assert.match(pr, /"can_approve_pull_request_reviews": true/);
+  // The workflow declares its own permissions; the radio governs every other
+  // workflow in the repository, and read-only is the tighter choice.
+  assert.doesNotMatch(pr, /"default_workflow_permissions": "write"/);
+  assert.doesNotMatch(pr, /Read and write/);
+
+  const auto = renderChecklist(baseAnswers({ approvalClass: 'autonomous-merge' }));
+  assert.doesNotMatch(auto, /can_approve_pull_request_reviews/);
+  assert.match(auto, /Nothing to change in Settings → Actions → General/);
+});
+
+test('renderChecklist: doctor is the last check before the rehearsal', () => {
+  const text = renderChecklist(baseAnswers());
+  assert.ok(text.indexOf('harness/scripts/doctor.mjs') < text.indexOf('agreed to spend real tokens'));
+});
+
 test('renderChecklist: no install is told to fix a harness dependency line, since there is none', () => {
   const copied = renderChecklist(baseAnswers());
   assert.equal(copied.includes('js-yaml'), false);

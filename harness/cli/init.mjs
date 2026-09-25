@@ -560,8 +560,10 @@ function writeFiles(answers) {
     '       node harness/cli/init.mjs --configure-github\n' +
     '\n  3. Work through SELF-IMPROVE-CHECKLIST.md, then SELF-IMPROVE-README.md —\n' +
     '     between them they say exactly what still needs a human before the\n' +
-    '     schedule should run unattended.' +
-    (errors.length ? ' Fix the error(s) above first — `node harness/scripts/validate.mjs` re-checks them any time.' : '')
+    '     schedule should run unattended.\n' +
+    '\n  Any time after that, one command says what is still missing:\n' +
+    '       node harness/scripts/doctor.mjs' +
+    (errors.length ? '\n\n  Fix the error(s) above first — `node harness/scripts/validate.mjs` re-checks them any time.' : '')
   );
 }
 
