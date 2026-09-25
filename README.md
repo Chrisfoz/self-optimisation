@@ -223,8 +223,8 @@ without this file committed, every monthly run would see an empty snapshot
 and report every model in the catalogue as "new" simultaneously, every
 time. Don't add `.agent/` to `.gitignore`; that's the one directory in this
 walkthrough that's the opposite of `.env.harness.local` — it holds no secrets and it
-*must* travel with the repo. `examples/workflows/watch-releases.yml`
-already commits it automatically as part of the workflow (Step 6 below).
+*must* travel with the repo.
+Both generated workflows commit it automatically on every run (Step 6 below).
 
 The same snapshot is what the console's model picker reads when you connect
 a repository: it is the only live list of models your account can actually
@@ -288,44 +288,19 @@ You're adding the *same values* as `harness/.env.harness.local`, into a *differe
 *different consumer* (GitHub's runners, not your own machine). Neither file
 references the other.
 
-### Step 6 — Add the workflow
-
-Copy the example workflow in, from the same temporary clone Step 1 made
-(`/tmp/self-optimisation`, or your Windows equivalent — if you've already
-deleted it, re-clone, or grab
-[`examples/workflows/watch-releases.yml`](examples/workflows/watch-releases.yml)
-from this repository on GitHub directly):
-
-```bash
-mkdir -p .github/workflows
-cp /tmp/self-optimisation/examples/workflows/watch-releases.yml .github/workflows/watch-releases.yml
-```
-
-Open it and:
-
-- Delete the `env:` line for any provider you didn't add a secret for in
-  Step 5.
-- Update the `--providers` list in the "Check for new releases" step to
-  match.
-- Commit and push.
-
-The workflow runs monthly by default (matching the reference cadence — see
-principle 1 again for why monthly, not weekly). Use the **Run workflow**
-button under the Actions tab to try it immediately rather than waiting.
-**What this particular workflow does:** checks your chosen labs, commits the
-updated snapshot, and opens a GitHub issue when a genuinely new model
-appears. It deliberately stops there — it is the detector alone, useful on
-its own as a monthly nudge that a model worth trying now exists. The **full**
-loop (suggest → implement → review → guard → test → pull request → notify) is
-built, and `harness/cli/init.mjs` generates the workflow that runs it; see
-[`ARCHITECTURE.md`](ARCHITECTURE.md) for both diagrams and Step 7 below.
-
-### Step 7 — The full loop
+### Step 6 — Generate the workflow
 
 ```bash
 node harness/cli/init.mjs                              # asks, then writes project-adapter.yml + the workflow
 node harness/cli/init.mjs --from-adapter --force       # later: regenerate the workflow from the adapter you edited
 ```
+
+That one workflow is the whole loop, and it also watches for releases, so
+there is nothing else to install. If you want **only** the monthly notice that
+a new model has shipped — an issue in your repository, no adapter, no model
+ever called — run `node harness/cli/init.mjs --detector-only` instead; it
+writes `.github/workflows/watch-releases.yml` with the secrets and the lab list
+already in agreement.
 
 **Or install it shared, once this repository is public.** Instead of keeping a
 copy of `harness/` in your project, `node <path-to>/harness/cli/init.mjs
@@ -459,7 +434,7 @@ three.
   `harness/`, prefer an explicit glob over a bare directory argument until
   you've confirmed the bare form on your own Node version.
 - **GitHub Actions workflow steps should pin `shell: bash` explicitly**,
-  which `examples/workflows/watch-releases.yml` already does on every
+  which every workflow `init` generates already does on every
   multi-line step. `ubuntu-latest`'s default happens to be bash, so this
   looks optional until the day you (or a project's build needs) point
   `runs-on` at `windows-latest` — whose default shell is PowerShell, not
@@ -760,7 +735,7 @@ self_optimisation/
 │   │                                 # in the proposed adapter schema, plus notes
 │   │                                 # on where the schema had to grow
 │   └── workflows/
-│       └── watch-releases.yml       # copy-pasteable — see "Getting started" above
+│       └── watch-releases.yml       # what `init --detector-only` renders, for reading
 └── harness/
     ├── .env.harness.example         # copy to .env.harness.local beside it — see Step 3
     ├── lib/                           # pure logic — no process.exit, no stdio.

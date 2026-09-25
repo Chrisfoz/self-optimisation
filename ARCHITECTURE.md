@@ -208,7 +208,7 @@ flowchart TD
 
 **Read these diagrams as what's real, not a roadmap with checkboxes filled
 in.** Every box is real: the detector via
-`examples/workflows/watch-releases.yml`, the whole chain locally via
+`init --detector-only` (or inside the full workflow), the whole chain locally via
 `harness/scripts/rehearse.mjs`, and the loop via
 `harness/scripts/run-generation.mjs` run directly — `npm test` prints the
 current check count against fake

@@ -937,9 +937,16 @@ for but cannot take.
   a hand-written parser: the adapter is safety configuration, and a
   home-grown YAML subset that misreads it is worse than 126 KB of the real
   thing.
-- [ ] **D9 — One workflow, not two.** *Done when:* the README installs only
+- [x] **D9 — One workflow, not two.** *Done when:* the README installs only
   the generated `self-improve.yml`, and `init --detector-only` renders the
   release-notice workflow for anyone who wants only that.
+  **Done.** README Step 6 (copy the example, then hand-edit its `env:` lines
+  and `--providers` to agree) is gone; the old Step 7 is now Step 6.
+  `renderDetectorWorkflow()` generates both lists from one answer, pins
+  actions by SHA like the full workflow, and passes lab-supplied names to
+  `gh` through `env:`. The example file is now that function's output for
+  all nine labs, and `tests/lib/detector-workflow.test.mjs` fails if anyone
+  edits one without the other.
 - [ ] **D5 — Detect project settings instead of asking.** *Done when:* `init`
   proposes test commands, setup commands and editable paths from
   `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod` / `pom.xml` /

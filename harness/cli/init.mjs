@@ -40,6 +40,10 @@
  *                --shared-label v0.1.0 as a comment beside it), so no copy
  *                of harness/ has to live in the project. With
  *                --from-adapter, it replaces the pin the adapter recorded.
+ *   --detector-only  writes only .github/workflows/watch-releases.yml: the
+ *                release detector on a schedule, opening an issue when a new
+ *                model ships. Asks which labs to watch and nothing else; no
+ *                adapter, no model is ever called.
  *
  * Interactive mode needs a real terminal (a TTY) on stdin — `rl.question()`
  * in a loop over piped/redirected input is unreliable in Node generally
@@ -56,7 +60,7 @@ import { execFileSync } from 'node:child_process';
 import readline from 'node:readline/promises';
 import '../providers/index.mjs';
 import { getProvider, registeredProviders, resolveProvider } from '../lib/llm-provider.mjs';
-import { renderAdapterYaml, renderWorkflowTemplate, renderCallerWorkflow, renderReadme, renderChecklist, buildAdapterObject, answersFromAdapter } from '../lib/scaffold.mjs';
+import { renderAdapterYaml, renderWorkflowTemplate, renderCallerWorkflow, renderDetectorWorkflow, renderReadme, renderChecklist, buildAdapterObject, answersFromAdapter } from '../lib/scaffold.mjs';
 import { harnessVersion, checkUpgrade } from '../lib/version.mjs';
 import { describeSeats } from '../lib/seats.mjs';
 import { normalizeAmbition, loadAdapter } from '../lib/adapter.mjs';
@@ -162,6 +166,45 @@ async function ask(rl, question, { default: def = '' } = {}) {
   return answer || def;
 }
 
+/** "Which labs?" — shared by the full install and --detector-only. Exits when none is valid. */
+async function askProviders(rl) {
+  const known = registeredProviders();
+  const providersRaw = await ask(rl, `Providers to watch (comma-separated; known: ${known.join(', ')})`, { default: 'anthropic,openai' });
+  const providerNames = splitList(providersRaw).filter((name) => {
+    const ok = known.includes(name);
+    if (!ok) console.log(`   ⚠️  "${name}" is not a registered provider — skipping. Known: ${known.join(', ')}.`);
+    return ok;
+  });
+  if (providerNames.length === 0) {
+    console.log('\n❌ No valid provider selected — at least one is required to check for new model releases.');
+    rl.close();
+    process.exit(1);
+  }
+  return { providerNames, providers: providerNames.map((name) => ({ name, envKey: getProvider(name).envKey })) };
+}
+
+/**
+ * `--detector-only`: the release notice without the loop. One question, one
+ * workflow file, and the env file so `check-keys` can prove the keys first.
+ */
+async function detectorOnly() {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  console.log('Self-optimisation harness — release detector only\n');
+  const { providers } = await askProviders(rl);
+  const cadenceCron = await ask(rl, 'Cadence (cron, UTC)', { default: '0 0 1 * *' });
+  rl.close();
+
+  console.log('\nWriting files...\n');
+  writeIfAbsentOrForced('.github/workflows/watch-releases.yml', renderDetectorWorkflow({ providers, cadenceCron }), 'the detector workflow');
+  writeEnvTemplate();
+  console.log(
+    '\nDone. Add one repository secret per lab (Settings → Secrets and variables → Actions):\n' +
+    providers.map((p) => `  - ${p.envKey}`).join('\n') +
+    '\n\nThen commit, push, and use "Run workflow" in the Actions tab to try it now.' +
+    '\nThe full loop is plain `node harness/cli/init.mjs`, whenever you want it.'
+  );
+}
+
 async function main() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   console.log('Self-optimisation harness — installation scaffolder\n');
@@ -198,18 +241,7 @@ async function main() {
     const testCommands = splitList(testCommandsRaw);
 
     const known = registeredProviders();
-    const providersRaw = await ask(rl, `Providers to watch (comma-separated; known: ${known.join(', ')})`, { default: 'anthropic,openai' });
-    const providerNames = splitList(providersRaw).filter((name) => {
-      const ok = known.includes(name);
-      if (!ok) console.log(`   ⚠️  "${name}" is not a registered provider — skipping. Known: ${known.join(', ')}.`);
-      return ok;
-    });
-    if (providerNames.length === 0) {
-      console.log('\n❌ No valid provider selected — at least one is required to check for new model releases.');
-      rl.close();
-      process.exit(1);
-    }
-    const providers = providerNames.map((name) => ({ name, envKey: getProvider(name).envKey }));
+    const { providerNames, providers } = await askProviders(rl);
 
     // The three pinned seats. The suggest seat rotates — whichever watched
     // lab shipped something new wins it — but implement, review and rank
@@ -519,4 +551,5 @@ async function fromAdapter() {
 }
 
 if (process.argv.includes('--from-adapter')) await fromAdapter();
+else if (process.argv.includes('--detector-only')) await detectorOnly();
 else await main();
