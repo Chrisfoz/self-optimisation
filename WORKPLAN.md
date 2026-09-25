@@ -1036,8 +1036,8 @@ for but cannot take.
   `node`, and has a health check; `.dockerignore` keeps every `.env` file
   out of the build context. CI's new `console-image` job plants a fake key
   file, builds, fails if any env file reached the image, and waits for
-  `/healthz` — Docker was not running on the machine this was written on,
-  so that job is the first real build. `.devcontainer/` brings Node 22 and
+  `/healthz`. Docker was not running where this was written; the job's first
+  run (PR #39) built the image, found no env file in it and got `/healthz`. `.devcontainer/` brings Node 22 and
   the GitHub CLI. **Not done, both owner:** a deploy button (Railway's
   "deploy from GitHub" and Codespaces links only work for other people once
   the repository is public) and the template repository. Both move to D3.
