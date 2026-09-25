@@ -960,9 +960,19 @@ for but cannot take.
   no dependency step unless the adapter was edited by hand (the I10 failure).
   Install proposals carry `--ignore-scripts`, because the job holds a write
   token; a project whose build needs install scripts removes the flag.
-- [ ] **D6 — A short setup path.** *Done when:* `init --quick` asks only labs,
+- [x] **D6 — A short setup path.** *Done when:* `init --quick` asks only labs,
   editable paths, test command and merge model, everything else takes its
   default, and the context-strategy question no longer offers `scoped`.
+  **Done, with one addition:** five questions, not four — setup commands
+  stay in, because a copied install without them cannot run its tests (I10),
+  and D5 proposes them anyway. Everything else takes the same default the
+  full questionnaire offers. The context-strategy question is gone from both
+  paths rather than trimmed: nothing in the harness reads `context.strategy`,
+  so the adapter records `full-dump`, which is what every run does.
+  `tests/scripts/init-quick.test.mjs` drives a real `init --quick` prompt by
+  prompt and asserts exactly which five were asked. Kept as a flag rather
+  than made the default, so the documented full questionnaire is unchanged;
+  the README now leads with `--quick`.
 - [ ] **D4 — `init` configures GitHub through `gh`.** *Done when:* with `gh`
   present and authenticated, `init --configure-github` sets the needed
   secrets from the local env file (only the labs the adapter uses), sets the

@@ -40,6 +40,11 @@
  *                --shared-label v0.1.0 as a comment beside it), so no copy
  *                of harness/ has to live in the project. With
  *                --from-adapter, it replaces the pin the adapter recorded.
+ *   --quick      asks only what has no safe default: which labs, what may be
+ *                edited, how to test, how to install for the tests, and
+ *                whether to merge without asking. Everything else takes the
+ *                default the full questionnaire offers, and stays editable in
+ *                project-adapter.yml.
  *   --detector-only  writes only .github/workflows/watch-releases.yml: the
  *                release detector on a schedule, opening an issue when a new
  *                model ships. Asks which labs to watch and nothing else; no
@@ -79,6 +84,7 @@ const AUTO_YES = process.argv.includes('--yes') || process.argv.includes('-y');
 // already-filled-in brief or adapter is exactly the kind of thing that
 // should need its own explicit flag, not fall out of "accept defaults."
 const FORCE = process.argv.includes('--force');
+const QUICK = process.argv.includes('--quick');
 
 // A shared installation (renderCallerWorkflow()). Validated when the workflow
 // is rendered, before anything is written.
@@ -167,6 +173,21 @@ async function ask(rl, question, { default: def = '' } = {}) {
   return answer || def;
 }
 
+/**
+ * A question --quick does not ask: its default is taken silently. Kept to the
+ * questions with a default that is safe to run on (the seats, the schedule,
+ * the paths a generation may never touch), so the short path never trades
+ * safety for speed.
+ */
+async function detail(rl, question, opts) {
+  return QUICK ? (opts?.default ?? '') : ask(rl, question, opts);
+}
+
+/** Explanatory text for a question --quick skips. */
+function explain(...lines) {
+  if (!QUICK) for (const line of lines) console.log(line);
+}
+
 /** "Which labs?" — shared by the full install and --detector-only. Exits when none is valid. */
 async function askProviders(rl) {
   const known = registeredProviders();
@@ -208,22 +229,22 @@ async function detectorOnly() {
 
 async function main() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  console.log('Self-optimisation harness — installation scaffolder\n');
+  console.log(`Self-optimisation harness — installation scaffolder${QUICK ? ' (quick: five questions; everything else takes its default)' : ''}\n`);
   let answersAmbitionOverride = null;
 
   try {
-    const projectId = await ask(rl, 'Project id', { default: path.basename(repoRoot) });
-    const repository = await ask(rl, 'Repository URL', { default: detectGitRemote() });
+    const projectId = await detail(rl, 'Project id', { default: path.basename(repoRoot) });
+    const repository = await detail(rl, 'Repository URL', { default: detectGitRemote() });
     // The repository's default branch, not the one you're on: the
     // walkthrough has you on a setup branch by now. See git-default-branch.mjs.
-    const defaultBranch = await ask(rl, 'Default branch', { default: detectDefaultBranch(gitRunner(repoRoot)) || detectGitBranch() || 'main' });
+    const defaultBranch = await detail(rl, 'Default branch', { default: detectDefaultBranch(gitRunner(repoRoot)) || detectGitBranch() || 'main' });
 
     // The committed goal (docs/curiosity/C1). Optional, strongly
     // recommended, and the one thing every stage is judged against once it
     // exists. Direction, not a metric — a number here would be gamed.
-    console.log('\nWhat is this project trying to become? One or two sentences of direction, not a metric.');
-    console.log('Optional, but every proposal and every review is judged against it once it exists.\n');
-    const goalStatement = await ask(rl, 'Goal (blank to skip)');
+    explain('\nWhat is this project trying to become? One or two sentences of direction, not a metric.',
+      'Optional, but every proposal and every review is judged against it once it exists.\n');
+    const goalStatement = await detail(rl, 'Goal (blank to skip)');
 
     // Proposals from the repository itself (package.json, pyproject.toml,
     // Cargo.toml, go.mod, pom.xml, *.csproj, Makefile): the defaults below,
@@ -240,10 +261,10 @@ async function main() {
     }
 
     const frozenDefaults = ['.github/**', '.claude/agents/**'];
-    const frozenPathsRaw = await ask(rl, 'Frozen paths — never touched autonomously (comma-separated globs)', { default: frozenDefaults.join(',') });
+    const frozenPathsRaw = await detail(rl, 'Frozen paths — never touched autonomously (comma-separated globs)', { default: frozenDefaults.join(',') });
     const frozenPaths = splitList(frozenPathsRaw);
 
-    const appendOnlyPathsRaw = await ask(rl, 'Append-only paths — new files may be added, existing ones may not change (comma-separated globs)', { default: 'tests/**' });
+    const appendOnlyPathsRaw = await detail(rl, 'Append-only paths — new files may be added, existing ones may not change (comma-separated globs)', { default: 'tests/**' });
     const appendOnlyPaths = splitList(appendOnlyPathsRaw);
 
     const testCommandsRaw = await ask(rl, 'Test commands — one or more shell commands that must exit 0 (comma-separated)', { default: detected.testCommands.join(',') || 'npm test' });
@@ -264,15 +285,15 @@ async function main() {
     // point of pinning them (see learning/01-principles.md). Defaulting all
     // three to claude-opus-5 matches the reference implementation; a
     // project is free to point any of them at any registered lab's model.
-    console.log('\nThe pinned seats — the suggest seat rotates to whichever watched lab ships something new,');
-    console.log('but these three stay on a model you choose. Blank accepts the default.\n');
-    const implementModel = await ask(rl, 'Implement model — writes the actual edit when the suggester offers none', { default: 'claude-opus-5' });
-    const reviewModel = await ask(rl, 'Review model — the independent gate; fails closed. Prefer a DIFFERENT lab than the implementer', { default: 'claude-opus-5' });
+    explain('\nThe pinned seats — the suggest seat rotates to whichever watched lab ships something new,',
+      'but these three stay on a model you choose. Blank accepts the default.\n');
+    const implementModel = await detail(rl, 'Implement model — writes the actual edit when the suggester offers none', { default: 'claude-opus-5' });
+    const reviewModel = await detail(rl, 'Review model — the independent gate; fails closed. Prefer a DIFFERENT lab than the implementer', { default: 'claude-opus-5' });
     // Blank means "let the run choose a different family from the snapshot"
     // (harness/lib/seats.mjs), which is the better default than echoing the
     // implementer — see run-generation.mjs for why the rank seat can be
     // auto-assigned and the review seat cannot.
-    const rankModel = await ask(rl, 'Rank model — only called when more than one lab proposed; blank picks another lab\'s model at run time', { default: '' });
+    const rankModel = await detail(rl, 'Rank model — only called when more than one lab proposed; blank picks another lab\'s model at run time', { default: '' });
 
     const seats = describeSeats({ implementModel, reviewModel, rankModel: rankModel || implementModel });
     for (const warning of seats.warnings) {
@@ -324,10 +345,10 @@ async function main() {
     // the same at every setting, but what a run ATTEMPTS is not, and an
     // owner who picks "ambitious" with autonomous merge has chosen to have
     // structural change land unattended. docs/Ambition-Control.md.
-    console.log('\nHow ambitious may each generation be? "focused" is one small localised change every time;');
-    console.log('"earned" (the default) unlocks one ambitious generation after a clean streak; "ambitious" attempts');
-    console.log('structural work on every run. Every setting passes the same gates.\n');
-    const ambition = normalizeAmbition(await ask(rl, 'Ambition (focused / earned / ambitious)', { default: 'earned' }));
+    explain('\nHow ambitious may each generation be? "focused" is one small localised change every time;',
+      '"earned" (the default) unlocks one ambitious generation after a clean streak; "ambitious" attempts',
+      'structural work on every run. Every setting passes the same gates.\n');
+    const ambition = normalizeAmbition(await detail(rl, 'Ambition (focused / earned / ambitious)', { default: 'earned' }));
     if (ambition === 'ambitious') {
       console.log('   ⚠️  Ambitious on every run. Expect more rejected attempts and more tokens per generation, and');
       console.log('      read docs/Ambition-Control.md — in particular, keep the pull-request merge model, and know');
@@ -341,18 +362,21 @@ async function main() {
       }
     }
 
-    const cadenceCron = await ask(rl, 'Cadence (cron, UTC)', { default: '0 0 1 * *' });
+    const cadenceCron = await detail(rl, 'Cadence (cron, UTC)', { default: '0 0 1 * *' });
     // Defaulted ON here and OFF for the console (console/DESIGN.md §Step 9):
     // someone running this CLI in their own checkout has already done the
     // equivalent of reviewing and merging the install, which is the step the
     // console's two-phase onboarding is protecting.
-    const includeSchedule = !(await ask(rl, 'Leave the schedule off until you have rehearsed a run by hand? (y/N)', { default: 'n' }))
+    const includeSchedule = !(await detail(rl, 'Leave the schedule off until you have rehearsed a run by hand? (y/N)', { default: 'n' }))
       .toLowerCase()
       .startsWith('y');
-    const runner = await ask(rl, 'CI runner (ubuntu-latest / windows-latest / macos-latest)', { default: 'ubuntu-latest' });
-    const contextStrategy = await ask(rl, 'Context strategy (full-dump / scoped — "scoped" has no implementation yet, see ARCHITECTURE.md)', { default: 'full-dump' });
+    const runner = await detail(rl, 'CI runner (ubuntu-latest / windows-latest / macos-latest)', { default: 'ubuntu-latest' });
+    // context.strategy is not asked: nothing in the harness reads it yet, and a
+    // question whose answer changes nothing is a question in the way. The
+    // adapter still records full-dump, which is what every run does.
+    const contextStrategy = 'full-dump';
 
-    const deploymentStrategy = await ask(rl, 'Deployment verify strategy (url / registry / artifact / none)', { default: 'none' });
+    const deploymentStrategy = await detail(rl, 'Deployment verify strategy (url / registry / artifact / none)', { default: 'none' });
     let deploymentUrl, deploymentRegistry, deploymentArtifact;
     if (deploymentStrategy === 'url') {
       const productionUrl = await ask(rl, '  Production URL');
@@ -375,7 +399,7 @@ async function main() {
       deploymentArtifact = { buildCommand: buildCommand || undefined, path: artifactPath || undefined, smokeCommand: smokeCommand || undefined };
     }
 
-    const wantsNotify = (await ask(rl, 'Set up email notifications via SendGrid? (y/N)', { default: 'n' })).toLowerCase().startsWith('y');
+    const wantsNotify = (await detail(rl, 'Set up email notifications via SendGrid? (y/N)', { default: 'n' })).toLowerCase().startsWith('y');
     let notify = null;
     if (wantsNotify) {
       const recipient = await ask(rl, '  Recipient email');
@@ -392,8 +416,8 @@ async function main() {
       } catch { /* the terse fallback still sends */ }
     }
 
-    const agentBriefPath = await ask(rl, 'Agent brief path', { default: '.claude/agents/improve.md' });
-    const reviewerBriefPath = await ask(rl, 'Reviewer brief path', { default: '.claude/agents/review.md' });
+    const agentBriefPath = await detail(rl, 'Agent brief path', { default: '.claude/agents/improve.md' });
+    const reviewerBriefPath = await detail(rl, 'Reviewer brief path', { default: '.claude/agents/review.md' });
 
     rl.close();
 
@@ -518,6 +542,7 @@ function writeFiles(answers) {
   for (const w of warnings) console.log(`   ⚠️  ${w}`);
   if (!errors.length && !warnings.length) console.log('   No issues found.');
   console.log(
+    (QUICK ? '\nEvery other setting took its default — see project-adapter.yml, or re-run without --quick.\n' : '') +
     '\nDone. Two things next, in this order:\n' +
     '\n  1. Prove your keys work — this is the cheapest failure to catch, and the\n' +
     '     only one that otherwise surfaces mid-generation after money is spent:\n' +

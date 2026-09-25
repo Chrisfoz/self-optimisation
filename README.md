@@ -291,9 +291,15 @@ references the other.
 ### Step 6 — Generate the workflow
 
 ```bash
-node harness/cli/init.mjs                              # asks, then writes project-adapter.yml + the workflow
+node harness/cli/init.mjs --quick                      # five questions, then writes project-adapter.yml + the workflow
 node harness/cli/init.mjs --from-adapter --force       # later: regenerate the workflow from the adapter you edited
 ```
+
+`--quick` asks only what has no safe default: which labs, what may be edited,
+how to test, how to install for the tests, and whether to merge without
+asking. Everything else — the pinned models, the schedule, the frozen paths,
+deployment checks, email — takes its default and stays editable in
+`project-adapter.yml`. Plain `init` asks all of it.
 
 Before asking, `init` reads your project's own files (`package.json`,
 `pyproject.toml`, `Cargo.toml`, `go.mod`, `pom.xml`, `*.csproj`, a
