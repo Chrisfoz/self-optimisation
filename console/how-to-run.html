@@ -106,10 +106,8 @@ Work through this in order. Stop where it says CHECK WITH ME and wait for my ans
 1. Read https://github.com/Chrisfoz/self-optimisation - README.md first, then
    harness/project-adapter.example.yml, which is the annotated schema for every setting.
 2. Check `node --version` is 22.11 or newer. Stop if it isn't.
-3. Copy the repository's `harness/` folder into the root of this project, then run:
-     npm install --prefix harness --no-save --no-package-lock js-yaml@5.3.0
-   Use `--prefix harness` exactly as written. Do NOT install js-yaml at this project's
-   top level: it has been tested to silently replace a project's own copy.
+3. Copy the repository's `harness/` folder into the root of this project. There is
+   nothing to install: the harness has no npm dependencies.
 4. CHECK WITH ME on two things before you run the installer, because they are mine to
    decide and not yours to infer from the code.
    (a) The permission split. Propose four lists and let me correct them: EDITABLE
@@ -247,14 +245,6 @@ me the real error rather than working around it.</pre>
           "not recognized" or "command not found", install Node (see
           <a href="#before">Before you start</a>), then quit your editor
           completely and open it again.
-        </p>
-      </li>
-      <li>
-        <h3>Install the one dependency</h3>
-        <div class="cmd"><pre>npm install</pre></div>
-        <p>
-          This downloads one small library, <code>js-yaml</code>, which the
-          harness and the installer use to read and write settings files.
         </p>
       </li>
       <li>
@@ -404,25 +394,6 @@ me the real error rather than working around it.</pre>
         <div class="cmd"><span class="label">Mac / Linux</span><pre>cp -r ../self-optimisation/harness ./harness</pre></div>
         <div class="cmd"><span class="label">Windows PowerShell</span><pre>Copy-Item -Recurse ..\self-optimisation\harness .\harness</pre></div>
         <p>These assume both folders sit side by side. Change the path if yours don't.</p>
-      </li>
-      <li>
-        <h3>Give your project the settings reader</h3>
-        <div class="cmd"><pre>npm install --prefix harness --no-save --no-package-lock js-yaml@5.3.0</pre></div>
-        <p>
-          This installs the same library as Part 1 into
-          <code>harness/node_modules</code>, where only the harness looks for it.
-          Your project's own <code>package.json</code>, lock file and installed
-          packages are left alone. Make sure your project's
-          <code>.gitignore</code> includes <code>node_modules/</code>.
-        </p>
-        <p class="notice warning">
-          <b>Don't install it at your project's top level.</b> Tested, a top-level
-          install can: quietly swap your project's own copy of js-yaml for this
-          one, breaking code that uses the older API; delete packages you
-          installed by hand; and, in a project with no <code>package.json</code>,
-          install into the nearest parent folder that has one, which can be your
-          home folder. A later <code>npm ci</code> also removes it again.
-        </p>
       </li>
       <li>
         <h3>Add your API key</h3>
@@ -623,37 +594,6 @@ git ls-files harness/.env.harness.local .env .env.harness.local</pre></div>
         are at the top. Open it in a browser from your checkout. GitHub shows
         HTML as source, so use GitHub Pages to browse it online.
         <code>docs/generations/REPORT.md</code> has the same records as metrics.
-      </li>
-      <li>
-        <b>You know what the workflow installs on GitHub.</b> A copied install's
-        generated workflow runs
-        <code>npm install --no-save --ignore-scripts js-yaml@5.3.0</code> at
-        your repository's <b>root</b>, inside the Actions run. Nothing on your
-        own computer is touched, and your <code>package.json</code> and lock
-        file are not modified — but two things are worth knowing, both tested
-        rather than guessed:
-        <ul>
-          <li>
-            If your project depends on <b>js-yaml 4 or earlier directly</b>,
-            the run's copy becomes 5.3.0, so your tests run against a version
-            you didn't choose. Tested consequence: <code>yaml.safeLoad</code>
-            becomes <code>undefined</code>. A transitive js-yaml (jest's, for
-            example) is nested by npm and is unaffected.
-          </li>
-          <li>
-            <code>--ignore-scripts</code> means <b>install scripts do not
-            run</b>, so anything your build generates that way is missing when
-            the tests run.
-          </li>
-        </ul>
-        If either applies to you, change that one line in your generated
-        <code>.github/workflows/self-improve.yml</code> to
-        <code>npm install --prefix harness --no-save --no-package-lock
-        js-yaml@5.3.0</code> — the same isolation the local install uses; Node
-        resolves it from <code>harness/node_modules</code> either way. The
-        shared-workflow install already does this and is unaffected. This is a
-        known rough edge, tracked as <b>I10</b>, and the harness will do it for
-        you in a future version.
       </li>
       <li>
         <b>You know when it runs.</b> On the 1st of each month, or straight away
@@ -938,14 +878,6 @@ git ls-files harness/.env.harness.local .env .env.harness.local</pre></div>
         That's expected on your own computer. Every step and the download still
         work (Way A). Connecting to GitHub needs a GitHub App of your own; see
         <code>console/DEPLOYMENT.md</code>.
-      </p>
-    </details>
-    <details>
-      <summary>"Cannot find package 'js-yaml'"</summary>
-      <p>
-        Run <code>npm install</code> in this repository (Part 1, step 4). If the
-        error comes from your own project, run the command from Way B, step 3
-        there.
       </p>
     </details>
     <details>

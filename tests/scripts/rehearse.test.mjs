@@ -7,7 +7,6 @@ import { execFileSync, spawnSync } from 'node:child_process';
 
 const REPO_ROOT = path.join(import.meta.dirname, '../..');
 const SCRIPT = path.join(REPO_ROOT, 'harness/scripts/rehearse.mjs');
-const NODE_MODULES = path.join(REPO_ROOT, 'node_modules');
 const HARNESS_DIR = path.join(REPO_ROOT, 'harness');
 
 /**
@@ -19,7 +18,6 @@ const HARNESS_DIR = path.join(REPO_ROOT, 'harness');
 function project({ providersWatched = ['anthropic'], testCommands = [] } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rehearse-script-'));
   fs.symlinkSync(HARNESS_DIR, path.join(root, 'harness'));
-  fs.symlinkSync(NODE_MODULES, path.join(root, 'node_modules'));
   const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
   git('init', '-q', '-b', 'main');
   git('config', 'user.email', 'a@b.c');
@@ -82,7 +80,6 @@ test('refuses when no project-adapter.yml exists', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rehearse-script-noadapter-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.symlinkSync(HARNESS_DIR, path.join(root, 'harness'));
-  fs.symlinkSync(NODE_MODULES, path.join(root, 'node_modules'));
   const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
   git('init', '-q', '-b', 'main');
   git('config', 'user.email', 'a@b.c');

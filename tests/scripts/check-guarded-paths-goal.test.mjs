@@ -6,7 +6,6 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const SCRIPT = path.join(import.meta.dirname, '../../harness/scripts/check-guarded-paths.mjs');
-const NODE_MODULES = path.join(import.meta.dirname, '../../node_modules');
 
 /** A real repo whose main branch carries an adapter with a goal, and a branch that edits it. */
 function repoWithGoal() {
@@ -15,7 +14,6 @@ function repoWithGoal() {
   git('init', '-q', '-b', 'main');
   git('config', 'user.email', 'a@b.c');
   git('config', 'user.name', 'A');
-  fs.symlinkSync(NODE_MODULES, path.join(root, 'node_modules'));
   fs.writeFileSync(path.join(root, 'project-adapter.yml'), 'project:\n  id: p\n  goal:\n    statement: Become calm.\nconstitution:\n  allowed_paths: [project-adapter.yml, index.html]\n  churn_ceiling: {max_files: 50, max_lines: 10000}\n');
   fs.writeFileSync(path.join(root, 'index.html'), 'v1');
   git('add', '-A');

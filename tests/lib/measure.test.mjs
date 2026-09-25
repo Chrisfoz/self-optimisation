@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { load as loadYaml } from 'js-yaml';
+import { load as loadYaml } from '../../harness/vendor/js-yaml.mjs';
 import { evaluatorFingerprint, compareMeasurements, buildComparisonRecord, summarizeComparison } from '../../harness/lib/measure.mjs';
 import { computeMetrics, renderReport, loadRecords } from '../../harness/lib/report.mjs';
 import { normalizeMetric } from '../../harness/lib/evaluators.mjs';
@@ -94,8 +94,7 @@ test('run-evaluators.mjs --baseline, then after a change: comparison.json names 
   ].join('\n'));
   fs.mkdirSync(path.join(root, 'src'));
   fs.writeFileSync(path.join(root, 'src/game.js'), Array.from({ length: 40 }, (_, i) => `const a${i} = ${i};`).join('\n') + '\n');
-  // The real script (its imports resolve from this repository's
-  // node_modules); the vendored copy is there for the adapter's module path.
+  // The real script; the vendored copy is there for the adapter's module path.
   const script = path.join(import.meta.dirname, '../../harness/scripts/run-evaluators.mjs');
   const env = { PATH: process.env.PATH, GEN_NUMBER: '001', GITHUB_OUTPUT: '' };
 

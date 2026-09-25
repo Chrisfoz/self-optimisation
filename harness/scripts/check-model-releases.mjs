@@ -45,9 +45,9 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 
 const adapterPath = args.adapter || process.env.PROJECT_ADAPTER_PATH || path.join(process.cwd(), 'project-adapter.yml');
-// Only ever pulls in js-yaml (see adapter.mjs's loadAdapter doc) if this
+// Only ever loads the YAML parser (see adapter.mjs's loadAdapter doc) if this
 // file actually exists — a project with no project-adapter.yml never pays
-// for that dependency.
+// for parsing it.
 const adapter = await loadAdapter(adapterPath);
 if (adapter) console.error(`Using ${adapterPath}`);
 

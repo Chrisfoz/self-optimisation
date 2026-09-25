@@ -914,6 +914,63 @@ Most of what broke was the install path and the cost of runs, not the loop.
   did not reproduce locally. *Done when:* the raw response of a failed
   compose is kept in the run log, and the cause is known.
 
+## Tier 8 — make the install easy (2026-09-26)
+
+From [`suggestion.md`](suggestion.md) (#36), a review of the end-user install
+path: about seven manual steps and an 807-line README stood between a new
+project and its first run. Numbered as in that file (D1 = suggestion 1), and
+listed in the order they are being built — each one makes the next smaller.
+Items marked **owner** are publishing decisions the code can be made ready
+for but cannot take.
+
+- [x] **D2 — No runtime dependency.** *Done when:* a copied `harness/` runs
+  `init` and `validate` with no `node_modules` anywhere, the generated
+  workflows install nothing from npm, and a test fails if anything in
+  `harness/` or `console/` imports a package.
+  **Done.** js-yaml 5.3.0's `dist/js-yaml.mjs` is vendored at
+  `harness/vendor/` with its licence, pinned by hash in
+  `tests/lib/vendor.test.mjs`, which also copies `harness/` into an empty
+  directory and runs `init --yes` and `validate` there. Both generated
+  workflows lost their install step, `package.json` has no dependencies, and
+  the README, how-to-run, the console quick start and CONTRIBUTING's first
+  non-negotiable no longer mention `--prefix harness`. Vendoring rather than
+  a hand-written parser: the adapter is safety configuration, and a
+  home-grown YAML subset that misreads it is worse than 126 KB of the real
+  thing.
+- [ ] **D9 — One workflow, not two.** *Done when:* the README installs only
+  the generated `self-improve.yml`, and `init --detector-only` renders the
+  release-notice workflow for anyone who wants only that.
+- [ ] **D5 — Detect project settings instead of asking.** *Done when:* `init`
+  proposes test commands, setup commands and editable paths from
+  `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod` / `pom.xml` /
+  `*.csproj` / `Makefile`, with a test per ecosystem.
+- [ ] **D6 — A short setup path.** *Done when:* `init --quick` asks only labs,
+  editable paths, test command and merge model, everything else takes its
+  default, and the context-strategy question no longer offers `scoped`.
+- [ ] **D4 — `init` configures GitHub through `gh`.** *Done when:* with `gh`
+  present and authenticated, `init --configure-github` sets the needed
+  secrets from the local env file (only the labs the adapter uses), sets the
+  workflow permission and the pull-request tickbox, reads both back and fails
+  loudly if either did not save; without `gh` it prints today's instructions.
+- [ ] **D7 — One `doctor` command.** *Done when:* `harness/scripts/doctor.mjs`
+  checks Node, env file present and git-ignored, keys working, GitHub secrets
+  and permission (via `gh`), snapshot committed, adapter valid and harness
+  current, and each failure prints the command that fixes it.
+- [ ] **D8 — A README that starts with commands.** *Done when:* Getting
+  Started is a short command list at the top, and the status tables, the
+  bet, the layout tree and the design narrative live in `ARCHITECTURE.md` or
+  `docs/`, linked rather than inline.
+- [ ] **D10 — One-click console, and a template repository.** *Done when:*
+  `console/` has a `Dockerfile` and a `.devcontainer`, and the README has a
+  deploy button. The template repository itself is **owner** (it needs D3).
+- [ ] **D1 — Run via `npx`.** *Done when:* `package.json` has a `bin` that
+  copies `harness/` into the current project and runs `init`, `npm pack`
+  contains exactly what an install needs, and a test runs the packed tarball.
+  Publishing to npm is **owner**.
+- [ ] **D3 — Public repository, shared install by default.** **Owner:** the
+  repository is private until the owner says otherwise. *Done when:* it is
+  public and `init` defaults to `--shared` at the current release.
+
 ## Housekeeping, whenever a nearby file is open
 
 - [x] Fold doc-drift fixes in as you touch things: `console/DESIGN.md` §2.1

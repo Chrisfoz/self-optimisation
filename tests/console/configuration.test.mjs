@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { load } from "js-yaml";
+import { load } from "../../harness/vendor/js-yaml.mjs";
 import "../../harness/providers/index.mjs";
 import { resolveProvider } from "../../harness/lib/llm-provider.mjs";
 import {
@@ -263,19 +263,18 @@ test("download is a complete installation and passes the harness structural vali
   }
 });
 
-test("project dependencies install before the pinned harness dependency, on setup and activation", () => {
+test("project dependencies install in the job that runs the tests, on setup and activation", () => {
   for (const files of [
     configure({ ...valid(), setupCommands: ["npm ci --ignore-scripts"] }).files,
     activationFiles({ ...valid(), setupCommands: ["npm ci --ignore-scripts"] }),
   ]) {
     const steps = load(files[WORKFLOW]).jobs["self-improve"].steps;
     const project = steps.findIndex(
-      (s) => s.name === "Install project dependencies",
+      (s) => s.name === "Install the project's own dependencies",
     );
-    const harness = steps.findIndex(
-      (s) => s.name === "Install harness dependencies",
-    );
-    assert.ok(project >= 0 && project < harness);
+    assert.ok(project >= 0);
+    // Nothing is installed for the harness any more: js-yaml is vendored.
+    assert.ok(!steps.some((s) => s.name === "Install harness dependencies"));
     assert.match(steps[project].run, /npm ci/);
 
     // ...and it goes in the job that runs the project's TESTS, not in the
@@ -285,7 +284,7 @@ test("project dependencies install before the pinned harness dependency, on setu
     const checkKeys = load(files[WORKFLOW]).jobs["check-keys"];
     assert.ok(checkKeys, "the generated workflow should still offer the key check");
     assert.ok(
-      !checkKeys.steps.some((s) => s.name === "Install project dependencies"),
+      !checkKeys.steps.some((s) => s.name === "Install the project's own dependencies"),
       "the key check does not need the project's dependencies",
     );
   }

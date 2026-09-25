@@ -12,14 +12,17 @@
  * it already collected.
  */
 
-import { dump as dumpYaml } from 'js-yaml';
+import { dump as dumpYaml } from '../vendor/js-yaml.mjs';
 import { normalizeApprovalClass, normalizeAmbition } from './adapter.mjs';
 
 /**
- * The exact js-yaml version the generated workflow installs at run time.
- * Exact, not a range: the job installing it holds a write token, and a
- * floating version is a supply-chain door into every gate. Kept beside
- * package.json's own pin — bump both together.
+ * The js-yaml release vendored at harness/vendor/js-yaml.mjs. Nothing is
+ * installed from npm at run time any more: the file is committed, so a
+ * copied `harness/` works with no install step and a generated workflow's
+ * write-token job runs only code that was reviewed into the repository.
+ * tests/lib/vendor.test.mjs pins the file's hash; to upgrade, replace the
+ * file from the published package's dist/js-yaml.mjs, then bump this and
+ * the hash together.
  */
 export const JS_YAML_VERSION = '5.3.0';
 
@@ -62,25 +65,6 @@ const CONCURRENCY_BLOCK = `# One run at a time, per repository. Two overlapping 
 concurrency:
   group: self-improvement-\${{ github.repository }}
   cancel-in-progress: false`;
-
-// First line unindented: the template supplies the six spaces before the token.
-// `--prefix harness`, not a bare root install. Half of WORKPLAN I10, and the
-// half that is one line: a root `npm install` here is silently the PROJECT's
-// dependency install, and it has been tested doing real damage — a project
-// that depends on js-yaml 4 directly had its copy replaced for the rest of
-// the run (`yaml.safeLoad` became undefined), and a project with a hoisted
-// js-yaml 3 under @istanbuljs/load-nyc-config, which is the common jest
-// shape, had the same done to it. Installing into harness/node_modules
-// leaves the project's own tree alone, and Node still resolves it because
-// resolution walks up from harness/lib/. The shared workflow never had this
-// problem: it installs into its own directory under RUNNER_TEMP.
-//
-// What remains of I10 is the other half — running `evaluation.setup_commands`
-// before this step, so a project that needs its own dependencies installed
-// says so once rather than relying on this line to do it by accident.
-const COPIED_HARNESS_SETUP = `- name: Install harness dependencies
-        shell: bash
-        run: npm install --prefix harness --no-save --no-package-lock --ignore-scripts js-yaml@{{JS_YAML_VERSION}}`;
 
 /** The repository path of the shared workflow, in the harness's own repository. */
 export const SHARED_WORKFLOW_PATH = '.github/workflows/self-improve.yml';
@@ -141,7 +125,7 @@ const SHARED_TRIGGER = `  # Called by each project's own short workflow, which p
 const SHARED_CONCURRENCY = `# No concurrency group here: the calling workflow holds it. A called
 # workflow in the same group as its caller would wait for itself forever.`;
 
-// First line unindented, like COPIED_HARNESS_SETUP.
+// First line unindented: the template supplies the six spaces before the token.
 const SHARED_HARNESS_SETUP = `# The harness comes from the repository and commit this workflow file was
       # called at (job.workflow_repository, job.workflow_sha), fetched by SHA
       # and checked after checkout, so a project runs exactly the code it
@@ -171,10 +155,6 @@ const SHARED_HARNESS_SETUP = `# The harness comes from the repository and commit
             exit 1
           fi
           echo "HARNESS_DIR=$dir/harness" >> "$GITHUB_ENV"
-
-      - name: Install harness dependencies
-        shell: bash
-        run: npm install --prefix "$RUNNER_TEMP/self-optimisation" --no-save --ignore-scripts js-yaml@{{JS_YAML_VERSION}}
 
       # Read once, here, from the default branch this job checked out, before
       # any agent change exists; every later step uses what this saves
@@ -830,17 +810,20 @@ function renderWorkflow(template, answers, shared) {
   // file with mixed line endings that a reader cannot see and a diff tool
   // reports as a rewrite of every line.
   let out = template.replace(/\r\n/g, '\n');
-  // The structural blocks first: the harness setup step carries a token of
-  // its own ({{JS_YAML_VERSION}}) for the substitutions below to fill.
+  // The structural blocks first, so any token they carry is filled below.
   // A value the shared workflow's config step should have exported. Unset
   // means that step failed, and the command stops rather than guessing.
   const configured = (name) => `\${${name}:?the project configuration was not read}`;
   out = out.replace('{{TRIGGERS}}', () => (shared ? SHARED_TRIGGER : `${scheduleBlock(answers)}\n${DISPATCH_TRIGGER}`));
   out = out.replace('{{CONCURRENCY_BLOCK}}', () => (shared ? SHARED_CONCURRENCY : CONCURRENCY_BLOCK));
-  // replaceAll, not replace: the check-keys job needs the same setup steps,
-  // so this token appears twice in the template and filling only the first
-  // left a literal {{HARNESS_SETUP_STEPS}} in the generated YAML.
-  out = out.replaceAll('{{HARNESS_SETUP_STEPS}}', () => (shared ? SHARED_HARNESS_SETUP : COPIED_HARNESS_SETUP));
+  // Both jobs carry this token, so every occurrence is filled — filling only
+  // the first once left a literal {{HARNESS_SETUP_STEPS}} in the generated
+  // YAML. A copied installation has nothing to set up (harness/ is already in
+  // the checkout, and its one library is vendored), so there the line goes,
+  // with the blank line after it.
+  out = shared
+    ? out.replaceAll('{{HARNESS_SETUP_STEPS}}', () => SHARED_HARNESS_SETUP)
+    : out.replace(/^ {6}\{\{HARNESS_SETUP_STEPS\}\}\n\n/gm, '');
   // {{PROJECT_SETUP_STEPS}} — `evaluation.setup_commands`, for a COPIED
   // installation. A shared installation already runs them, per run, from the
   // project's adapter on the default branch (run-project-commands.mjs setup
@@ -886,7 +869,6 @@ function renderWorkflow(template, answers, shared) {
   out = sub(out, '{{THEMES_CADENCE}}', shared
     ? 'N (memory.themes_review.cadence_generations)'
     : String(Number.isFinite(answers.themesCadence) ? answers.themesCadence : 10));
-  out = sub(out, '{{JS_YAML_VERSION}}', JS_YAML_VERSION);
   out = sub(out, '{{GENERATIONS_DIR}}', shared ? `"${configured('GENERATIONS_DIR')}"` : shellQuote(answers.generationsDir || 'docs/generations'));
   out = sub(out, '{{DEFAULT_BRANCH}}', shared ? configured('DEFAULT_BRANCH') : answers.defaultBranch || 'main');
   // Same first-line-unindented convention as {{NOTIFY_STEPS}} below: the
@@ -1411,16 +1393,7 @@ ${frozen}
   }
 - [ ] **(you)** Nothing in section 1's editable list can reach production by
       itself. If it can, that is a deliberate choice you are making, not an
-      oversight.${
-    shared
-      ? ''
-      : `
-- [ ] **(agent)** The workflow's dependency install does not disturb this
-      project's own. A copied install runs \`npm install\` at the repository root
-      inside the Actions run; if this project depends on js-yaml 4 or earlier,
-      or needs install scripts to have run, change that line to
-      \`npm install --prefix harness --no-save --no-package-lock js-yaml@${JS_YAML_VERSION}\`.`
-  }
+      oversight.
 
 ## 6. The practice run, before anything is scheduled
 

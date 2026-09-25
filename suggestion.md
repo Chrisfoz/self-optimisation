@@ -6,6 +6,9 @@ started", `harness/cli/init.mjs`, `harness/lib/scaffold.mjs`,
 `package.json`. These are proposals for review, not decisions; nothing here
 has been implemented.
 
+**Status:** tracked item by item as Tier 8 (D1–D10) in
+[`WORKPLAN.md`](WORKPLAN.md), which is where the ticks are.
+
 ## Current friction
 
 A new installation takes about seven manual steps:

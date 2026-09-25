@@ -34,15 +34,18 @@ instead.
 These are real defects when broken, not style opinions. Each one exists
 because of a specific failure — usually one that already happened.
 
-1. **Zero npm dependencies outside two named files.**
-   [`harness/lib/adapter.mjs`](harness/lib/adapter.mjs) and
-   [`harness/lib/scaffold.mjs`](harness/lib/scaffold.mjs) may use `js-yaml`,
-   because parsing and emitting YAML by hand is worse. Nothing else in
-   `harness/` may import from `node_modules`. `adapter.mjs`'s own import is
-   lazy — inside the function, after an existence check — so a project with no
-   adapter file never needs `js-yaml` installed at all. If you need a utility,
-   check Node's built-ins first; the whole install is "copy one folder," and
-   every dependency erodes that.
+1. **Zero npm dependencies. Copying `harness/` is the whole install.**
+   Nothing in `harness/` or `console/` may import from `node_modules`, and
+   [`tests/lib/vendor.test.mjs`](tests/lib/vendor.test.mjs) fails if anything
+   does. The one exception to "Node built-ins only" is `js-yaml`, **vendored**
+   at [`harness/vendor/js-yaml.mjs`](harness/vendor/js-yaml.mjs) because
+   parsing YAML by hand is worse, and used only by
+   [`adapter.mjs`](harness/lib/adapter.mjs) (lazily) and
+   [`scaffold.mjs`](harness/lib/scaffold.mjs). The vendored file is pinned by
+   hash; an upgrade replaces it from the published package's
+   `dist/js-yaml.mjs` and bumps the hash and `JS_YAML_VERSION` together. If you
+   need a utility, check Node's built-ins first; every dependency erodes
+   "copy one folder".
 
 2. **Edits are all-or-nothing.** [`edit-format.mjs`](harness/lib/edit-format.mjs)
    validates every edit in memory across every file before a single byte

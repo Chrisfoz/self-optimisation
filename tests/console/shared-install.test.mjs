@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load } from "js-yaml";
+import { load } from "../../harness/vendor/js-yaml.mjs";
 import {
   configure,
   activationFiles,

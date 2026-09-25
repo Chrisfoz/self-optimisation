@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { load as loadYaml } from 'js-yaml';
+import { load as loadYaml } from '../../harness/vendor/js-yaml.mjs';
 import { renderWorkflowTemplate, NODE_VERSION } from '../../harness/lib/scaffold.mjs';
 
 // The three places a supported Node version is stated, which drifted apart
