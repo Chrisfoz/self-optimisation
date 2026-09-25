@@ -276,7 +276,19 @@ GitHub's side and is injected into a workflow run's environment; it is never
 readable back out, never appears in logs, and has nothing to do with any
 file in your repo.
 
-In your GitHub repository:
+**The short way,** once Step 6 has written `project-adapter.yml` and the
+[GitHub CLI](https://cli.github.com/) is signed in (`gh auth login`):
+
+```bash
+node harness/cli/init.mjs --configure-github
+```
+
+It uploads exactly the keys this installation calls, from
+`harness/.env.harness.local` (a blank one is reported, never uploaded), and
+ticks the pull-request permission Step 6 describes, then reads it back and
+fails if it did not save. Without `gh` it prints the steps below.
+
+**By hand,** in your GitHub repository:
 
 1. Go to **Settings → Secrets and variables → Actions**.
 2. Click **New repository secret**.

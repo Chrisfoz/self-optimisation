@@ -973,11 +973,24 @@ for but cannot take.
   prompt and asserts exactly which five were asked. Kept as a flag rather
   than made the default, so the documented full questionnaire is unchanged;
   the README now leads with `--quick`.
-- [ ] **D4 — `init` configures GitHub through `gh`.** *Done when:* with `gh`
+- [x] **D4 — `init` configures GitHub through `gh`.** *Done when:* with `gh`
   present and authenticated, `init --configure-github` sets the needed
   secrets from the local env file (only the labs the adapter uses), sets the
   workflow permission and the pull-request tickbox, reads both back and fails
   loudly if either did not save; without `gh` it prints today's instructions.
+  **Done, with one deliberate narrowing:** it ticks the pull-request box but
+  leaves the repository's default workflow permission as it finds it — that
+  radio governs every *other* workflow in the repository, and the generated
+  one declares its own permissions, so it works under either. On the
+  autonomous-merge path it does not touch permissions at all.
+  `harness/lib/github-setup.mjs` sends secret values to `gh` on stdin, never
+  in argv; reports a blank key rather than uploading it; and reads the
+  tickbox back after saving. `tests/lib/github-setup.test.mjs` drives it
+  against a fake `gh`, including a save that does not stick (the first real
+  install's failure), and runs the CLI with an empty `PATH` for the fallback.
+  The response shapes were checked read-only against this repository. Not
+  yet run end to end against a real repository's settings — that write is
+  the first real install's to make.
 - [ ] **D7 — One `doctor` command.** *Done when:* `harness/scripts/doctor.mjs`
   checks Node, env file present and git-ignored, keys working, GitHub secrets
   and permission (via `gh`), snapshot committed, adapter valid and harness

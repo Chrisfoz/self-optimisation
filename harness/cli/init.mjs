@@ -45,6 +45,12 @@
  *                whether to merge without asking. Everything else takes the
  *                default the full questionnaire offers, and stays editable in
  *                project-adapter.yml.
+ *   --configure-github  after init: sets the repository secrets this
+ *                installation needs from harness/.env.harness.local, and ticks
+ *                "Allow GitHub Actions to create and approve pull requests",
+ *                through the `gh` CLI — then reads the tickbox back and fails
+ *                if it did not save. Asks before changing anything (--yes
+ *                skips that). Without `gh`, prints the manual steps.
  *   --detector-only  writes only .github/workflows/watch-releases.yml: the
  *                release detector on a schedule, opening an issue when a new
  *                model ships. Asks which labs to watch and nothing else; no
@@ -63,14 +69,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import readline from 'node:readline/promises';
+import { parseEnv } from 'node:util';
 import '../providers/index.mjs';
 import { getProvider, registeredProviders, resolveProvider } from '../lib/llm-provider.mjs';
-import { renderAdapterYaml, renderWorkflowTemplate, renderCallerWorkflow, renderDetectorWorkflow, renderReadme, renderChecklist, buildAdapterObject, answersFromAdapter } from '../lib/scaffold.mjs';
+import { renderAdapterYaml, renderWorkflowTemplate, renderCallerWorkflow, renderDetectorWorkflow, renderReadme, renderChecklist, buildAdapterObject, answersFromAdapter, requiredProviders } from '../lib/scaffold.mjs';
 import { harnessVersion, checkUpgrade } from '../lib/version.mjs';
 import { describeSeats } from '../lib/seats.mjs';
-import { normalizeAmbition, loadAdapter } from '../lib/adapter.mjs';
+import { normalizeAmbition, normalizeApprovalClass, loadAdapter } from '../lib/adapter.mjs';
 import { validateAdapter } from '../lib/validate.mjs';
 import { detectProject } from '../lib/detect-project.mjs';
+import { ghRunner, ghReady, repoSlug, setSecrets, allowPullRequests, manualSteps } from '../lib/github-setup.mjs';
 import { detectDefaultBranch, gitRunner, remoteDefaultBranch } from '../lib/git-default-branch.mjs';
 
 // path.join(..., '../x'), not import.meta.dirname — kept as the one idiom every
@@ -543,11 +551,14 @@ function writeFiles(answers) {
   if (!errors.length && !warnings.length) console.log('   No issues found.');
   console.log(
     (QUICK ? '\nEvery other setting took its default — see project-adapter.yml, or re-run without --quick.\n' : '') +
-    '\nDone. Two things next, in this order:\n' +
+    '\nDone. Three things next, in this order:\n' +
     '\n  1. Prove your keys work — this is the cheapest failure to catch, and the\n' +
     '     only one that otherwise surfaces mid-generation after money is spent:\n' +
     '       node --env-file=harness/.env.harness.local harness/scripts/check-keys.mjs\n' +
-    '\n  2. Work through SELF-IMPROVE-CHECKLIST.md, then SELF-IMPROVE-README.md —\n' +
+    '\n  2. Put the same keys on GitHub, and allow the workflow to open pull\n' +
+    '     requests (with the GitHub CLI signed in; it prints the steps otherwise):\n' +
+    '       node harness/cli/init.mjs --configure-github\n' +
+    '\n  3. Work through SELF-IMPROVE-CHECKLIST.md, then SELF-IMPROVE-README.md —\n' +
     '     between them they say exactly what still needs a human before the\n' +
     '     schedule should run unattended.' +
     (errors.length ? ' Fix the error(s) above first — `node harness/scripts/validate.mjs` re-checks them any time.' : '')
@@ -590,6 +601,69 @@ async function fromAdapter() {
   process.exit(errors.length ? 1 : 0);
 }
 
-if (process.argv.includes('--from-adapter')) await fromAdapter();
+/**
+ * `--configure-github`: the secrets and the pull-request tickbox, from the
+ * adapter and the local env file that already exist. Only the labs this
+ * installation calls get a secret; a blank key is reported, never uploaded.
+ */
+async function configureGithub() {
+  const adapter = await loadAdapter(path.join(repoRoot, 'project-adapter.yml'));
+  if (!adapter) {
+    console.error('No project-adapter.yml here. Run init first, then --configure-github.');
+    process.exit(1);
+  }
+  const answers = answersFromAdapter(adapter, {
+    providerEnvKey: (name) => getProvider(name)?.envKey ?? `${String(name).toUpperCase()}_API_KEY`,
+    modelProvider: (model) => { try { return resolveProvider(model); } catch { return null; } },
+  });
+  const names = [...requiredProviders(answers).map((p) => p.envKey), ...(answers.notify?.envKey ? [answers.notify.envKey] : [])];
+  const pullRequests = normalizeApprovalClass(answers.approvalClass) !== 'autonomous-merge';
+  const slug = repoSlug(answers.repository || detectGitRemote());
+
+  const gh = ghRunner({ cwd: repoRoot });
+  if (!slug || !ghReady(gh)) {
+    console.log(slug
+      ? 'The GitHub CLI (`gh`) is not installed or not signed in (`gh auth login`), so here are the steps by hand:\n'
+      : 'Could not tell which GitHub repository this is (project.repository in the adapter), so here are the steps by hand:\n');
+    console.log(manualSteps(slug, names, { pullRequests }));
+    process.exit(1);
+  }
+
+  const envPath = path.join(repoRoot, 'harness', '.env.harness.local');
+  const env = fs.existsSync(envPath) ? parseEnv(fs.readFileSync(envPath, 'utf8')) : {};
+  console.log(`Repository: ${slug}`);
+  console.log(`Secrets to set from harness/.env.harness.local: ${names.join(', ')}`);
+  if (pullRequests) console.log('Setting: allow GitHub Actions to create pull requests (your default workflow permission is left as it is).');
+  if (!AUTO_YES) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const go = (await rl.question('Proceed? (y/N): ')).trim().toLowerCase().startsWith('y');
+    rl.close();
+    if (!go) { console.log('Nothing changed.'); process.exit(1); }
+  }
+
+  let failed = false;
+  const secrets = setSecrets(gh, slug, names, env);
+  for (const n of secrets.set) console.log(`   ✅ secret ${n}`);
+  for (const n of secrets.missing) {
+    console.log(`   ❌ ${n} is blank or missing in harness/.env.harness.local — not set. Paste the key in and re-run.`);
+    failed = true;
+  }
+  for (const { name, error } of secrets.failed) {
+    console.log(`   ❌ secret ${name}: ${error}`);
+    failed = true;
+  }
+  if (pullRequests) {
+    const pr = allowPullRequests(gh, slug);
+    if (pr.ok) console.log(`   ✅ pull requests allowed${pr.alreadySet ? ' (already on)' : ', and it reads back as saved'}`);
+    else {
+      console.log(`   ❌ pull-request permission: ${pr.error}`);
+      failed = true;
+    }
+  }
+  process.exit(failed ? 1 : 0);
+}
+
+if (process.argv.includes('--configure-github')) await configureGithub();
+else if (process.argv.includes('--from-adapter')) await fromAdapter();
 else if (process.argv.includes('--detector-only')) await detectorOnly();
 else await main();
