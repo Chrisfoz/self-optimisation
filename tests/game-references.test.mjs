@@ -35,3 +35,16 @@ test('network failure is non-fatal and injects no unverified candidates',async()
  assert.equal(result.status,'unavailable');
  assert.equal(formatDiscoveredReferences(result),'');
 });
+
+test('web discovery enforces opt in, credentials, bounded results and failure fallback',async()=>{
+ const {discoverWebGameReferences,formatWebGameReferences}=await import('../harness/lib/game-references.mjs');
+ assert.equal((await discoverWebGameReferences({enabled:false})).status,'disabled');
+ assert.equal((await discoverWebGameReferences({enabled:true,query:'game'})).status,'missing-key');
+ const result=await discoverWebGameReferences({enabled:true,query:'driving mechanics',apiKey:'mock',limit:8,
+  fetchImpl:async (url,opts)=>{assert.match(url,/count=3/);assert.equal(opts.headers['X-Subscription-Token'],'mock');
+   return {ok:true,json:async()=>({web:{results:Array.from({length:5},(_,i)=>({title:'Example '+i,url:'https://example.org/game/'+i,description:'Mechanics'}))}})};}});
+ assert.equal(result.candidates.length,3);
+ assert.match(formatWebGameReferences(result),/Untrusted live web/);
+ const failed=await discoverWebGameReferences({enabled:true,query:'driving',apiKey:'mock',fetchImpl:async()=>{throw Error('offline')}});
+ assert.equal(failed.status,'unavailable');
+});
