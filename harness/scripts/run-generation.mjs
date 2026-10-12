@@ -51,6 +51,7 @@ import { loadLatestThemesReview, buildThemesBrief, buildOpenQuestionsBrief } fro
 import { buildMetricsBrief, loadLatestMetrics, loadVisualEvidence, loadEvaluatorPlugin, createVisualCapture } from '../lib/evaluators.mjs';
 import { buildEscalationBrief, loadLedger } from '../lib/escalations.mjs';
 import { runGeneration } from '../lib/orchestrator.mjs';
+import { loadGameReferences } from '../lib/game-references.mjs';
 
 function parseArgs(argv) {
   const out = {};
@@ -151,7 +152,12 @@ const readRequired = (relative, what) => {
   return fs.readFileSync(absolute, 'utf8');
 };
 
-const agentBrief = readRequired(briefs.agentBriefPath, 'agent brief');
+const baseAgentBrief = readRequired(briefs.agentBriefPath, 'agent brief');
+// Opt-in is explicit in the project brief: ordinary projects remain unchanged.
+const gameResearchEnabled = baseAgentBrief.includes('GAME REFERENCE RESEARCH — active');
+const referenceEvidence = loadGameReferences({ repoRoot, enabled: gameResearchEnabled });
+const agentBrief = baseAgentBrief + referenceEvidence;
+if (gameResearchEnabled) console.error(`🎮 Game reference evidence: ${referenceEvidence ? 'loaded from docs/GAME-REFERENCE-PILOT.md' : 'missing; research-only prompt remains active'}`);
 const reviewerBrief = readRequired(briefs.reviewerBriefPath, 'reviewer brief');
 
 const generationsDir = ctxConfig.generationsDir || 'docs/generations';
