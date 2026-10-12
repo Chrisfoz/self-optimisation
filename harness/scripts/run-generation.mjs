@@ -51,7 +51,7 @@ import { loadLatestThemesReview, buildThemesBrief, buildOpenQuestionsBrief } fro
 import { buildMetricsBrief, loadLatestMetrics, loadVisualEvidence, loadEvaluatorPlugin, createVisualCapture } from '../lib/evaluators.mjs';
 import { buildEscalationBrief, loadLedger } from '../lib/escalations.mjs';
 import { runGeneration } from '../lib/orchestrator.mjs';
-import { loadGameReferences, discoverGameReferences, formatDiscoveredReferences } from '../lib/game-references.mjs';
+import { loadGameReferences, discoverGameReferences, formatDiscoveredReferences, discoverWebGameReferences, formatWebGameReferences } from '../lib/game-references.mjs';
 
 function parseArgs(argv) {
   const out = {};
@@ -158,7 +158,14 @@ const gameResearchEnabled = baseAgentBrief.includes('GAME REFERENCE RESEARCH —
 const referenceEvidence = loadGameReferences({ repoRoot, enabled: gameResearchEnabled });
 // Live discovery is separately opt-in: metadata only and never needed for a successful generation.
 const liveResearch = await discoverGameReferences({ enabled: gameResearchEnabled && process.env.GAME_REFERENCE_LIVE_SEARCH === 'true', query: process.env.GAME_REFERENCE_QUERY || '' });
-const agentBrief = baseAgentBrief + referenceEvidence + formatDiscoveredReferences(liveResearch);
+const webResearch = await discoverWebGameReferences({
+ enabled: gameResearchEnabled && process.env.GAME_REFERENCE_WEB_SEARCH === 'true',
+ query: process.env.GAME_REFERENCE_WEB_QUERY || process.env.GAME_REFERENCE_QUERY || '',
+ apiKey: process.env.BRAVE_SEARCH_API_KEY || ''
+});
+const agentBrief = baseAgentBrief + referenceEvidence + formatDiscoveredReferences(liveResearch) + formatWebGameReferences(webResearch);
+if (gameResearchEnabled && process.env.GAME_REFERENCE_WEB_SEARCH === 'true')
+ console.error('Game web discovery: '+webResearch.status+', candidates: '+webResearch.candidates.length);
 if (gameResearchEnabled && process.env.GAME_REFERENCE_LIVE_SEARCH === 'true') console.error(`🎮 Game reference discovery: ${liveResearch.status}, ${liveResearch.candidates.length} candidate(s)`);
 if (gameResearchEnabled) console.error(`🎮 Game reference evidence: ${referenceEvidence ? 'loaded from docs/GAME-REFERENCE-PILOT.md' : 'missing; research-only prompt remains active'}`);
 const reviewerBrief = readRequired(briefs.reviewerBriefPath, 'reviewer brief');
