@@ -44,3 +44,10 @@ Attribution or licence action required: [none / details / unresolved]
 The local evidence loader is active when a game's filled-in prompt opts in. An **additional, separately opt-in GitHub repository metadata search** is available by setting `GAME_REFERENCE_LIVE_SEARCH=true` and `GAME_REFERENCE_QUERY` to a specific mechanic or engine search phrase (e.g. `traffic simulation game language:JavaScript`). It retrieves at most three public repository records with names, descriptions, update dates and declared SPDX licence identifiers. Network failures are non-fatal. It never downloads code, measures gameplay, certifies licences or searches non-GitHub sources. The model must investigate source suitability before implementing anything. This search is off by default. Unit coverage is provided in `tests/game-references.test.mjs`.
 
 For a project using a copied earlier harness installation, updating the central repository alone will not update that project's vendored `harness/` directory. The new reader will be active there only after the updated harness files are copied across. The brief-level research guidance operates independently of this context injection.
+
+
+## Optional broader live web discovery
+
+Set `GAME_REFERENCE_WEB_SEARCH=true` and `GAME_REFERENCE_WEB_QUERY="road safety game vehicle movement"` in the self-improvement runner environment. Supply `BRAVE_SEARCH_API_KEY` only through a local environment secret or GitHub Actions secret (never commit it). The integration calls Brave Search Web API, requests at most three results, and passes only titles, HTTPS URLs and snippets to the suggestion model. It does not fetch pages, inspect games, import third-party code or assets, or verify licensing. Errors and missing credentials fail open to the normal project-local research prompt without stopping the generation. Disabled by default, including for all non-game projects.
+
+To use in a GitHub Actions generation, the workflow must explicitly map these variables and the secret into the run-generation step. No workflow secret or production deployment has been configured by this change. Treat web snippets as untrusted, potentially inaccurate data.
