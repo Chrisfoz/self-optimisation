@@ -111,17 +111,31 @@ Work through this in order. Stop where it says CHECK WITH ME and wait for my ans
    Use `--prefix harness` exactly as written. Do NOT install js-yaml at this project's
    top level: it has been tested to silently replace a project's own copy.
 4. CHECK WITH ME on two things before you run the installer, because they are mine to
-   decide and not yours to infer from the code: (a) which paths a model may edit and
-   which are frozen, and (b) the one-sentence goal this project is trying to achieve.
+   decide and not yours to infer from the code.
+   (a) The permission split. Propose four lists and let me correct them: EDITABLE
+       (rewritten freely - must already exist), CREATE-ONLY (may add new files, never
+       modify), APPEND-ONLY (usually the test suites - a model that can edit its own
+       gate is not gated), FROZEN (never writable: the workflow, the briefs, the guard,
+       test config, and anything with consequences outside the repo - deploy config,
+       infrastructure, secrets, billing, anything that sends messages or touches
+       customer data). Start narrow; granting a path later is easy, un-shipping a
+       change to one is not.
+   (b) The one-sentence goal this project is trying to achieve.
 5. Run `node harness/cli/init.mjs` and answer the rest from what you can actually see
    in this codebase - my real test command, my real default branch, real paths.
 6. Fill in .claude/agents/improve.md and .claude/agents/review.md from this codebase.
    Replace every [placeholder]. Only name files that really exist.
 7. Run `node harness/scripts/validate.mjs` and fix everything it reports.
-8. Never create, read out, or commit .env. Tell me which API keys to add and where,
-   and I will add them myself.
-9. CHECK WITH ME, then do one practice run: `node harness/scripts/rehearse.mjs`. Show me
-   what it proposed, what the reviewer said, and what it cost, before anything is
+8. Never create, read out, or commit an env file. Keys live in
+   harness/.env.harness.local, which is git-ignored - never in .env (my project may
+   already have one) and never in harness/.env.harness.example, which is tracked.
+   Confirm `git check-ignore -v harness/.env.harness.local` prints a matching rule,
+   then tell me which API keys to add and where, and I will add them myself.
+9. Work through SELF-IMPROVE-CHECKLIST.md, which the installer wrote. Tick every item
+   marked (agent) once you have run its command and read the output. Do NOT tick an
+   item marked (you) - those are mine. Then tell me which (you) items are outstanding.
+10. CHECK WITH ME, then do one practice run: `node harness/scripts/rehearse.mjs`. Show
+   me what it proposed, what the reviewer said, and what it cost, before anything is
    scheduled on GitHub Actions.
 
 Keep everything on a branch and do not merge to my default branch. If a step fails, show
@@ -131,7 +145,11 @@ me the real error rather than working around it.</pre>
       <b>What to expect.</b> It should stop and ask you twice: once about what
       may change and what your goal is, and once before it spends anything on
       a practice run. Those two are the decisions that stay yours. Everything
-      else it can read out of your codebase.
+      else it can read out of your codebase. At the end it should hand you
+      <code>SELF-IMPROVE-CHECKLIST.md</code> with the <code>(agent)</code> boxes
+      ticked and the <code>(you)</code> boxes listed &mdash; those last ones are
+      the GitHub settings, the billing and the judgement calls, and an agent
+      ticking them on your behalf is the failure this file is shaped to prevent.
     </p>
     <p>
       Prefer to do it yourself, or want to understand what the agent is doing?
@@ -335,7 +353,10 @@ me the real error rather than working around it.</pre>
         <p>
           The download includes this file. It lists the API keys to add as GitHub
           secrets (<b>Settings → Secrets and variables → Actions</b>) and how to
-          do the first run.
+          do the first run. Beside it is
+          <code>SELF-IMPROVE-CHECKLIST.md</code> &mdash; the same list as
+          <a href="#finished">Before you let it run</a> below, rendered with your
+          own branch and secrets, and shaped to be ticked off rather than read.
         </p>
         <p class="notice">
           <b>One GitHub switch is off by default, and it's easy to miss.</b> On your
@@ -405,27 +426,35 @@ me the real error rather than working around it.</pre>
       </li>
       <li>
         <h3>Add your API key</h3>
-        <p class="notice warning">
-          <b>Check first: does your project already have a <code>.env</code>?</b>
-          Most real applications do — their own database URL, mail credentials,
-          their own model key. If yours does, <b>do not run the copy command
-          below as written</b>: it would overwrite that file. Copy to
-          <code>.env.harness.local</code> instead, and use
-          <code>--env-file=.env.harness.local</code> everywhere these steps say
-          <code>--env-file=.env</code>.
+        <p>
+          The harness keeps its keys in <code>harness/.env.harness.local</code> —
+          never in <code>.env</code>. Most real applications already have a
+          <code>.env</code> of their own (a database URL, mail credentials, their
+          own model key), and an earlier version of these steps told you to copy
+          over it, which destroys that file. Keeping the two apart is the point,
+          not a workaround: your web server has no reason to hold nine labs' API
+          keys, and the harness has no reason to hold your database's
+          service-role key. The two names cannot collide, whatever your project
+          already does.
         </p>
         <p>
-          Keeping them apart is the point, not a workaround: your web server has
-          no reason to hold nine labs' API keys, and the harness has no reason to
-          hold your database's service-role key.
+          <code>node harness/cli/init.mjs</code> writes this file for you in the
+          next step, and never overwrites one that already exists. To create it
+          now, by hand:
         </p>
-        <div class="cmd"><span class="label">Mac / Linux — no existing .env</span><pre>cp harness/.env.example .env</pre></div>
-        <div class="cmd"><span class="label">Mac / Linux — you already have one</span><pre>cp harness/.env.example .env.harness.local</pre></div>
-        <div class="cmd"><span class="label">Windows PowerShell</span><pre>Copy-Item harness\.env.example .env.harness.local</pre></div>
+        <div class="cmd"><span class="label">Mac / Linux</span><pre>cp harness/.env.harness.example harness/.env.harness.local</pre></div>
+        <div class="cmd"><span class="label">Windows PowerShell</span><pre>Copy-Item harness\.env.harness.example harness\.env.harness.local</pre></div>
         <p>
           Open the file you created and paste your key after the matching name,
           such as <code>ANTHROPIC_API_KEY=sk-ant-…</code>. Leave the other lines
           blank.
+        </p>
+        <p class="notice warning">
+          <b>Put the keys in the <code>.local</code> file, not the
+          <code>.example</code> one.</b> The two names exist to keep them apart:
+          <code>harness/.env.harness.example</code> is tracked by git and holds
+          placeholders only. Filling in the tracked one is how keys reach a
+          commit, and it has happened.
         </p>
         <p class="notice warning">
           <b>Now prove git is ignoring it.</b> Do not assume — a
@@ -435,10 +464,12 @@ me the real error rather than working around it.</pre>
           <code>.env.harness.local</code>. Run this; it must print a matching
           rule, and print nothing at all from the second command:
         </p>
-        <div class="cmd"><pre>git check-ignore -v .env.harness.local
-git ls-files .env .env.harness.local</pre></div>
+        <div class="cmd"><pre>git check-ignore -v harness/.env.harness.local
+git ls-files harness/.env.harness.local .env .env.harness.local</pre></div>
         <p>
-          If the first prints nothing, add <code>.env.*.local</code> to your
+          If the first prints nothing, add <code>.env.*</code> (no leading
+          slash, so it matches inside <code>harness/</code> too) and
+          <code>!.env.harness.example</code> to your
           <code>.gitignore</code> and run it again before you go any further.
           Anyone who sees your key can spend your money.
         </p>
@@ -476,13 +507,13 @@ git ls-files .env .env.harness.local</pre></div>
       </li>
       <li>
         <h3>Do a practice run</h3>
-        <div class="cmd"><pre>node --env-file=.env harness/scripts/rehearse.mjs</pre></div>
+        <div class="cmd"><pre>node --env-file=harness/.env.harness.local harness/scripts/rehearse.mjs</pre></div>
         <p>
           This runs the whole loop on your computer, on a new local branch. It
           normally waits for a newly released model, so the first run usually
           finds nothing and stops, which is expected. To try a model right away:
         </p>
-        <div class="cmd"><pre>node --env-file=.env harness/scripts/rehearse.mjs --models claude-opus-5</pre></div>
+        <div class="cmd"><pre>node --env-file=harness/.env.harness.local harness/scripts/rehearse.mjs --models claude-opus-5</pre></div>
         <p>It never pushes, opens a pull request or merges.</p>
         <p class="notice warning">
           <b>Start with one model.</b> Each model you name is sent every file it may
@@ -520,6 +551,17 @@ git ls-files .env .env.harness.local</pre></div>
       Every item below went wrong at least once in a real installation. Tick them
       all before the monthly run starts, whichever way you installed.
     </p>
+    <p class="notice">
+      <b>You do not have to tick these here.</b> The installer writes this same
+      list into your project as <code>SELF-IMPROVE-CHECKLIST.md</code>, rendered
+      with your own branch, your own test command and the exact secrets your
+      installation needs &mdash; so it can be ticked in a pull request and read
+      back later. Each item there is tagged <code>(agent)</code>, settled by a
+      command, or <code>(you)</code>, settled in a browser or a billing console.
+      A coding agent should finish the first kind and hand you the second;
+      it should never tick a <code>(you)</code> item on your behalf. What
+      follows is the same list in prose, for reading before you install.
+    </p>
     <ul class="need">
       <li>
         <b>Everything is on your default branch.</b> The harness, your
@@ -531,8 +573,12 @@ git ls-files .env .env.harness.local</pre></div>
       </li>
       <li>
         <b>Your keys are nowhere in git.</b>
-        <code>git ls-files .env .env.harness.local</code> prints nothing, and
-        <code>git check-ignore .env</code> prints the file's name.
+        <code>git ls-files harness/.env.harness.local .env .env.harness.local</code>
+        prints nothing, and
+        <code>git check-ignore -v harness/.env.harness.local</code> prints a
+        matching rule. Check <code>harness/.env.harness.example</code> still holds
+        placeholders too &mdash; that one is tracked, and filling it in is how keys
+        reach a commit.
       </li>
       <li>
         <b>GitHub has a secret for every lab the run calls.</b> On your project's
@@ -836,8 +882,8 @@ git ls-files .env .env.harness.local</pre></div>
         <tr><td><span class="tag backend">Backend</span> Choose how big each change may be</td><td><code>project-adapter.yml</code> → <code>context.ambition</code> (<code>focused</code>, <code>earned</code> or <code>ambitious</code>)</td></tr>
         <tr><td><span class="tag backend">Backend</span> Cap the tokens spent per run</td><td><code>project-adapter.yml</code> → <code>budget.max_generation_tokens</code></td></tr>
         <tr><td><span class="tag backend">Backend</span> Explain what "better" means</td><td><code>.claude/agents/improve.md</code></td></tr>
-        <tr><td><span class="tag backend">Backend</span> Add or change API keys</td><td><code>.env</code> on your computer; <b>Settings → Secrets</b> on GitHub</td></tr>
-        <tr><td><span class="tag backend">Backend</span> Update the models the installer offers</td><td><code>node --env-file=.env harness/scripts/refresh-model-catalogue.mjs</code>, which rewrites <code>harness/data/model-catalogue.json</code></td></tr>
+        <tr><td><span class="tag backend">Backend</span> Add or change API keys</td><td><code>harness/.env.harness.local</code> on your computer; <b>Settings → Secrets</b> on GitHub</td></tr>
+        <tr><td><span class="tag backend">Backend</span> Update the models the installer offers</td><td><code>node --env-file=harness/.env.harness.local harness/scripts/refresh-model-catalogue.mjs</code>, which rewrites <code>harness/data/model-catalogue.json</code></td></tr>
       </table>
     </div>
     <p style="margin-top: 16px">

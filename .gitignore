@@ -18,11 +18,29 @@ $RECYCLE.BIN/
 ~$*
 *.tmp
 
-# Secrets — never commit real API keys. Copy harness/.env.example to .env
-# and fill it in locally; .env is read by `node --env-file=.env`, not by git.
+# Secrets — never commit real API keys. Copy harness/.env.harness.example to
+# harness/.env.harness.local and fill that in; it is read by
+# `node --env-file=harness/.env.harness.local`, not by git. The harness uses
+# .env.harness rather than .env on purpose, so it can never collide with a
+# project's own .env. No leading slash, so these match at every level,
+# harness/ included.
 .env
+.envrc
 .env.*
-!.env.example
+
+# One exception: the tracked, placeholders-only template. Nothing else is
+# re-admitted — an .env.example someone fills in by mistake is how keys reach
+# a commit.
+!.env.harness.example
+
+# Credentials and private keys, whatever they get named.
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+service-account*.json
 
 # Runtime state a local rehearsal writes (which models have been seen before)
 .agent/
@@ -42,3 +60,8 @@ node_modules/
 # VS Code Local History extension — snapshots of files as they were edited,
 # including copies of .claude/agents/ which is itself ignored above.
 .history/
+
+# Test-run output. `npm test` prints TAP to stdout; redirecting it to a file is
+# a local debugging habit, not something a clone should carry.
+*.tap
+test-output*.txt

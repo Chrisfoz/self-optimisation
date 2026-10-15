@@ -273,11 +273,19 @@ Proposed prompts (mirrors the paper's §5 schema directly):
 Output: a filled `project-adapter.yml` in the target repo root, a
 `.github/workflows/self-improve.yml` built from the template, an agent brief
 and reviewer brief with the brackets in `06-starter-kit.md` filled from the
-answers above, a guard config, and a `SELF-IMPROVE-README.md` in the target
+answers above, a guard config, a `SELF-IMPROVE-README.md` in the target
 repo that is this document's real deliverable: a short, concrete "what did I
 just install, what secrets does it need, how do I rehearse it once before
 turning on the schedule" page, written for the person who ran the command
-rather than for someone reading harness source.
+rather than for someone reading harness source — and a
+`SELF-IMPROVE-CHECKLIST.md` beside it, the same ground as a list of boxes
+that can actually be ticked, in a pull request, by whoever or whatever did
+the work. Each item there names who can settle it: `(agent)` items are
+decided by a command's output, `(you)` items are decided in a browser, a
+billing console or the owner's own judgement, and an agent must never tick
+one of those. The checklist is written once and then owned by the project —
+unlike the workflow it is never regenerated, because a half-ticked list is a
+record of where an installation got to.
 
 ## 7. Kernel mapping — paper §3 against real code
 

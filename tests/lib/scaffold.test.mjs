@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { load as loadYaml } from 'js-yaml';
-import { buildAdapterObject, renderAdapterYaml, renderWorkflowTemplate, renderReadme, requiredProviders, JS_YAML_VERSION } from '../../harness/lib/scaffold.mjs';
+import { buildAdapterObject, renderAdapterYaml, renderWorkflowTemplate, renderReadme, renderChecklist, requiredProviders, JS_YAML_VERSION } from '../../harness/lib/scaffold.mjs';
 
 const TEMPLATE_PATH = path.join(import.meta.dirname, '../../harness/templates/workflow.yml.tmpl');
 const template = fs.readFileSync(TEMPLATE_PATH, 'utf8');
@@ -648,4 +648,124 @@ test('renderWorkflowTemplate: campaign mode replaces the release check when mode
 test('buildAdapterObject: a goal is written under project.goal only when the owner gave one', () => {
   assert.equal(buildAdapterObject(baseAnswers()).project.goal, undefined);
   assert.deepEqual(buildAdapterObject(baseAnswers({ goalStatement: 'Become calm.' })).project.goal, { statement: 'Become calm.', holds: [], away_from: [] });
+});
+
+// --- renderChecklist ----------------------------------------------------------
+
+test('renderChecklist: every item is an unticked box, so a fresh install starts with nothing claimed', () => {
+  const text = renderChecklist(baseAnswers());
+  assert.ok(text.includes('- [ ]'));
+  assert.equal(/- \[[xX]\]/.test(text), false, 'nothing may ship pre-ticked');
+});
+
+test('renderChecklist: tags every item with who can settle it, and says an agent must not tick the owner\'s', () => {
+  const text = renderChecklist(baseAnswers());
+  const boxes = text.match(/- \[ \]/g).length;
+  const tagged = (text.match(/\*\*\((?:agent|you)\)\*\*/g) || []).length;
+  assert.equal(boxes, tagged, 'every box carries an (agent) or (you) tag');
+  assert.match(text, /an agent must never tick one on\s+your behalf/);
+});
+
+test('renderChecklist: names the real secrets this installation needs, not a generic list', () => {
+  const text = renderChecklist(baseAnswers({
+    providers: [{ name: 'anthropic', envKey: 'ANTHROPIC_API_KEY' }],
+    notify: { provider: 'sendgrid', envKey: 'SENDGRID_API_KEY', recipient: 'a@b.c', from: 'd@e.f' },
+  }));
+  assert.match(text, /`ANTHROPIC_API_KEY`/);
+  assert.match(text, /`SENDGRID_API_KEY`/);
+});
+
+test('renderChecklist: without a notifier, does not ask for a notifier secret', () => {
+  const text = renderChecklist(baseAnswers({ notify: null }));
+  assert.equal(text.includes('SENDGRID_API_KEY'), false);
+});
+
+test('renderChecklist: names the project, its real branch and its real test command', () => {
+  const text = renderChecklist(baseAnswers({
+    projectId: 'grammar-game',
+    defaultBranch: 'trunk',
+    testCommands: ['npm run test:unit', 'npm run lint'],
+  }));
+  assert.match(text, /# Self-improvement install checklist — grammar-game/);
+  assert.match(text, /`npm run test:unit` passes on `trunk`/);
+  assert.equal(text.includes('`main`'), false, 'must not quote a branch this project does not use');
+});
+
+test('renderChecklist: the secrets section checks the harness env file, not a bare .env', () => {
+  const text = renderChecklist(baseAnswers());
+  assert.match(text, /git ls-files harness\/\.env\.harness\.local/);
+  assert.match(text, /git check-ignore -v harness\/\.env\.harness\.local/);
+  assert.match(text, /harness\/\.env\.harness\.example` still holds placeholders/);
+});
+
+test('renderChecklist: says which merge model was installed, in its own words', () => {
+  const pr = renderChecklist(baseAnswers());
+  assert.match(pr, /human-approval-required/);
+  assert.match(pr, /fails to open its pull request/);
+
+  const auto = renderChecklist(baseAnswers({ approvalClass: 'autonomous-merge' }));
+  assert.match(auto, /autonomous-merge/);
+  assert.match(auto, /nobody asked first/);
+});
+
+test('renderChecklist: a shared install is not told to fix a dependency line it does not have', () => {
+  const copied = renderChecklist(baseAnswers());
+  assert.match(copied, /--prefix harness --no-save --no-package-lock/);
+
+  const shared = renderChecklist(baseAnswers({ sharedHarness: { ref: 'a'.repeat(40), label: 'v0.1.0' } }));
+  assert.equal(shared.includes('--no-package-lock'), false);
+  assert.match(shared, /\/path\/to\/self-optimisation\/harness\/scripts\/revert-generation\.mjs/);
+});
+
+test('renderChecklist: tells the owner that a leaked key is rotated, not merely deleted', () => {
+  const text = renderChecklist(baseAnswers());
+  assert.match(text, /\*\*rotated\*\*/);
+  assert.match(text, /does not remove it\s+from history/);
+});
+
+test('renderChecklist: the permission split comes first, before anything downstream of it', () => {
+  const text = renderChecklist(baseAnswers());
+  assert.match(text, /## 1\. What the agent may touch/);
+  assert.ok(
+    text.indexOf('## 1. What the agent may touch') < text.indexOf('## 2. The installation is complete'),
+    'the foundational decision is section 1'
+  );
+});
+
+test('renderChecklist: prints the four path lists as the config actually holds them', () => {
+  const text = renderChecklist(baseAnswers({
+    allowedPaths: ['grammar-game.html'],
+    createOnlyPaths: ['game/**', 'assets/**'],
+    appendOnlyPaths: ['tests/**'],
+    frozenPaths: ['.github/**', 'harness/**'],
+  }));
+  for (const p of ['grammar-game.html', 'game/**', 'assets/**', 'tests/**', '.github/**', 'harness/**']) {
+    assert.match(text, new RegExp('^- `' + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '`$', 'm'), p);
+  }
+});
+
+test('renderChecklist: an empty list says so rather than rendering a silent gap', () => {
+  const text = renderChecklist(baseAnswers({ createOnlyPaths: [], appendOnlyPaths: [] }));
+  assert.match(text, /_nothing — the agent may not add files_/);
+  assert.match(text, /_nothing_/);
+});
+
+test('renderChecklist: signing off the split is the owner\'s, and the mechanical checks are the agent\'s', () => {
+  const text = renderChecklist(baseAnswers());
+  const section = text.slice(text.indexOf('## 1.'), text.indexOf('## 2.'));
+  assert.match(section, /- \[ \] \*\*\(you\)\*\* \*\*You have read those four lists and they are what you meant\.\*\*/);
+  assert.match(section, /- \[ \] \*\*\(agent\)\*\* `\.github\/\*\*` is frozen/);
+  assert.match(section, /- \[ \] \*\*\(agent\)\*\* Both briefs describe the same split/);
+});
+
+test('renderChecklist: names the consequences an owner cannot revert their way out of', () => {
+  const text = renderChecklist(baseAnswers());
+  assert.match(text, /deployment config, infrastructure-as-code, CI definitions/);
+  assert.match(text, /not undone by\s+reverting the commit/);
+});
+
+test('renderChecklist: says start narrow, and that widening later is the normal path', () => {
+  const text = renderChecklist(baseAnswers());
+  assert.match(text, /promoting\s+that glob to `allowed_paths`/);
+  assert.match(text, /easier to grant a path than to un-ship a change to one/);
 });

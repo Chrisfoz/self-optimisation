@@ -27,7 +27,7 @@
 import fs from 'fs';
 import path from 'path';
 import { constitutionAllowlist, guardConfig, briefPaths, rolesConfig, watchedProviders, goalConfig } from './adapter.mjs';
-import { globToRegExp } from './glob.mjs';
+import { globToRegExp, isGlob, expandGlob } from './glob.mjs';
 import { resolveProvider, getProvider } from './llm-provider.mjs';
 
 /**
@@ -106,7 +106,16 @@ export function validateAdapter(adapter, { repoRoot = process.cwd(), env = proce
   // model — the exact incident learning/03-failure-modes.md Part 2 warns
   // against ("a file the agent may edit is a file the agent must have read").
   for (const p of allowedPaths) {
-    if (!fs.existsSync(path.join(repoRoot, p))) {
+    if (isGlob(p)) {
+      // `fs.existsSync("game/**")` is false however many files game/ holds —
+      // it is a literal filename check. Checking a pattern means asking
+      // whether it matches anything, which is also the honest question: a
+      // pattern matching nothing is an editable surface that is empty today,
+      // and the agent would be shown no source for it.
+      if (expandGlob(p, { repoRoot }).length === 0) {
+        errors.push(`constitution.allowed_paths: "${p}" matches no file in the repository. A pattern the agent may edit but that matches nothing gives it an empty editable surface — put the path under create_only_paths until something exists there.`);
+      }
+    } else if (!fs.existsSync(path.join(repoRoot, p))) {
       errors.push(`constitution.allowed_paths: "${p}" does not exist in the repository.`);
     }
   }
