@@ -25,6 +25,7 @@ import { loadLatestThemesReview, buildThemesBrief, buildOpenQuestionsBrief } fro
 import { buildMetricsBrief, loadLatestMetrics } from './evaluators.mjs';
 import { buildEscalationBrief, loadLedger } from './escalations.mjs';
 import { buildImportGraph, renderCodeMap, DEFAULT_MAP_MAX_CHARS } from './code-map.mjs';
+import { loadLessons, buildLessonsBrief, diskLookups } from './lessons.mjs';
 
 export const sha256 = (text) => crypto.createHash('sha256').update(String(text ?? '')).digest('hex');
 
@@ -70,10 +71,16 @@ export function assembleContext({ repoRoot, adapter }) {
       createOnlyDescription: createOnlyPaths.length ? createOnlyPaths.join(', ') : undefined,
     }),
     testIndex: buildTestIndex({ repoRoot, testFiles: ctxConfig.testFiles }),
-    generationIndex: buildGenerationIndex({ repoRoot, generationsDir }),
+    // The records quote model output, reviewers' reasons and test output —
+    // all of it text that repository content can steer. Fenced like the
+    // source, so an injection that reached one run's record is not read as
+    // an instruction by the next. The oldest generations are summarised as
+    // counts past context.index_rows, so the index stops growing without
+    // bound.
+    generationIndex: fenceUntrusted('GENERATION RECORDS', buildGenerationIndex({ repoRoot, generationsDir, maxRows: ctxConfig.indexRows })),
     // context.history_limit was read by the adapter and then ignored here:
     // every run used 3.
-    history: buildGenerationHistory({ repoRoot, generationsDir, limit: ctxConfig.historyLimit ?? 3 }),
+    history: fenceUntrusted('RECENT GENERATIONS', buildGenerationHistory({ repoRoot, generationsDir, limit: ctxConfig.historyLimit ?? 3 })),
     architectureNotes: fenceUntrusted('ARCHITECTURE NOTES', buildArchitectureNotes({ repoRoot, docPath: ctxConfig.architectureNotesPath, appendOnlyMarker: ctxConfig.architectureNotesMarker })),
     themes: buildThemesBrief(latestThemes),
     // The UNKNOWN field of the same review — docs/curiosity/C2, phase A.
@@ -88,7 +95,10 @@ export function assembleContext({ repoRoot, adapter }) {
     // generation. Null with no evaluators, which drops the section.
     qualityMetrics: buildMetricsBrief(loadLatestMetrics({ repoRoot, generationsDir })),
     // What the last few runs actually SAW — not a verdict and not a score.
-    runtime: buildRuntimeEvidence({ repoRoot, evidenceDir: ctxConfig.runtimeEvidenceDir || undefined }),
+    runtime: fenceUntrusted('RUNTIME OBSERVATIONS', buildRuntimeEvidence({ repoRoot, evidenceDir: ctxConfig.runtimeEvidenceDir || undefined })),
+    // Lessons anchored to the files they concern, stale ones left out
+    // (lessons.mjs). Null until a record yields one.
+    lessons: buildLessonsBrief(loadLessons({ repoRoot, generationsDir }), { hashOf: diskLookups(repoRoot).hashOf }),
   };
 
   return { context, editableFiles, editablePaths, createOnlyPaths, allowlist, generationsDir, memory, ctxConfig, guard, sourcesFor, graph, scoped };

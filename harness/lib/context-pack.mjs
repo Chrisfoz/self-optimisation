@@ -395,9 +395,17 @@ export function generationNumbers({ repoRoot = process.cwd(), generationsDir = D
  *
  * @param {{repoRoot?: string, generationsDir?: string}} [opts]
  */
-export function buildGenerationIndex({ repoRoot = process.cwd(), generationsDir = DEFAULT_GENERATIONS_DIR } = {}) {
-  const all = generationDirs(repoRoot, generationsDir);
-  if (all.length === 0) return null;
+export const DEFAULT_INDEX_ROWS = 60;
+
+export function buildGenerationIndex({ repoRoot = process.cwd(), generationsDir = DEFAULT_GENERATIONS_DIR, maxRows = DEFAULT_INDEX_ROWS } = {}) {
+  const every = generationDirs(repoRoot, generationsDir);
+  if (every.length === 0) return null;
+  // One row per generation grew without bound. Past maxRows the oldest are
+  // counted by outcome instead — the records themselves are untouched, and
+  // the summary line says where they are.
+  const keep = Number.isFinite(maxRows) && maxRows > 0 ? maxRows : DEFAULT_INDEX_ROWS;
+  const older = every.length > keep ? every.slice(0, every.length - keep) : [];
+  const all = every.slice(older.length);
 
   // Markdown table cells cannot contain a literal `|`, and this text
   // ultimately comes from model-authored proposals and error messages.
@@ -446,7 +454,24 @@ export function buildGenerationIndex({ repoRoot = process.cwd(), generationsDir 
     return `| ${dir.replace('gen-', '')}${campaign ? ' (campaign)' : ''} | ${modelOnly(suggestedBy)} | ${outcome} | ${cell(change)} |`;
   });
 
+  const summary = (() => {
+    if (!older.length) return [];
+    const counts = new Map();
+    for (const dir of older) {
+      let label = 'NO RECORD';
+      try {
+        const record = JSON.parse(read(repoRoot, `${generationsDir}/${dir}/attempts.json`) ?? 'null');
+        label = record?.outcome === 'approved' ? fateOf(record).label : String(record?.outcome ?? 'unknown').toUpperCase();
+      } catch { /* counted as unknown below */ }
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    const first = older[0].replace('gen-', '');
+    const last = older.at(-1).replace('gen-', '');
+    return [`Generations ${first}–${last}, summarised: ${[...counts].map(([k, n]) => `${n} ${k}`).join(', ')}. Full records are in ${generationsDir}/.`, ''];
+  })();
+
   return [
+    ...summary,
     '| Gen | Suggested by | Outcome | Change |',
     '|---|---|---|---|',
     ...rows,

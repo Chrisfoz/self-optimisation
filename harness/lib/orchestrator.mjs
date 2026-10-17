@@ -350,7 +350,7 @@ export function buildSuggestUserPrompt({ genLabel, context, screenshots = { imag
 
 # Repository map
 ${context.manifest ?? ''}
-${section('THIS GENERATION HAS BEEN ASSIGNED A DECIDED CHANGE', context.workOrder)}${section('Target platform', context.platform)}${section('Measured quality dimensions — non-gating', context.qualityMetrics)}${section('Frozen test invariants', context.testIndex)}${section('Every generation on record (compact — nothing here is ever dropped)', context.generationIndex)}${section('Most recent generations, in full detail (including what failed)', context.history)}${section('What the last runs actually observed at runtime', context.runtime)}${section('Recurring themes from the last review', context.themes)}${section('Open questions this project has not answered', context.openQuestions)}${section('Open escalations — what earlier models asked us to change', context.escalations)}${section('Player feedback', context.feedback)}${section('How this project is built, and what it has learned building itself', context.architectureNotes)}
+${section('THIS GENERATION HAS BEEN ASSIGNED A DECIDED CHANGE', context.workOrder)}${section('Target platform', context.platform)}${section('Measured quality dimensions — non-gating', context.qualityMetrics)}${section('Frozen test invariants', context.testIndex)}${section('Every generation on record (compact; past the most recent, counted by outcome)', context.generationIndex)}${section('Most recent generations, in full detail (including what failed)', context.history)}${section('Lessons from earlier generations, about the files they name', context.lessons)}${section('What the last runs actually observed at runtime', context.runtime)}${section('Recurring themes from the last review', context.themes)}${section('Open questions this project has not answered', context.openQuestions)}${section('Open escalations — what earlier models asked us to change', context.escalations)}${section('Player feedback', context.feedback)}${section('How this project is built, and what it has learned building itself', context.architectureNotes)}
 ${shots}${section('Code map — every editable file, its symbols and imports', context.codeMap)}${context.sources ? `
 # Current source
 ${context.sources}
@@ -1559,12 +1559,15 @@ export async function runGeneration(config, deps = {}) {
         }
       }
       crashState.created = parsed.creates.map((c) => c.file);
+      // Which files this attempt touched — what a lesson drawn from it is
+      // anchored to (lessons.mjs), and what makes that lesson stale later.
+      const files = [...new Set([...parsed.edits.map((e) => e.file), ...parsed.creates.map((c) => c.file)])];
 
       const outcome = applyEdits(parsed.edits, { repoRoot, allowlist, creates: parsed.creates, createDescription: createOnlyDescription });
 
       if (outcome.errors.length) {
         log(`⚠️  Attempt ${attempt} (${step.by}): edits did not apply`);
-        attemptLog.push({ attempt, by: step.by, outcome: 'edits-did-not-apply', detail: oneLine(outcome.errors.join('; '), 400) });
+        attemptLog.push({ attempt, by: step.by, outcome: 'edits-did-not-apply', detail: oneLine(outcome.errors.join('; '), 400), files });
         applyErrors = step.direct ? null : outcome.errors;
         // An edit aimed at a file the implementer was never shown fails here;
         // show it next time instead of letting it fail the same way again.
@@ -1593,7 +1596,7 @@ export async function runGeneration(config, deps = {}) {
           const failedCmd = testRun.results.find((r) => !r.passed);
           log(`❌ Attempt ${attempt} (${step.by}): tests failed — ${failedCmd?.command} ${failedCmd?.timedOut ? 'timed out' : `exited ${failedCmd?.exitCode}`}\n`);
           attemptLog.push({
-            attempt, by: step.by, outcome: 'tests-failed',
+            attempt, by: step.by, outcome: 'tests-failed', files,
             detail: oneLine(`${failedCmd?.command}: ${failedCmd?.timedOut ? 'timed out' : `exit ${failedCmd?.exitCode}`} — ${failureExcerpt(failedCmd?.output) ?? failedCmd?.output.slice(-300) ?? ''}`, 400),
             tests: summarizeTestRun(testRun),
           });
@@ -1673,6 +1676,7 @@ export async function runGeneration(config, deps = {}) {
         attemptLog.push({
           attempt, by: step.by,
           outcome: unreadable ? 'review-unparseable' : insufficient ? 'review-insufficient-context' : 'rejected-by-review',
+          files,
           detail: oneLine(review.reason || 'no reason given', 400),
           ...(testRun ? { tests: summarizeTestRun(testRun) } : {}),
           ...shown,
@@ -1696,7 +1700,7 @@ export async function runGeneration(config, deps = {}) {
       // to ship a suggester's own edits opened a pull request titled
       // "Generation 005: Generation 005 improvement".
       const summary = oneLine(parsed.summary || extractField(proposal, 'CHANGE') || `Generation ${genNumber} improvement`, 80);
-      attemptLog.push({ attempt, by: step.by, outcome: 'approved', detail: summary, ...(testRun ? { tests: summarizeTestRun(testRun) } : {}), ...shown });
+      attemptLog.push({ attempt, by: step.by, outcome: 'approved', detail: summary, files, ...(testRun ? { tests: summarizeTestRun(testRun) } : {}), ...shown });
 
       const proposalPath = writeProposal({
         repoRoot, generationsDir, genNumber, proposal, parsed, suggestResult,

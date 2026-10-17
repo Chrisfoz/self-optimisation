@@ -16,6 +16,7 @@
 
 import { syncPullRequests } from '../lib/pull-requests.mjs';
 import { setOutput } from '../lib/gh-output.mjs';
+import { refreshLessons } from '../lib/lessons.mjs';
 
 function parseArgs(argv) {
   const out = {};
@@ -31,6 +32,14 @@ const generationsDir = args.generationsDir || process.env.GENERATIONS_DIR || 'do
 
 const result = syncPullRequests({ repoRoot, generationsDir, log: (msg) => console.error(msg) });
 console.error(`Checked ${result.checked} pull request(s); ${result.updated.length} updated, ${result.failed.length} could not be read.`);
+// A merge, a close or a revert is the verdict that verifies a lesson, so the
+// ledger is re-derived after every read-back (harness/lib/lessons.mjs).
+try {
+  const ledger = refreshLessons({ repoRoot, generationsDir });
+  if (ledger.lessons.length) console.error(`Lessons: ${ledger.lessons.filter((l) => l.status === 'verified').length} verified, ${ledger.lessons.filter((l) => l.status === 'candidate').length} candidate, ${ledger.lessons.filter((l) => l.status === 'stale').length} stale.`);
+} catch (err) {
+  console.error(`Could not update the lessons: ${err.message}`);
+}
 setOutput('updated', String(result.updated.length));
 setOutput('closed-unmerged', result.updated.filter((u) => u.state === 'closed').map((u) => u.genNumber).join(','));
 process.exit(0);

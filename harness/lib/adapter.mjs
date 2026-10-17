@@ -363,6 +363,9 @@ export function contextConfig(adapter) {
     purposes: adapter?.context?.purposes ?? {},
     platformNotes: adapter?.context?.platform_notes ?? null,
     historyLimit: Number.isFinite(adapter?.context?.history_limit) ? adapter.context.history_limit : null,
+    // Rows of the generation index shown one per generation; older ones are
+    // summarised as counts. Null: context-pack.mjs's default.
+    indexRows: Number.isFinite(adapter?.context?.index_rows) ? adapter.context.index_rows : null,
     scopeRequired: Number.isFinite(adapter?.context?.scope_required) ? adapter.context.scope_required : null,
     // The ambition dial — see normalizeAmbition() above. Read at RUN time
     // by run-generation.mjs (unlike approval_class, which is baked into the

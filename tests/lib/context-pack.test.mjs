@@ -416,3 +416,20 @@ test('buildGenerationIndex marks a campaign generation, and a normal one renders
   assert.match(index, /\| 001 \(campaign\) \|/);
   assert.match(index, /\| 002 \| /);
 });
+
+test('buildGenerationIndex: past maxRows the oldest generations are counted by outcome, not listed', async (t) => {
+  const { buildGenerationIndex } = await import('../../harness/lib/context-pack.mjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'index-cap-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const outcomes = ['abandoned', 'approved', 'no-proposal', 'abandoned', 'approved'];
+  outcomes.forEach((outcome, i) => {
+    const dir = path.join(root, `docs/generations/gen-00${i + 1}`);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'attempts.json'), JSON.stringify({ outcome, attempts: [] }));
+  });
+  const capped = buildGenerationIndex({ repoRoot: root, maxRows: 2 });
+  assert.match(capped, /^Generations 001–003, summarised: 1 ABANDONED, 1 MERGED, 1 NO-PROPOSAL\. Full records are in docs\/generations\//);
+  assert.equal((capped.match(/^\| 00\d/gm) || []).length, 2);
+  assert.match(capped, /\| 005 /);
+  assert.doesNotMatch(buildGenerationIndex({ repoRoot: root }), /summarised/);
+});
