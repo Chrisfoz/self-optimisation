@@ -19,7 +19,7 @@ usually wants. Read this page for that. Read `learning/diagrams/` for the
 portable pattern you'd lift into another project. Read
 `Portable-Harness-Design.md` §7 for the prose mapping between the two.
 
-## The five diagram layers, and which one you want
+## Diagram layers, and which one you want
 
 | Layer | Where | Shows |
 |---|---|---|
@@ -28,6 +28,7 @@ portable pattern you'd lift into another project. Read
 | **Portable pattern** | [`learning/diagrams/generic-loop.mmd`](learning/diagrams/generic-loop.mmd), `generic-guardrails.mmd`, `generic-context.mmd` — embedded and viewable in [`learning/02-blueprint.md`](learning/02-blueprint.md) and [`learning/05-guardrails-and-trust.md`](learning/05-guardrails-and-trust.md) | The abstract loop and guardrail layers, project-neutral — what you'd draw for *any* installation, including one that isn't this harness at all |
 | **Reference implementation, concretely** | [`learning/diagrams/worked-example-run.mmd`](learning/diagrams/worked-example-run.mmd), `worked-example-harness.mmd` — both embedded below since GitHub doesn't render a bare `.mmd` file as a picture | The same pattern as it actually runs in the reference implementation (real job names, real check counts, real token costs) — useful for seeing what the abstraction looks like once it's hit a real, live system |
 | **Proposed, not built** | [`learning/diagrams/proposed-curiosity-run.mmd`](learning/diagrams/proposed-curiosity-run.mmd), `proposed-curiosity-memory.mmd`, `proposed-curiosity-authorisation.mmd`, indexed at [`docs/curiosity/README.md`](docs/curiosity/README.md) | The curiosity design's own three diagrams — a second longitudinal pass, four of its ten components built and the rest proposed. Do not read the dashed nodes as documentation of the harness. |
+| **Proposed KPI learning** | [Two-loop design below](#proposed-kpi-learning-loop), with [sidecar source](learning/diagrams/proposed-kpi-learning-loop.mmd) and [measurement specification](docs/harness-kpis/README.md) | Existing product-run records feed proposed outcome assessments, controlled operating-strategy experiments and reviewed policy adoption. Measurement automation is not built. |
 
 ## Historical project snapshot, in one picture
 
@@ -280,6 +281,58 @@ about the file rather than a promise about the process.
 `Portable-Harness-Design.md`'s Status table has the same information as
 prose, kept in sync by hand — if the two ever disagree, trust whichever was
 edited more recently and fix the other.
+
+## Proposed KPI learning loop
+
+The product loop already records attempts, spend, tests and PR disposition.
+The second loop is a proposed measurement and policy-evaluation design; no live
+KPI scorecard, experiment scheduler or automatic strategy adaptation is installed.
+A merged PR supplies disposition evidence, not proof of product effectiveness.
+Warm-toned dashed nodes and their connecting design flow describe proposed work.
+
+```mermaid
+flowchart TD
+  subgraph product["Product loop: implemented"]
+    investigate["Investigate and propose"]
+    change["Implement and review"]
+    gates["Guard, test and configured approval"]
+    records["Attempt, spend and PR records"]
+    investigate --> change --> gates --> records
+    records -->|"History informs next run"| investigate
+  end
+
+  subgraph learning["Harness learning: proposed"]
+    evidence["Join later outcome evidence"]
+    assess["Independent assessments and KPI report"]
+    experiment["Compare operating strategies"]
+    decision{"Held-out evidence supports adoption?"}
+    adopt["Reviewed and versioned policy change"]
+    preserve["Preserve results and limitations"]
+    evidence --> assess --> experiment --> decision
+    decision -->|"Yes"| adopt
+    decision -->|"No or uncertain"| preserve
+    adopt --> preserve
+  end
+
+  records -.-> evidence
+  adopt -.->|"Bounded trial and observation"| investigate
+  preserve -.->|"Inform future hypotheses"| experiment
+  classDef proposed fill:#F3E3D4,stroke:#9F7960,stroke-dasharray:5 5
+  class evidence,assess,experiment,decision,adopt,preserve proposed
+  style learning stroke:#9F7960,stroke-dasharray:5 5
+```
+
+Candidate strategies may change context selection, memory retrieval or retry
+policy. They cannot change their own assessment labels, weaken gates, expand
+write permissions or bypass the configured approval class. Adoption requires
+held-out evaluation followed by a bounded real-project trial and continued
+observation. This learns operating policy from experience; it does not train
+foundation-model weights.
+
+The current generated operational report describes merged or kept changes and
+resource use. The proposed independently assessed scorecard is distinct. See
+[workflow evidence mapping](docs/harness-kpis/workflow-integration.md) for existing
+artifacts, missing collection points and the workflow changes that depend on them.
 
 ## The reference implementation, concretely
 

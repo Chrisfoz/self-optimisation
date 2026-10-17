@@ -1,12 +1,9 @@
 # Diagrams
 
-Eight diagrams, in [Mermaid](https://mermaid.js.org) source form so you can paste
-them straight into your own documents. **Five describe the harness. Three
-describe a design that is four-tenths built** — they are prefixed
-`proposed-` and are indexed separately below, because a drawing of something
-that does not exist is the easiest way to mislead someone about a system.
-That prefix is now a slight overstatement, which is the better direction for
-it to be wrong in.
+Diagrams in [Mermaid](https://mermaid.js.org) source form for use in other
+documents. The implemented harness patterns, partly built curiosity design and
+proposed KPI learning loop are indexed separately below. A `proposed-` prefix
+marks a design; read its status notes before treating it as runtime behaviour.
 
 | File | What it shows |
 |---|---|
@@ -51,6 +48,19 @@ than the reader's theme.
 
 ---
 
+## Proposed KPI learning
+
+| File | What it shows |
+| --- | --- |
+| [`proposed-kpi-learning-loop.mmd`](proposed-kpi-learning-loop.mmd) | The implemented product loop supplies records to a proposed outcome-assessment and strategy-experiment loop. Dashed warm-toned nodes are not implemented. |
+
+The identical source is embedded in
+[the architecture](../../ARCHITECTURE.md#proposed-kpi-learning-loop) and
+[the learning specification](../../docs/harness-kpis/learning-loop.md#two-connected-loops).
+The [KPI folder](../../docs/harness-kpis/README.md) defines measures, evidence,
+workflow integration and the implementation backlog. This design is separate
+from the partly built curiosity mechanisms above.
+
 ## Rendering them
 
 **In GitHub, Notion, Obsidian, or most modern markdown tools:** paste the
@@ -77,7 +87,9 @@ diagram that fails to parse looks identical to one nobody has looked at:
 npx -y @mermaid-js/mermaid-cli -i learning/diagrams/<file>.mmd -o /tmp/out.svg
 ```
 
-All eight files in this folder render clean as of the last change to them.
+Render changed diagrams before committing. When a sidecar has embedded copies,
+check that each copy is byte-identical to the source; historical render results
+do not validate a later edit.
 
 ---
 

@@ -11,11 +11,11 @@ this document is the one to distrust.
 
 **Scope note, added once other work landed alongside this one:** everything
 below tracks the harness port specifically — the ten-component kernel and
-its build order. It predates, and still says nothing about, `console/` (a
+its build order. It predates the separate designs for `console/` (a
 browser-based install flow, now implemented — [`console/IMPLEMENTATION.md`](console/IMPLEMENTATION.md))
-or `docs/curiosity/` (a proposed second longitudinal pass —
-[`docs/Curiosity-Engine-Design.md`](docs/Curiosity-Engine-Design.md)). Both
-are real, separate streams of design work that build on top of what this
+and `docs/curiosity/` (a proposed second longitudinal pass —
+[`docs/Curiosity-Engine-Design.md`](docs/Curiosity-Engine-Design.md)). These
+are separate streams of design work that build on top of what this
 document tracks; see [`README.md`](README.md)'s "How the three pieces fit
 together" for how all three relate.
 
@@ -810,3 +810,22 @@ Keys are entered directly on GitHub; the console never accepts them. Live authen
 acceptance and deployment App configuration remain outstanding; automated GitHub
 integration tests use injected responses. See `console/IMPLEMENTATION.md` and
 `console/DEPLOYMENT.md` for the exact scope, evidence and remaining limitations.
+
+## KPI learning design revision added 17 October 2026
+
+[Harness KPIs](docs/harness-kpis/README.md) specifies practical outcome learning
+above the existing kernel. The product loop changes project software; the
+proposed strategy loop independently assesses outcomes and compares how the
+harness investigates, changes and reviews it. This is distinct from curiosity's
+open-question and escalation mechanisms.
+
+Existing spend, attempt, PR and operational report mechanisms provide inputs.
+They do not establish verified product benefit or reviewer accuracy. Independent
+assessments, delayed outcome collection, the verified KPI scorecard and automatic
+policy adaptation are not implemented. This revision adds documentation,
+diagrams and installation guidance, not a new executable workflow stage.
+
+See [the proposed architecture](ARCHITECTURE.md#proposed-kpi-learning-loop),
+[workflow integration](docs/harness-kpis/workflow-integration.md) and the open
+KPI1-KPI5 workstream in [WORKPLAN.md](WORKPLAN.md). New policy adoption retains
+the existing tests, permission boundaries and configured approval class.
