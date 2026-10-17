@@ -83,7 +83,11 @@ without shipping anything. The second is *what happens inside the loop*: the
 one Node process where suggest → implement → review → refine lives, and
 everything that feeds the prompt it starts from.
 
-Everything in both is real code with its own test file. `harness/cli/init.mjs`
+Everything in both is real code with its own test file. One more tool sits
+beside them rather than in them: the replay bench (`harness/scripts/bench.mjs`,
+[docs/Replay-Bench.md](docs/Replay-Bench.md)) runs this same loop under
+different variants of how the harness works, on pinned commits, and scores
+each variant with held-out checks. `harness/cli/init.mjs`
 and `harness/templates/workflow.yml.tmpl` chain all of it into one generated
 workflow for a new project, and `harness/scripts/rehearse.mjs` runs the same
 chain locally, on demand — so nothing here is a human invoking each script by
@@ -165,8 +169,10 @@ flowchart TD
   subgraph ctx["What the suggestion prompt is assembled from — every block dropped entirely when its input is absent"]
     goal["✅ The committed goal<br/>project.goal — frozen, sits above the brief"]
     brief["✅ The project's own agent brief<br/>IS the system prompt, whole, not a summary"]
-    source["✅ Source bundle + repo manifest<br/>fenced as untrusted input"]
-    index["✅ Every generation on record,<br/>recent ones in full — including the<br/>owner's merge or close on each PR"]
+    source["✅ Source bundle (full-dump) or a code map<br/>the model chooses from (scoped) + repo manifest<br/>fenced as untrusted input"]
+    index["✅ Every generation on record (oldest counted),<br/>recent ones in full — including the<br/>owner's merge or close on each PR. Fenced"]
+    lessons["✅ Lessons — anchored to file hashes,<br/>candidate until a second generation or a<br/>person supports them, dropped when stale"]
+    providers["✅ Context providers the project configured<br/>fenced, capped, own env only"]
     ledger["✅ Escalation ledger, themes review,<br/>open questions, any work order<br/>a human accepted"]
     dims["✅ Measured dimensions + observations<br/>evaluators.mjs — measured, never gates"]
     shots["✅ Renders from the last generation<br/>loadVisualEvidence — with the provenance<br/>stated, so 'current' cannot mean stale"]
@@ -184,7 +190,7 @@ flowchart TD
   apply -->|"refused · nothing written"| refine
   apply -->|"applied all-or-nothing"| tests{"✅ STAGE 2b · TESTS<br/>test-runner.mjs — the project's own<br/>test_commands against THIS tree,<br/>credentials scrubbed from the child"}
   tests -->|"red · failing lines handed back,<br/>the reviewer is not paid"| refine
-  tests -->|"green, or none configured"| review["✅ STAGE 3 · REVIEW<br/>review.mjs — fresh context, pinned model,<br/>judged against the goal, shown the test run.<br/>Exactly one complete verdict, or a REJECTION:<br/>truncated, contradictory or malformed all fail closed."]
+  tests -->|"green, or none configured"| review["✅ STAGE 3 · REVIEW<br/>review.mjs — fresh context, pinned model,<br/>judged against the goal, shown the test run<br/>and the unchanged files that depend on the change;<br/>may ask for files once; INSUFFICIENT_CONTEXT never ships.<br/>Exactly one complete verdict, or a REJECTION:<br/>truncated, contradictory or malformed all fail closed."]
 
   capture["✅ visual_capture — a render of THIS<br/>change, made for the reviewer"] -.-> review
 

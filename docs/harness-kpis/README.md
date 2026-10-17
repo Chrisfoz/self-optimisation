@@ -35,6 +35,14 @@ The current foundation includes:
 - [Context history](../../harness/lib/context-pack.mjs) and
   [recurring themes](../../harness/lib/themes.mjs).
 
+- [Replay provenance](../../harness/lib/assemble-context.mjs) in every attempt
+  record: base commit, adapter, brief and prompt hashes, context sizes.
+- The [replay bench](../Replay-Bench.md), which compares operating strategies on
+  pinned commits with held-out oracle checks. It is the comparison tool KPI4
+  needs, but no real cohort has been run with it yet.
+- [Lessons](../../harness/lib/lessons.mjs) that stay candidates until a second
+  generation or a person's verdict supports them.
+
 - [Operational reporting](../../harness/lib/report.mjs) and
   [run history](../../harness/lib/run-history.mjs), which describe dispositions
   such as merged or kept, resource use and available evaluator comparisons.

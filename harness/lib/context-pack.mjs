@@ -481,8 +481,9 @@ export function buildGenerationIndex({ repoRoot = process.cwd(), generationsDir 
 /**
  * What previous generations proposed, and — more valuably — what did not
  * work. Deliberately a small recent window rather than everything:
- * buildGenerationIndex() above already guarantees no generation is ever
- * completely forgotten, so this only needs to carry the *expensive* detail
+ * buildGenerationIndex() above keeps every generation in view (the oldest
+ * as counts by outcome), and lessons.mjs keeps what failed beyond this window,
+ * so this only needs to carry the *expensive* detail
  * (rationale, exact failure messages) for generations recent enough that
  * it is still likely to change this generation's decision.
  *
