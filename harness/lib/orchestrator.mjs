@@ -1222,6 +1222,10 @@ export async function runGeneration(config, deps = {}) {
     // Run-level provenance from the caller (base commit, adapter and brief
     // hashes); the prompt hash and context sizes are added below.
     provenance: callerProvenance = null,
+    // review-evidence.mjs's createReviewEvidence(): unchanged dependents of a
+    // change, and files the reviewer asks for. Null: the reviewer sees the
+    // diff and the touched files only, as before.
+    reviewEvidence = null,
   } = config;
 
   const rawCall = deps.call ?? callModelWithHeadroom;
@@ -1605,7 +1609,14 @@ export async function runGeneration(config, deps = {}) {
 
       log(`🔎 Stage 3 — review`);
 
-      const askReviewer = () => reviewChanges({
+      // Unchanged files that depend on this attempt's edits, found before the
+      // first ask; files the reviewer asks for, after it. Both read-only.
+      const dependents = reviewEvidence ? reviewEvidence.dependents(outcome.filesChanged, parsed.edits) : null;
+      let reviewFiles = null;
+      const evidenceShown = { dependents: Boolean(dependents), requested: [], refused: [] };
+      if (dependents) log(`   reviewer also shown the unchanged files that depend on this change`);
+
+      const askReviewer = (canRequestFiles = false) => reviewChanges({
         reviewerBrief,
         genLabel,
         diff: renderForReview(parsed),
@@ -1617,12 +1628,25 @@ export async function runGeneration(config, deps = {}) {
         reviewModel,
         ...(reviewEffort ? { effort: reviewEffort } : {}),
         goal,
+        dependents,
+        requestedFiles: reviewFiles,
+        canRequestFiles,
         call: callFor('review'),
       });
 
       let review;
       try {
-        review = await askReviewer();
+        review = await askReviewer(Boolean(reviewEvidence));
+        // Asked to see more before deciding: shown once, read-only, then a
+        // verdict is required.
+        if (review.needFiles?.length) {
+          const got = reviewEvidence.read(review.needFiles);
+          evidenceShown.requested = got.served;
+          evidenceShown.refused = got.refused;
+          log(`   📂 reviewer asked for ${review.needFiles.join(', ')}; shown ${got.served.length}${got.refused.length ? `, refused ${got.refused.join('; ')}` : ''}`);
+          reviewFiles = [got.text, got.refused.length ? `Not shown: ${got.refused.join('; ')}.` : null].filter(Boolean).join('\n\n') || 'None of the files you asked for could be shown.';
+          review = await askReviewer(false);
+        }
         // A review that could not be read as one complete verdict
         // (truncated, contradictory, malformed) is a rejection — but a
         // rejection of the REVIEW, not of the change, and handing the
@@ -1641,18 +1665,23 @@ export async function runGeneration(config, deps = {}) {
         break;
       }
 
+      const shown = reviewEvidence ? { reviewEvidence: evidenceShown } : {};
       if (!review.approved) {
         const unreadable = Boolean(review.problem);
-        log(`❌ Attempt ${attempt} (${step.by}): ${unreadable ? 'review unreadable' : 'rejected'} — ${review.reason}\n`);
+        const insufficient = review.verdict === 'insufficient-context';
+        log(`❌ Attempt ${attempt} (${step.by}): ${unreadable ? 'review unreadable' : insufficient ? 'reviewer could not judge it from what it was shown' : 'rejected'} — ${review.reason}\n`);
         attemptLog.push({
           attempt, by: step.by,
-          outcome: unreadable ? 'review-unparseable' : 'rejected-by-review',
+          outcome: unreadable ? 'review-unparseable' : insufficient ? 'review-insufficient-context' : 'rejected-by-review',
           detail: oneLine(review.reason || 'no reason given', 400),
           ...(testRun ? { tests: summarizeTestRun(testRun) } : {}),
+          ...shown,
         });
         reviewFeedback = unreadable
           ? `The reviewer's response could not be read as one complete verdict (${review.problem}), twice. No required fix was reliably stated; what it did say follows. Re-check the change against the proposal and the source.\n\n${review.feedback}`
-          : review.feedback;
+          : insufficient
+            ? `The reviewer could not judge the previous attempt from what it was shown — not a rejection of the idea. What it said was missing follows. Make the change easier to verify: smaller, self-contained, and with its RATIONALE naming everything it affects.\n\n${review.feedback}`
+            : review.feedback;
         rejectedRender = review.visual;
         applyErrors = null;
         testFailure = null;
@@ -1667,7 +1696,7 @@ export async function runGeneration(config, deps = {}) {
       // to ship a suggester's own edits opened a pull request titled
       // "Generation 005: Generation 005 improvement".
       const summary = oneLine(parsed.summary || extractField(proposal, 'CHANGE') || `Generation ${genNumber} improvement`, 80);
-      attemptLog.push({ attempt, by: step.by, outcome: 'approved', detail: summary, ...(testRun ? { tests: summarizeTestRun(testRun) } : {}) });
+      attemptLog.push({ attempt, by: step.by, outcome: 'approved', detail: summary, ...(testRun ? { tests: summarizeTestRun(testRun) } : {}), ...shown });
 
       const proposalPath = writeProposal({
         repoRoot, generationsDir, genNumber, proposal, parsed, suggestResult,

@@ -1183,3 +1183,38 @@ test('selectFiles keeps the model\'s order and stops at the character cap', asyn
   // The first file always fits, however large: a cap below one file must not leave nothing to read.
   assert.deepEqual(selectFiles('READ FILES: a.js', ['a.js'], { maxSourceChars: 10, sizeOf: (f) => sizes[f] }).selected, ['a.js']);
 });
+
+test('runGeneration: the reviewer is shown dependents, may ask for a file once, and an insufficient-context verdict never ships', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  const asked = [];
+  const reviewEvidence = {
+    dependents: (changed) => { asked.push(['dependents', changed]); return '#### app.js — imports a changed file'; },
+    read: (paths) => { asked.push(['read', paths]); return { text: '#### app.js\n```\nAPP BODY\n```', served: paths, refused: [] }; },
+  };
+  const reviewUsers = [];
+  const call = async ({ model, user }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
+    if (model === 'review-model') {
+      reviewUsers.push(user);
+      if (reviewUsers.length === 1) return { text: 'NEED FILES: app.js' };
+      return { text: 'VERDICT: INSUFFICIENT_CONTEXT\n\nREASON: cannot tell how app.js renders it\n\nEND OF REVIEW' };
+    }
+    throw new Error('unexpected call: ' + model);
+  };
+
+  const result = await runGeneration(baseConfig(repoRoot, { maxAttempts: 1, reviewEvidence }), { call });
+  assert.equal(result.outcome, 'abandoned');
+  assert.equal(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), 'original content');
+  assert.match(reviewUsers[0], /imports a changed file/);
+  assert.match(reviewUsers[0], /NEED FILES: <path>/);
+  assert.match(reviewUsers[1], /APP BODY/);
+  assert.doesNotMatch(reviewUsers[1], /NEED FILES: <path>/);
+  assert.deepEqual(asked, [['dependents', ['index.html']], ['read', ['app.js']]]);
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.equal(record.attempts[0].outcome, 'review-insufficient-context');
+  assert.deepEqual(record.attempts[0].reviewEvidence, { dependents: true, requested: ['app.js'], refused: [] });
+});

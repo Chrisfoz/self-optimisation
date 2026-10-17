@@ -44,6 +44,7 @@ import { loadRecords } from '../lib/report.mjs';
 import { recommendScope } from '../lib/context-pack.mjs';
 import { assembleContext, measureContext, headCommit, fileHash, sha256 } from '../lib/assemble-context.mjs';
 import { loadVisualEvidence, loadEvaluatorPlugin, createVisualCapture } from '../lib/evaluators.mjs';
+import { createReviewEvidence } from '../lib/review-evidence.mjs';
 import { runGeneration } from '../lib/orchestrator.mjs';
 import { loadGameReferences, discoverGameReferences, formatDiscoveredReferences, discoverWebGameReferences, formatWebGameReferences } from '../lib/game-references.mjs';
 
@@ -342,6 +343,20 @@ console.error(testsInLoop
   ? `🧪 In-loop tests: ${loopTestCommands.join(' && ')} (credentials scrubbed; ${evaluation.testTimeoutSeconds}s per command)`
   : `🧪 In-loop tests: off (${loopTestCommands.length ? 'evaluation.test_in_loop is false' : 'no evaluation.test_commands configured'})`);
 
+// --- what the reviewer may see besides the diff ----------------------------
+// Every tracked file is an index for finding the unchanged callers of a
+// change, and a file the reviewer may ask to read. Outside a git checkout,
+// the editable files are the whole index. Secret-shaped paths are never
+// served (review-evidence.mjs's servable()).
+const trackedFiles = (() => {
+  try {
+    return execFileSync('git', ['ls-files', '-z'], { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 }).split('\0').filter(Boolean);
+  } catch {
+    return editableFiles;
+  }
+})();
+const reviewEvidence = createReviewEvidence({ repoRoot, files: trackedFiles });
+
 // --- run ---
 let result;
 try {
@@ -365,6 +380,7 @@ try {
       implementEffort: process.env.IMPLEMENT_EFFORT || roles.implementEffort,
       sourcesFor,
       scoped: assembled.scoped,
+      reviewEvidence,
       implementPromptCache: roles.implementPromptCache !== false,
       reviewEffort: process.env.REVIEW_EFFORT || roles.reviewEffort,
       scope,

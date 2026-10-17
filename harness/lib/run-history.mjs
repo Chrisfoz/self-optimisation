@@ -75,6 +75,7 @@ const ATTEMPT_WORDS = {
   approved: 'approved by review',
   'rejected-by-review': 'rejected by review',
   'review-unparseable': 'review could not be read',
+  'review-insufficient-context': 'reviewer could not judge it from what it was shown',
   'edits-did-not-apply': 'edits did not apply',
   'tests-failed': "failed the project's tests",
   'needed-files': 'asked to see more files',
