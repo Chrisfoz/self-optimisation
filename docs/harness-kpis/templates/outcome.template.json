@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "template": true,
+  "run_id": null,
+  "proposal_id": null,
+  "repository": null,
+  "base_sha": null,
+  "patch_sha": null,
+  "policy": {
+    "id": null,
+    "revision": null,
+    "model_versions": [],
+    "context_manifest_ref": null,
+    "memory_snapshot_ref": null
+  },
+  "process": {
+    "outcome": null,
+    "attempt_record_ref": null,
+    "pull_request_url": null
+  },
+  "resources": {
+    "spend_record_ref": null,
+    "total_tokens": null,
+    "estimated_calls": null,
+    "coverage": "unknown",
+    "shared_cost_allocation": null,
+    "actual_cost": {
+      "amount": null,
+      "currency": null,
+      "billing_evidence_ref": null
+    }
+  },
+  "assessment": {
+    "id": null,
+    "supersedes": null,
+    "as_of": null,
+    "state": "pending",
+    "task_class": null,
+    "acceptance_criteria": [],
+    "evidence_refs": [],
+    "observation": {
+      "started_at": null,
+      "due_at": null,
+      "completed_at": null,
+      "follow_up_coverage": "unknown"
+    },
+    "assessor": null
+  },
+  "repetition": {
+    "label": "unknown",
+    "prior_failure_refs": [],
+    "changed_conditions": null,
+    "rationale": null
+  },
+  "dependencies": {
+    "follow_up": "pending",
+    "escaped_defect": null,
+    "incident_refs": [],
+    "assessor": null
+  },
+  "review": {
+    "verdict": null,
+    "independent_expected_verdict": "unknown",
+    "label_status": "unknown",
+    "assessor": null,
+    "evidence_refs": []
+  },
+  "lesson": {
+    "status": "candidate",
+    "claim": null,
+    "applicability": null,
+    "experiment_ref": null,
+    "confidence_basis": null
+  }
+}

@@ -41,6 +41,13 @@ example. See [`WORKPLAN.md`](WORKPLAN.md) Tier 6. See
 [`ARCHITECTURE.md`](ARCHITECTURE.md) for the five diagrams, and
 [Status in detail](#status-in-detail) for the per-component table.
 
+## Harness KPIs and practical learning
+
+[Harness KPIs](docs/harness-kpis/README.md) defines how to measure verified
+product improvement, cost, repeated failures, dependency defects and review
+accuracy, then test better harness operating strategies. This is a design and
+implementation plan; live KPI collection and policy adaptation are not enabled.
+
 ---
 
 ## Download and run it locally
