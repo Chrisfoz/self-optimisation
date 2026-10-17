@@ -261,9 +261,9 @@ const scope = scopeEnv === 'focused' || scopeEnv === 'ambitious'
 console.error(`🎚️  Scope: ${scope.scope} — ${scope.reason}`);
 
 // --- context ---
-const measured = measureContext({ context, agentBrief });
+const measured = measureContext({ context, agentBrief, scoped: assembled.scoped });
 console.error(
-  `📚 Context: ~${measured.estimatedTokens.toLocaleString()} tokens estimated, ${context.sources.length} chars of editable source, ` +
+  `📚 Context: ~${measured.estimatedTokens.toLocaleString()} tokens estimated, ${assembled.scoped ? `scoped: a code map of ${editableFiles.length} files, each suggester reads up to ${assembled.scoped.maxSourceChars.toLocaleString()} chars` : `${context.sources.length} chars of editable source`}, ` +
   `test index ${context.testIndex ? 'included' : 'unavailable'}, ` +
   `generation index ${context.generationIndex ? 'included' : 'unavailable'}, ` +
   `architecture notes ${context.architectureNotes ? 'included' : 'unavailable'}, ` +
@@ -364,6 +364,7 @@ try {
       implementMaxTokens,
       implementEffort: process.env.IMPLEMENT_EFFORT || roles.implementEffort,
       sourcesFor,
+      scoped: assembled.scoped,
       implementPromptCache: roles.implementPromptCache !== false,
       reviewEffort: process.env.REVIEW_EFFORT || roles.reviewEffort,
       scope,

@@ -24,12 +24,17 @@ import {
 import { loadLatestThemesReview, buildThemesBrief, buildOpenQuestionsBrief } from './themes.mjs';
 import { buildMetricsBrief, loadLatestMetrics } from './evaluators.mjs';
 import { buildEscalationBrief, loadLedger } from './escalations.mjs';
+import { buildImportGraph, renderCodeMap, DEFAULT_MAP_MAX_CHARS } from './code-map.mjs';
 
 export const sha256 = (text) => crypto.createHash('sha256').update(String(text ?? '')).digest('hex');
 
 /**
  * @param {{repoRoot: string, adapter: object}} opts
- * @returns {{context: object, editableFiles: string[], editablePaths: string[], createOnlyPaths: string[], allowlist: object, generationsDir: string, memory: object, ctxConfig: object, sourcesFor: (files: string[]) => string}}
+ * Under `context.strategy: scoped` the full source is NOT in the context:
+ * `context.codeMap` is, and `scoped` carries what the suggest stage needs to
+ * let each model choose files to read (orchestrator.mjs's suggest()).
+ *
+ * @returns {{context: object, editableFiles: string[], editablePaths: string[], createOnlyPaths: string[], allowlist: object, generationsDir: string, memory: object, ctxConfig: object, sourcesFor: (files: string[]) => string, graph: object, scoped: {maxSourceChars: number}|null}}
  */
 export function assembleContext({ repoRoot, adapter }) {
   const { allowedPaths: editablePaths, createOnlyPaths } = constitutionAllowlist(adapter);
@@ -44,12 +49,19 @@ export function assembleContext({ repoRoot, adapter }) {
   const generationsDir = ctxConfig.generationsDir || 'docs/generations';
   const latestThemes = loadLatestThemesReview({ repoRoot, themesDir: memory.themesDir || 'docs/themes' });
   const sourcesFor = (files) => fenceUntrusted('SOURCE', buildSourceBundle(files, { repoRoot })) ?? '';
+  const scoped = ctxConfig.strategy === 'scoped' ? { maxSourceChars: ctxConfig.scopedMaxSourceChars } : null;
+  // Built for every strategy: the reviewer's dependents and a lesson's
+  // neighbours come from the same graph. Only 'scoped' puts it in the prompt.
+  const graph = buildImportGraph(editableFiles, { repoRoot });
 
   const context = {
     // Fenced (context-pack.mjs's fenceUntrusted()): the source and the
     // architecture notes are the two blocks a stranger with commit access to
     // the project could have written into.
-    sources: sourcesFor(editableFiles),
+    sources: scoped ? null : sourcesFor(editableFiles),
+    // File names, sizes, symbols and imports — what a scoped suggester reads
+    // to choose its files. Fenced: symbol names come from the repository.
+    codeMap: scoped ? fenceUntrusted('CODE MAP', renderCodeMap(graph, { maxChars: ctxConfig.mapMaxChars ?? DEFAULT_MAP_MAX_CHARS })) : null,
     manifest: buildRepoManifest({
       repoRoot,
       purposes: ctxConfig.purposes,
@@ -79,19 +91,27 @@ export function assembleContext({ repoRoot, adapter }) {
     runtime: buildRuntimeEvidence({ repoRoot, evidenceDir: ctxConfig.runtimeEvidenceDir || undefined }),
   };
 
-  return { context, editableFiles, editablePaths, createOnlyPaths, allowlist, generationsDir, memory, ctxConfig, guard, sourcesFor };
+  return { context, editableFiles, editablePaths, createOnlyPaths, allowlist, generationsDir, memory, ctxConfig, guard, sourcesFor, graph, scoped };
 }
 
 /**
  * Per-block sizes and a token estimate for the suggestion prompt: every
  * context block, plus the brief (the system prompt) and the images.
  */
-export function measureContext({ context, agentBrief = '', imageCount = 0 }) {
+export function measureContext({ context, agentBrief = '', imageCount = 0, scoped = null }) {
   const blocks = { brief: agentBrief };
   for (const [name, text] of Object.entries(context ?? {})) {
     if (typeof text === 'string') blocks[name] = text;
   }
-  return estimateContextSize({ blocks, imageCount });
+  const size = estimateContextSize({ blocks, imageCount });
+  // Scoped runs read up to this much source on their second call; count the
+  // ceiling, since a window has to hold the worst case.
+  if (scoped?.maxSourceChars) {
+    size.scopedSourceCeilingChars = scoped.maxSourceChars;
+    size.textChars += scoped.maxSourceChars;
+    size.estimatedTokens += Math.round(scoped.maxSourceChars / 4);
+  }
+  return size;
 }
 
 /** The commit the run started from, or null outside a git checkout. */

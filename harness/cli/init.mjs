@@ -303,7 +303,7 @@ async function main() {
       .toLowerCase()
       .startsWith('y');
     const runner = await ask(rl, 'CI runner (ubuntu-latest / windows-latest / macos-latest)', { default: 'ubuntu-latest' });
-    const contextStrategy = await ask(rl, 'Context strategy (full-dump / scoped — "scoped" has no implementation yet, see ARCHITECTURE.md)', { default: 'full-dump' });
+    const contextStrategy = await ask(rl, 'Context strategy (full-dump / scoped — scoped sends a code map and lets each model choose files; for large projects)', { default: 'full-dump' });
 
     const deploymentStrategy = await ask(rl, 'Deployment verify strategy (url / registry / artifact / none)', { default: 'none' });
     let deploymentUrl, deploymentRegistry, deploymentArtifact;

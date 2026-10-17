@@ -99,6 +99,11 @@ export function validateAdapter(adapter, { repoRoot = process.cwd(), env = proce
     errors.push('constitution.allowed_paths is empty — the agent has nothing it may edit.');
   }
 
+  const strategy = adapter.context?.strategy;
+  if (strategy !== undefined && strategy !== null && strategy !== 'full-dump' && strategy !== 'scoped') {
+    warnings.push(`context.strategy is "${strategy}" — use full-dump or scoped. Anything else runs as full-dump.`);
+  }
+
   // Every editable path must actually exist. A typo here is a silent gap:
   // edit-format.mjs's compileAllowlist() would let the agent write to it if
   // asked, buildSourceBundle() would simply skip a file it can't read, and

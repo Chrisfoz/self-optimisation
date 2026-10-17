@@ -43,6 +43,7 @@ test('bench: two variants on a pinned commit, scored by a held-out oracle no mod
     variants: [
       { id: 'history-3', adapter: { context: { history_limit: 3 } } },
       { id: 'history-1', adapter: { context: { history_limit: 1 } } },
+      { id: 'scoped', adapter: { context: { strategy: 'scoped' } } },
     ],
   }));
   const out = path.join(benchDir, 'out');
@@ -51,15 +52,20 @@ test('bench: two variants on a pinned commit, scored by a held-out oracle no mod
   assert.equal(result.status, 0, result.stderr);
 
   const { results, summary, comparisons } = JSON.parse(fs.readFileSync(path.join(out, 'results.json'), 'utf8'));
-  assert.equal(results.length, 2);
+  assert.equal(results.length, 3);
   for (const r of results) {
     assert.equal(r.outcome, 'approved', r.error ?? '');
     assert.equal(r.oraclePassed, true);
     assert.ok(r.totalTokens > 0);
   }
-  assert.equal(summary.length, 2);
+  assert.equal(summary.length, 3);
   assert.equal(comparisons[0].variant, 'history-1');
   assert.match(fs.readFileSync(path.join(out, 'REPORT.md'), 'utf8'), /Replay bench/);
+  // The scoped variant really ran two-pass: a selection call saw the map, not the page.
+  const scopedRecord = JSON.parse(fs.readFileSync(fs.readdirSync(out).filter((f) => f.startsWith('scratch-scoped-')).map((f) => path.join(out, f)).find((f) => f.endsWith('.attempts.json')), 'utf8'));
+  assert.equal(scopedRecord.provenance.contextStrategy, 'scoped');
+  assert.deepEqual(Object.values(scopedRecord.fanOut.read), [['index.html']]);
+  assert.ok(labs.requests.some((r) => r.stage === 'suggest' && /READ FILES:/.test(r.user) && !/Scratch project<\/h1>/.test(r.user)));
 
   // Held out means held out.
   assert.ok(labs.requests.length > 0);

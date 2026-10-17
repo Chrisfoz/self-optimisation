@@ -88,7 +88,7 @@ if (!Number.isFinite(estimatedTokens) && adapter) {
     const briefPath = briefPaths(adapter).agentBriefPath;
     const agentBrief = briefPath && fs.existsSync(path.join(repoRoot, briefPath)) ? fs.readFileSync(path.join(repoRoot, briefPath), 'utf8') : '';
     const images = loadVisualEvidence({ repoRoot, generationsDir: assembled.generationsDir }).images.length;
-    estimatedTokens = measureContext({ context: assembled.context, agentBrief, imageCount: images }).estimatedTokens;
+    estimatedTokens = measureContext({ context: assembled.context, agentBrief, imageCount: images, scoped: assembled.scoped }).estimatedTokens;
     console.error(`📏 Suggestion prompt estimated at ~${estimatedTokens.toLocaleString()} tokens (from project-adapter.yml)`);
   } catch (err) {
     console.error(`⚠️  Could not estimate the prompt size (${err.message}); no candidate is dropped for its context window.`);

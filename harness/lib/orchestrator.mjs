@@ -331,7 +331,7 @@ export const DEFAULT_SCOPE_TEXT = {
  *   configured none, which drops the section entirely.
  * @param {{images: Array, source: string|null}} [opts.screenshots]
  */
-export function buildSuggestUserPrompt({ genLabel, context, screenshots = { images: [], source: null } }) {
+export function buildSuggestUserPrompt({ genLabel, context, screenshots = { images: [], source: null }, selection = null }) {
   // Provenance, when the caller knows it. The reference implementation told
   // every model these images showed "the current state" while silently
   // serving a stale baseline, because a failed generation created a folder
@@ -351,15 +351,48 @@ export function buildSuggestUserPrompt({ genLabel, context, screenshots = { imag
 # Repository map
 ${context.manifest ?? ''}
 ${section('THIS GENERATION HAS BEEN ASSIGNED A DECIDED CHANGE', context.workOrder)}${section('Target platform', context.platform)}${section('Measured quality dimensions — non-gating', context.qualityMetrics)}${section('Frozen test invariants', context.testIndex)}${section('Every generation on record (compact — nothing here is ever dropped)', context.generationIndex)}${section('Most recent generations, in full detail (including what failed)', context.history)}${section('What the last runs actually observed at runtime', context.runtime)}${section('Recurring themes from the last review', context.themes)}${section('Open questions this project has not answered', context.openQuestions)}${section('Open escalations — what earlier models asked us to change', context.escalations)}${section('Player feedback', context.feedback)}${section('How this project is built, and what it has learned building itself', context.architectureNotes)}
-${shots}
+${shots}${section('Code map — every editable file, its symbols and imports', context.codeMap)}${context.sources ? `
 # Current source
-${context.sources ?? ''}
-
+${context.sources}
+` : ''}
 # Your task
 
-${context.workOrder
+${selection ? buildSelectionTask(selection) : `${context.workOrder
     ? 'Propose the change the work order above describes. It is not yours to choose; it is yours to specify well.'
-    : 'Pick the ONE improvement you would make.'} ${SUGGEST_RESPONSE_FORMAT}${context.escalationReview ? `\n${context.escalationReview}` : ''}`;
+    : 'Pick the ONE improvement you would make.'} ${SUGGEST_RESPONSE_FORMAT}${context.escalationReview ? `\n${context.escalationReview}` : ''}`}`;
+}
+
+/**
+ * The first of a scoped run's two suggestion calls: no source yet, only the
+ * map. The model names what it wants to read; the second call shows it.
+ */
+export function buildSelectionTask({ maxSourceChars }) {
+  return `This project is too large to show you every file. The code map above lists every file you may edit, with its size, symbols and imports.
+
+Before proposing anything, choose the files you need to read in full to find and specify ONE improvement. Up to ${maxSourceChars.toLocaleString('en-US')} characters in total, by the sizes in the map; files past that are dropped in the order you list them. Prefer the files your change would touch and the ones they import.
+
+Reply with exactly one line and nothing else:
+
+READ FILES: <path>, <path>, ...`;
+}
+
+/** The files a selection call asked for, in its order, capped at maxSourceChars by the map's sizes. */
+export function selectFiles(text, editableFiles, { maxSourceChars, sizeOf }) {
+  const line = String(text ?? '').match(/^\s*READ FILES:\s*(.+)$/im)?.[1] ?? '';
+  const named = filesNamedIn(line || text, editableFiles);
+  // filesNamedIn returns editable order; keep the model's own priority.
+  const order = (f) => { const i = line.indexOf(f); return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
+  named.sort((a, b) => order(a) - order(b));
+  const selected = [];
+  const dropped = [];
+  let used = 0;
+  for (const f of named) {
+    const size = sizeOf(f);
+    if (selected.length && used + size > maxSourceChars) { dropped.push(f); continue; }
+    selected.push(f);
+    used += size;
+  }
+  return { selected, dropped, chars: used };
 }
 
 // ---------------------------------------------------------------------------
@@ -375,7 +408,32 @@ ${context.workOrder
  */
 export async function suggest(promptConfig, model, { call = callModelWithHeadroom, log = () => {} } = {}) {
   const system = buildSuggestSystemPrompt(promptConfig);
-  const user = buildSuggestUserPrompt(promptConfig);
+
+  // context.strategy: scoped. Two calls: the map, a READ FILES: line back,
+  // then the brief and history again with only those files in full.
+  let reading = null;
+  if (promptConfig.scoped && typeof promptConfig.sourcesFor === 'function') {
+    const pick = await call({
+      model: model.id,
+      provider: model.provider,
+      system,
+      user: buildSuggestUserPrompt({ ...promptConfig, selection: promptConfig.scoped }),
+      maxTokens: Math.min(promptConfig.suggestMaxTokens ?? 32000, 8000),
+      images: promptConfig.screenshots?.images ?? [],
+    });
+    reading = selectFiles(pick.text, promptConfig.editableFiles, {
+      maxSourceChars: promptConfig.scoped.maxSourceChars,
+      sizeOf: promptConfig.scoped.sizeOf ?? (() => 0),
+    });
+    if (!reading.selected.length) {
+      throw new Error('Named no editable file to read (scoped context: the selection call needs a READ FILES: line naming files from the code map).');
+    }
+    log(`   ${model.id} reads ${reading.selected.length} file(s), ${reading.chars.toLocaleString()} chars${reading.dropped.length ? `; over the cap, dropped ${reading.dropped.join(', ')}` : ''}`);
+  }
+
+  const user = buildSuggestUserPrompt(reading
+    ? { ...promptConfig, context: { ...promptConfig.context, sources: promptConfig.sourcesFor(reading.selected) } }
+    : promptConfig);
 
   const result = await call({
     model: model.id,
@@ -394,11 +452,11 @@ export async function suggest(promptConfig, model, { call = callModelWithHeadroo
       );
     }
     log(`   ⚠️  ${model.id} was truncated (${result.stopReason}); analysis was complete, so any partial edits were dropped and the prose kept.`);
-    return { ...result, text: salvaged, truncatedButUsable: true };
+    return { ...result, text: salvaged, truncatedButUsable: true, read: reading?.selected ?? null };
   }
 
   log(`   ${result.provider}/${result.model} → ${result.text.length} chars (${result.sentImages} screenshot(s) accepted)`);
-  return result;
+  return { ...result, read: reading?.selected ?? null };
 }
 
 /**
@@ -1140,6 +1198,9 @@ export async function runGeneration(config, deps = {}) {
     // (files) => the source bundle for just those files. Present, the
     // implementer is shown only the files a proposal names; absent, everything.
     sourcesFor = null,
+    // context.strategy: scoped — {maxSourceChars}. Null sends every editable
+    // file in full to every suggester (full-dump).
+    scoped = null,
     implementPromptCache = true,
     scope,
     scopeText = DEFAULT_SCOPE_TEXT,
@@ -1214,6 +1275,9 @@ export async function runGeneration(config, deps = {}) {
     implementMaxTokens,
     implementEffort,
     sourcesFor,
+    scoped: scoped && typeof sourcesFor === 'function'
+      ? { ...scoped, sizeOf: (f) => { try { return fs.statSync(path.join(repoRoot, f)).size; } catch { return 0; } } }
+      : null,
     implementPromptCache,
     context: {
       ...context,
@@ -1253,7 +1317,9 @@ export async function runGeneration(config, deps = {}) {
   // this run will cost. A run that cannot fit under the cap is refused
   // here, recorded, and reported — not discovered after N labs were paid.
   if (maxGenerationTokens !== null) {
-    const promptChars = suggestSystem.length + suggestUser.length;
+    // A scoped run's second call carries up to maxSourceChars of source on
+    // top of the prompt measured here, which holds the map instead.
+    const promptChars = suggestSystem.length + suggestUser.length + (promptConfig.scoped?.maxSourceChars ?? 0);
     const projected = projectedFanOut({ promptChars, models: asking.length, maxTokens: maxGenerationTokens });
     if (projected.over) {
       const detail = `projected ${projected.estimatedTokens.toLocaleString()} input tokens across ${asking.length} model(s) exceeds budget.max_generation_tokens (${maxGenerationTokens.toLocaleString()}); nothing was called`;
@@ -1382,6 +1448,8 @@ export async function runGeneration(config, deps = {}) {
       rankingReason: ranking.reason,
       proposalFiles,
       briefFeedback: Object.fromEntries(proposals.filter((p) => p.briefFeedback).map((p) => [p.id, p.briefFeedback])),
+      // Scoped runs: which files each suggester chose to read in full.
+      ...(promptConfig.scoped ? { read: Object.fromEntries(proposals.map((p) => [p.id, p.result?.read ?? []])) } : {}),
     };
     crashState.suggestResult = suggestResult;
     crashState.proposal = proposal;
@@ -1418,6 +1486,9 @@ export async function runGeneration(config, deps = {}) {
       for (const e of [...(winner.directEdits?.edits ?? []), ...(winner.directEdits?.creates ?? [])]) {
         if (editableFiles.includes(e.file)) seed.add(e.file);
       }
+      // Scoped: no full bundle exists to fall back to, so a proposal that
+      // names no file is implemented against what its author read.
+      if (!seed.size && promptConfig.scoped) for (const f of winner.result?.read ?? []) seed.add(f);
       implementScope = seed.size ? seed : null;
     }
     const scopeList = () => (implementScope ? editableFiles.filter((f) => implementScope.has(f)) : null);

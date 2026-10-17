@@ -237,6 +237,9 @@ test('briefPaths, rolesConfig and contextConfig return null/empty defaults on a 
     architectureNotesPath: null, architectureNotesMarker: null,
     testFiles: [], purposes: {}, platformNotes: null, historyLimit: null, scopeRequired: null,
     ambition: 'earned',
+    strategy: 'full-dump',
+    scopedMaxSourceChars: 200000,
+    mapMaxChars: null,
   });
 });
 

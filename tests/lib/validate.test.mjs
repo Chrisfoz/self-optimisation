@@ -234,3 +234,13 @@ test('does not warn about a missing key when the environment has it', (t) => {
   const { warnings } = validateAdapter(adapter, { repoRoot, env: { ANTHROPIC_API_KEY: 'sk-real' } });
   assert.ok(!warnings.some((w) => /ANTHROPIC_API_KEY/.test(w)));
 });
+
+test('context.strategy: scoped and full-dump are accepted; anything else is warned about', (t) => {
+  const { repoRoot, adapter } = validSetup();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  for (const strategy of ['scoped', 'full-dump']) {
+    assert.deepEqual(validateAdapter({ ...adapter, context: { strategy } }, { repoRoot, env: { ANTHROPIC_API_KEY: 'x' } }).warnings, []);
+  }
+  const { warnings } = validateAdapter({ ...adapter, context: { strategy: 'retrieval' } }, { repoRoot, env: { ANTHROPIC_API_KEY: 'x' } });
+  assert.match(warnings.join('\n'), /context\.strategy is "retrieval"/);
+});
