@@ -7,7 +7,12 @@ This is a staged backlog, not functionality enabled by this folder.
 Reuse `spend.summary()` and `attempts.json`; do not implement a parallel token
 ledger. Add versioned companion assessments and context-policy provenance without
 rewriting historical attempt semantics. The example outcome template is a design
-starting point, not an enforced schema.
+starting point, not an enforced schema. Version 2 uses a `reviews` array so
+earlier rejections and later approvals on different patch revisions can each be
+independently assessed. No runtime consumer is changed by that template revision.
+
+Use the [workflow integration map](workflow-integration.md) to distinguish
+existing emission points from collectors and joins that still need building.
 
 Join by stable run, proposal and patch IDs. Preserve repository/base/patch SHAs,
 model/provider versions, policy revision, context pack identifiers, timestamps

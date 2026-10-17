@@ -16,6 +16,42 @@ call.
 
 ---
 
+## KPI learning workstream added 17 October 2026
+
+[Harness KPIs](docs/harness-kpis/README.md) defines a second loop for improving
+how the harness investigates, changes and reviews projects. Documentation and
+templates are present; every runtime milestone below remains open. This
+workstream builds on the existing records and operational reports. It does not
+close the larger-repository context experiment or the curiosity A-prime gate.
+
+- [ ] **KPI1 — Reconcile evidence and policy provenance.** Reuse spend and attempt
+  records, join patch/PR outcomes, and account for auxiliary work, exclusions and
+  cycles that never acquire a generation number.
+  **Done when:** a cohort reconciles to its source records and missing coverage
+  is explicit.
+- [ ] **KPI2 — Independently assess real outcomes.** Record acceptance criteria,
+  observation windows, dependency incidents and one label per review decision
+  on a patch revision. Preserve pending/disputed assessments and revisions.
+  **Done when:** a manually assessed cohort explains what worked, what it cost,
+  what review missed and what is unknown.
+- [ ] **KPI3 — Publish the descriptive scorecard.** Show the five measures with
+  numerators, denominators, coverage, maturity and uncertainty.
+  **Done when:** aggregation handles zero successes, pending outcomes, repeated
+  reviews, late incidents, missing billing and duplicate events correctly.
+- [ ] **KPI4 — Compare operating strategies on held-out tasks.** Pin models,
+  repositories, budgets and memory snapshots; include all helper costs.
+  **Done when:** a reproducible experiment records a decision, limitations and
+  independent evaluation, including negative results.
+- [ ] **KPI5 — Trial supported policies.** Keep current approval and gate rules.
+  **Done when:** a bounded project trial has a versioned decision, rollback
+  criteria and follow-up; transfer to another project is assessed separately.
+
+The [implementation plan](docs/harness-kpis/implementation-plan.md) and
+[workflow mapping](docs/harness-kpis/workflow-integration.md) specify attachment
+points. Generated installation guidance distinguishes operational reports from
+verified KPIs. Workflow execution gains KPI steps only when their collectors and
+validation exist.
+
 ## Start here
 
 **→ A person's verdict, then 2.1a.** The generated workflow has now run real

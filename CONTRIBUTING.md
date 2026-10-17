@@ -134,7 +134,9 @@ agent, reads it and acts on it. Drift here isn't cosmetic.
 
 - **Mark proposals as proposals.** Historical parts of `console/DESIGN.md` and `docs/curiosity/` describe
   work that is not implemented; current console status is in `console/IMPLEMENTATION.md`. Any diagram, table, or sentence about them must
-  make that unmistakable. In diagrams the convention is dashed and warm-toned
+  make that unmistakable. The [KPI learning design](docs/harness-kpis/README.md)
+  likewise specifies proposed assessments and experiments, not a live scorecard.
+  In diagrams the convention is dashed and warm-toned
   for proposed, solid for real.
 - **Keep the three-way status agreement.** `README.md`'s Status table,
   `ARCHITECTURE.md`'s diagram and prose, and
@@ -149,6 +151,20 @@ agent, reads it and acts on it. Drift here isn't cosmetic.
   how stale they are.
 
 ---
+
+## Outcome and policy claims
+
+For changes to context selection, memory, retry policy or review strategy,
+follow the [KPI experiment protocol](docs/harness-kpis/learning-loop.md). Record
+what is observed separately from what is inferred. Keep reviewed operating-policy
+changes separate from the evaluator and its hidden labels. Passing tests,
+merging, lower token counts and an author's disagreement with a rejection do not
+independently establish effectiveness or reviewer accuracy.
+
+A design-only change needs consistent status in the README, architecture and
+design log. A generator text change is still a behaviour change: exercise the
+renderer and check the generated installation guidance. Do not add executable
+KPI workflow steps before the collection, assessment and aggregation code exists.
 
 ## Diagrams
 

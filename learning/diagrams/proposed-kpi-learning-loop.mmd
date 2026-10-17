@@ -1,0 +1,29 @@
+flowchart TD
+  subgraph product["Product loop: implemented"]
+    investigate["Investigate and propose"]
+    change["Implement and review"]
+    gates["Guard, test and configured approval"]
+    records["Attempt, spend and PR records"]
+    investigate --> change --> gates --> records
+    records -->|"History informs next run"| investigate
+  end
+
+  subgraph learning["Harness learning: proposed"]
+    evidence["Join later outcome evidence"]
+    assess["Independent assessments and KPI report"]
+    experiment["Compare operating strategies"]
+    decision{"Held-out evidence supports adoption?"}
+    adopt["Reviewed and versioned policy change"]
+    preserve["Preserve results and limitations"]
+    evidence --> assess --> experiment --> decision
+    decision -->|"Yes"| adopt
+    decision -->|"No or uncertain"| preserve
+    adopt --> preserve
+  end
+
+  records -.-> evidence
+  adopt -.->|"Bounded trial and observation"| investigate
+  preserve -.->|"Inform future hypotheses"| experiment
+  classDef proposed fill:#F3E3D4,stroke:#9F7960,stroke-dasharray:5 5
+  class evidence,assess,experiment,decision,adopt,preserve proposed
+  style learning stroke:#9F7960,stroke-dasharray:5 5

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "template": true,
   "run_id": null,
   "proposal_id": null,
@@ -58,18 +58,23 @@
     "incident_refs": [],
     "assessor": null
   },
-  "review": {
-    "verdict": null,
-    "independent_expected_verdict": "unknown",
-    "label_status": "unknown",
-    "assessor": null,
-    "evidence_refs": []
-  },
   "lesson": {
     "status": "candidate",
     "claim": null,
     "applicability": null,
     "experiment_ref": null,
     "confidence_basis": null
-  }
+  },
+  "reviews": [
+    {
+      "review_id": null,
+      "attempt_id": null,
+      "reviewed_patch_sha": null,
+      "verdict": null,
+      "independent_expected_verdict": "unknown",
+      "label_status": "unknown",
+      "assessor": null,
+      "evidence_refs": []
+    }
+  ]
 }

@@ -427,7 +427,11 @@ record. It shows every generation newest first:
 Pull requests waiting for you are listed at the top. It's one self-contained
 file: open it from a checkout or a download. GitHub shows HTML as source, so
 use GitHub Pages to browse it on the web. `docs/generations/REPORT.md`
-carries the same records as metrics, and GitHub renders it.
+carries the same records as metrics, and GitHub renders it. These are operational
+measures of process outcomes and resource use. A kept or merged change is not a
+verified successful change, and promotion precision is not review accuracy.
+The [KPI design](docs/harness-kpis/README.md) describes the additional independent
+assessment and follow-up that would be needed.
 
 ---
 
@@ -613,6 +617,7 @@ ever disagrees with the diagram, trust whichever was edited more recently.
 | Rollback (`harness/lib/rollback.mjs`, `harness/scripts/revert-generation.mjs`) | ✅ Built, tested against a real remote on both merge paths — reverts the shipped merge, records `reverted`, the next run reads it as a failure |
 | The ambition dial (`context.ambition`, [`docs/Ambition-Control.md`](docs/Ambition-Control.md)) and scope-aware ranking | ✅ Built, tested — `focused` / `earned` (default) / `ambitious`, read at run time, per-run override from the Actions tab; the ranking rubric follows the scope; a lone ambitious failure no longer resets the streak |
 | Seats (`harness/lib/seats.mjs`) — cross-family ranker, seat promotion | ✅ Built, tested — the rank seat defaults to another lab's model from the snapshot; a rotating model whose own edits keep being approved and kept can earn the implement seat (`roles.promotion`, off by default); the review seat is never auto-assigned |
+| Harness KPIs and practical strategy learning ([`docs/harness-kpis/`](docs/harness-kpis/)) | Design and templates only. Existing spend, attempt and PR records are inputs; independent outcome assessments, a verified KPI scorecard and controlled policy adaptation are not implemented. |
 | Operational report (`harness/lib/report.mjs` → `<generationsDir>/REPORT.md`) | ✅ Built, tested — the paper's §7 metrics from the records, regenerated every cycle, never hand-edited |
 | Run history page (`harness/lib/run-history.mjs` → `<generationsDir>/index.html`) | ✅ Built, tested — one self-contained page for the owner: every generation newest first, the change in plain words, its outcome and pull request, failed attempts with their reasons, tokens and cache savings, pull requests waiting for review, open escalations. Rebuilt after every run with the record and at the start of each cycle once fates are read back. Every installation gets it; no configuration |
 | Campaign mode (`harness/lib/campaign.mjs`, the workflow's `models` input) | ✅ Built, tested — a generation now, on models named by hand, recorded as `campaign: true` |
@@ -632,6 +637,7 @@ what comes next and why.
 |---|---|
 | What's actually built here, as a picture — and the reference implementation's real 7-job workflow alongside it | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | The design rules a change to this repository has to keep — the dependency rule, the three-way status agreement, where a new file goes | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| How real outcomes could improve the harness's own context, memory and review strategy | [`docs/harness-kpis/README.md`](docs/harness-kpis/README.md), including [workflow integration](docs/harness-kpis/workflow-integration.md) and [the proposed diagram](ARCHITECTURE.md#proposed-kpi-learning-loop) |
 | The concepts, principles, and incidents this is built from — written to be lifted into any project | [`learning/`](learning/), starting with [`learning/README.md`](learning/README.md) |
 | Copy-paste templates (agent brief, reviewer brief, guard config, edit format) | [`learning/06-starter-kit.md`](learning/06-starter-kit.md) |
 | What's being ported from the reference implementation, what needs genericising, and the proposed repo/CLI structure | [`Portable-Harness-Design.md`](Portable-Harness-Design.md) |
@@ -679,6 +685,11 @@ status marks below don't read as contradictions:
    file the loop already writes and renders nothing when its input is
    absent, so a repository with no run history yet is unaffected — see "Cold
    start" in [`docs/curiosity/README.md`](docs/curiosity/README.md#cold-start-the-first-runs-must-work-with-none-of-this).
+   Separately, [harness KPIs](docs/harness-kpis/README.md) proposes learning
+   operating strategy from independently assessed real-world outcomes. It
+   compares policies on held-out tasks and bounded project trials; live KPI
+   collection and policy adaptation are not built. Curiosity raises questions;
+   KPI experiments test whether a proposed way of working actually helps.
 
 **The seam between stage 1 and stage 2, now closed:** the generated workflow
 used to always auto-merge an approved change (`harness/lib/promote.mjs`),

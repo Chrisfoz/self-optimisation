@@ -35,6 +35,14 @@ The current foundation includes:
 - [Context history](../../harness/lib/context-pack.mjs) and
   [recurring themes](../../harness/lib/themes.mjs).
 
+- [Operational reporting](../../harness/lib/report.mjs) and
+  [run history](../../harness/lib/run-history.mjs), which describe dispositions
+  such as merged or kept, resource use and available evaluator comparisons.
+
+These reports do not provide the new verified-success or independently labelled
+review-accuracy measures. A model approval, merge or owner disagreement is not an
+independent effectiveness label.
+
 These records are inputs, not proof of product benefit. Post-change outcomes,
 independent review labels and policy experiment provenance still need wiring.
 
@@ -42,12 +50,19 @@ independent review labels and policy experiment provenance still need wiring.
 
 1. [Metric definitions](metric-definitions.md): exact denominators and unknowns.
 2. [Learning loop](learning-loop.md): turn observations into tested policies.
-3. [Implementation plan](implementation-plan.md): build on existing records.
-4. [Outcome template](templates/outcome.template.json): capture an assessment
+3. [Workflow integration](workflow-integration.md): existing evidence, missing
+   collection points and when workflow changes become justified.
+4. [Implementation plan](implementation-plan.md): build on existing records.
+5. [Outcome template](templates/outcome.template.json): capture an assessment
    without inventing measurements.
-5. [Experiment template](templates/experiment.template.md): predeclare the
+6. [Experiment template](templates/experiment.template.md): predeclare the
    comparison and write down the result.
 
 Keep the five primary measures separate initially. Pair every rate with its
 numerator, denominator, assessment coverage and observation period. Do not hide a
 rise in escaped defects behind a lower token bill or a composite score.
+
+The [rendered two-loop diagram](../../ARCHITECTURE.md#proposed-kpi-learning-loop)
+distinguishes the implemented product loop from the proposed learning process.
+Its [Mermaid source](../../learning/diagrams/proposed-kpi-learning-loop.mmd) can
+be reused in other documentation.

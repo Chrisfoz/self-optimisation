@@ -12,6 +12,15 @@ window before comparison. Report blocked runs and infrastructure failures
 separately, with counts; do not quietly remove them to improve the success rate.
 Use an explicit as-of timestamp. Later assessments can revise a cohort result.
 
+Predeclare eligibility. By default, include every assigned generation record,
+including over-budget, no-proposal, abandoned and failed runs, whether or not any
+model produced an answer. Quiet/no-release cycles, pauses and failures before a
+generation is assigned belong in a separate cycle inventory. Show their counts
+and reasons; they are not successful generations. Report infrastructure-failure
+strata separately without removing assigned generations from the primary
+denominator. Any different eligibility rule must be declared before results are
+seen, with excluded counts and rationale.
+
 ## Five primary KPIs
 
 | KPI | Definition | Interpretation and evidence |
@@ -52,6 +61,13 @@ Use seeded defects, known-good changes, blind human adjudication and confirmed
 post-acceptance findings. Freeze the criteria before reviewing. Do not label a
 rejection incorrect merely because its author disagrees, or an approval correct
 because tests passed. Preserve `unknown` and `disputed` labels.
+
+The unit is **one reviewer decision on one patch revision**, identified by
+review ID, attempt ID and reviewed patch SHA. One generation may have several
+decisions, including rejected attempts before approval. Preserve each decision
+and label coverage by attempt; do not retain only the final verdict.
+The [outcome template](templates/outcome.template.json) uses a `reviews` array
+for this reason. Each entry is a template placeholder, not an observed decision.
 
 Publish the full 2x2 table: approve/reject versus should-accept/should-reject.
 Report label source, sample counts and coverage by verdict; an assessment set

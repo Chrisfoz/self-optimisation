@@ -17,6 +17,50 @@ This is learning through measured experience, not evidence that foundation-model
 weights have changed. Policy selection and model-release-driven product
 generations are separate mechanisms.
 
+## Two connected loops
+
+The product loop already records attempts, spend, tests and PR disposition.
+The second loop is a proposed measurement and policy-evaluation design; no live
+KPI scorecard, experiment scheduler or automatic strategy adaptation is installed.
+A merged PR supplies disposition evidence, not proof of product effectiveness.
+Warm-toned dashed nodes and their connecting design flow describe proposed work.
+
+```mermaid
+flowchart TD
+  subgraph product["Product loop: implemented"]
+    investigate["Investigate and propose"]
+    change["Implement and review"]
+    gates["Guard, test and configured approval"]
+    records["Attempt, spend and PR records"]
+    investigate --> change --> gates --> records
+    records -->|"History informs next run"| investigate
+  end
+
+  subgraph learning["Harness learning: proposed"]
+    evidence["Join later outcome evidence"]
+    assess["Independent assessments and KPI report"]
+    experiment["Compare operating strategies"]
+    decision{"Held-out evidence supports adoption?"}
+    adopt["Reviewed and versioned policy change"]
+    preserve["Preserve results and limitations"]
+    evidence --> assess --> experiment --> decision
+    decision -->|"Yes"| adopt
+    decision -->|"No or uncertain"| preserve
+    adopt --> preserve
+  end
+
+  records -.-> evidence
+  adopt -.->|"Bounded trial and observation"| investigate
+  preserve -.->|"Inform future hypotheses"| experiment
+  classDef proposed fill:#F3E3D4,stroke:#9F7960,stroke-dasharray:5 5
+  class evidence,assess,experiment,decision,adopt,preserve proposed
+  style learning stroke:#9F7960,stroke-dasharray:5 5
+```
+
+[Workflow integration](workflow-integration.md) maps the existing artifacts to
+the proposed evidence and assessment stages. The reviewer cannot certify its own
+accuracy, and the candidate policy cannot alter the independent assessment.
+
 ## From signal to experiment
 
 | Observed pattern | Hypothesis to test | What could disprove it |
