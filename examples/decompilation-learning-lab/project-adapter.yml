@@ -1,0 +1,76 @@
+project:
+  id: decompilation-learning-lab
+  repository: https://github.com/Chrisfoz/self-optimisation
+  default_branch: main
+  goal:
+    statement: Teach verifiable binary reconstruction by recovering one original game-scoring function from assembly and input/output evidence.
+    holds:
+      - Preserve every previously correct input and record counterexamples honestly.
+      - Report behavior in the finite domain separately from function byte identity.
+    away_from:
+      - Optimising the check instead of reconstructing the function.
+      - Inferring commercial source recovery from a tiny teaching fixture.
+providers:
+  watched: [openai, anthropic]
+  snapshot_path: .agent/model-snapshot.json
+  max_fanout: 1
+constitution:
+  allowed_paths: [candidate/score.c]
+  create_only_paths: []
+  frozen_paths:
+    - .github/**
+    - .claude/**
+    - reference/**
+    - oracle/**
+    - fixtures/**
+    - tests/**
+    - docs/evidence.md
+    - scripts/**
+    - lab.py
+    - project-adapter.yml
+    - harness/**
+    - harness.lock.json
+    - package.json
+  append_only_paths: []
+  frozen_fields: {}
+  churn_ceiling: {max_files: 1, max_lines: 100}
+  approval_class: human-approval-required
+roles:
+  agent_brief_path: .claude/agents/improve.md
+  reviewer_brief_path: .claude/agents/review.md
+  suggest: {max_output_tokens: 4000}
+  implement: {model: gpt-6-sol, provider: openai, max_output_tokens: 4000}
+  review: {model: claude-sonnet-5, provider: anthropic, max_output_tokens: 4000}
+  rank: {model: null}
+  refine: {max_attempts: 2}
+memory:
+  escalation_ledger: docs/escalations/ledger.json
+  escalation_consensus: {models: 3, labs: 2}
+context:
+  generations_dir: docs/generations
+  runtime_evidence_dir: docs/runtime
+  architecture_notes: {path: docs/evidence.md}
+  test_files: []
+  purposes:
+    candidate/score.c: The only editable reconstruction; reference source is deliberately excluded from model context.
+  platform_notes: Linux x86-64 teaching lab; gcc and GNU binutils; pure integer function on 128 valid inputs. Run only locally authored fixtures on the host; use disposable isolation for generated code.
+  history_limit: 2
+  ambition: focused
+budget:
+  max_generation_tokens: 80000
+cadence:
+  trigger: model-release
+  scheduled: false
+  schedule_cron: ''
+deployment:
+  verify_strategy: none
+  ci: {runner: ubuntu-latest}
+evaluation:
+  test_commands:
+    - python3 -m unittest discover -s tests -q
+    - python3 lab.py evaluate
+    - python3 lab.py gate
+  test_in_loop: true
+  test_timeout_seconds: 120
+  test_env_passthrough: []
+  setup_commands: []

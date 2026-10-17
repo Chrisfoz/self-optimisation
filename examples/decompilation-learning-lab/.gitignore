@@ -1,0 +1,8 @@
+build/
+__pycache__/
+node_modules/
+.env
+.env.*
+!.env.example
+!.env.harness.example
+harness/.env.harness.local

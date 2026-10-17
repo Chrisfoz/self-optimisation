@@ -1,0 +1,32 @@
+name: Decompilation learning lab
+on:
+  pull_request:
+    paths:
+      - 'examples/decompilation-learning-lab/**'
+      - '.github/workflows/decompilation-lab.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'examples/decompilation-learning-lab/**'
+      - '.github/workflows/decompilation-lab.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lab:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/decompilation-learning-lab
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: python3 scripts/install-harness.py
+      - run: npm install --prefix harness --no-save --no-package-lock --ignore-scripts js-yaml@5.3.0
+      - run: node harness/scripts/validate.mjs
+      - run: npm test
+      - run: python3 lab.py gate
+      - run: python3 lab.py replay
+      - run: python3 scripts/package.py

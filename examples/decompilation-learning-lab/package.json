@@ -1,0 +1,15 @@
+{
+  "name": "decompilation-learning-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=22.11.0"},
+  "scripts": {
+    "demo": "python3 lab.py replay",
+    "test": "python3 -m unittest discover -s tests -q && node --test tests/harness.test.mjs",
+    "evaluate": "python3 lab.py evaluate",
+    "harness:verify": "python3 scripts/install-harness.py --verify",
+    "harness:validate": "node harness/scripts/validate.mjs",
+    "harness:rehearse": "node harness/scripts/rehearse.mjs"
+  }
+}

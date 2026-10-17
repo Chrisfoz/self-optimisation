@@ -1,0 +1,390 @@
+{
+  "mode": "scripted-replay",
+  "model_calls": 0,
+  "final_proposal_is_supplied_ground_truth": true,
+  "attempts": [
+    {
+      "attempt": 0,
+      "label": "Starter reconstruction",
+      "decision": "baseline",
+      "schema_version": 1,
+      "candidate_sha256": "bbfa1d4916f121b979b6af9ced492b58ea393f0fb82dcd025b4e7d32d048dfed",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+      "compiler_flags": [
+        "-std=c11",
+        "-O2",
+        "-fno-stack-protector",
+        "-fno-asynchronous-unwind-tables"
+      ],
+      "domain": {
+        "coins": [
+          0,
+          7
+        ],
+        "streak": [
+          0,
+          7
+        ],
+        "hazard": [
+          0,
+          1
+        ]
+      },
+      "matches": 14,
+      "total": 128,
+      "public_matches": 8,
+      "public_total": 16,
+      "assessment_matches": 6,
+      "assessment_total": 112,
+      "behavioral_match_in_declared_domain": false,
+      "function_text_byte_match": false,
+      "reference_text_sha256": "afe9638ab52ad81bd89123f4fa1a569ee332ce5e81986266ba8d048ab15993d3",
+      "candidate_text_sha256": "a57732bb31da2b3d5b08670d94753cac2192c0567c5ba529ae945600f9bcea27",
+      "counterexamples": [
+        {
+          "input": [
+            0,
+            1,
+            0
+          ],
+          "expected": 0,
+          "actual": 1
+        },
+        {
+          "input": [
+            0,
+            1,
+            1
+          ],
+          "expected": 0,
+          "actual": 1
+        },
+        {
+          "input": [
+            0,
+            2,
+            0
+          ],
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "input": [
+            0,
+            2,
+            1
+          ],
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "input": [
+            0,
+            3,
+            0
+          ],
+          "expected": 6,
+          "actual": 3
+        },
+        {
+          "input": [
+            0,
+            4,
+            0
+          ],
+          "expected": 8,
+          "actual": 4
+        },
+        {
+          "input": [
+            0,
+            5,
+            0
+          ],
+          "expected": 10,
+          "actual": 5
+        },
+        {
+          "input": [
+            0,
+            6,
+            0
+          ],
+          "expected": 12,
+          "actual": 6
+        }
+      ],
+      "elapsed_seconds": 0.188,
+      "limitation": "Only this pure function and the 128 declared inputs are assessed. This does not recover original names/comments, verify a whole game, or prove equivalence outside the declared domain."
+    },
+    {
+      "attempt": 1,
+      "label": "Repair combo rule",
+      "decision": "rejected",
+      "schema_version": 1,
+      "candidate_sha256": "aa69ed6f68405835b19218d340025a981d8f0d48483b9856be2fb32f79030c11",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+      "compiler_flags": [
+        "-std=c11",
+        "-O2",
+        "-fno-stack-protector",
+        "-fno-asynchronous-unwind-tables"
+      ],
+      "domain": {
+        "coins": [
+          0,
+          7
+        ],
+        "streak": [
+          0,
+          7
+        ],
+        "hazard": [
+          0,
+          1
+        ]
+      },
+      "matches": 67,
+      "total": 128,
+      "public_matches": 16,
+      "public_total": 16,
+      "assessment_matches": 51,
+      "assessment_total": 112,
+      "behavioral_match_in_declared_domain": false,
+      "function_text_byte_match": false,
+      "reference_text_sha256": "afe9638ab52ad81bd89123f4fa1a569ee332ce5e81986266ba8d048ab15993d3",
+      "candidate_text_sha256": "5b6d883f7e0bdfdf1aa9615db2c0cd71d225ba9fad1383bcc9c6fdb7bba4adce",
+      "counterexamples": [
+        {
+          "input": [
+            0,
+            3,
+            1
+          ],
+          "expected": 3,
+          "actual": 6
+        },
+        {
+          "input": [
+            0,
+            4,
+            1
+          ],
+          "expected": 4,
+          "actual": 8
+        },
+        {
+          "input": [
+            0,
+            5,
+            1
+          ],
+          "expected": 5,
+          "actual": 10
+        },
+        {
+          "input": [
+            0,
+            6,
+            1
+          ],
+          "expected": 6,
+          "actual": 12
+        },
+        {
+          "input": [
+            0,
+            7,
+            1
+          ],
+          "expected": 7,
+          "actual": 14
+        },
+        {
+          "input": [
+            1,
+            0,
+            1
+          ],
+          "expected": 5,
+          "actual": 10
+        },
+        {
+          "input": [
+            1,
+            1,
+            1
+          ],
+          "expected": 5,
+          "actual": 10
+        },
+        {
+          "input": [
+            1,
+            2,
+            1
+          ],
+          "expected": 5,
+          "actual": 10
+        }
+      ],
+      "elapsed_seconds": 0.148,
+      "limitation": "Only this pure function and the 128 declared inputs are assessed. This does not recover original names/comments, verify a whole game, or prove equivalence outside the declared domain."
+    },
+    {
+      "attempt": 2,
+      "label": "Simplify too aggressively",
+      "decision": "rejected",
+      "schema_version": 1,
+      "candidate_sha256": "dccef451b477e60236ae6ba8838d362f89c885517e922a495223f4dd00a55ac7",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+      "compiler_flags": [
+        "-std=c11",
+        "-O2",
+        "-fno-stack-protector",
+        "-fno-asynchronous-unwind-tables"
+      ],
+      "domain": {
+        "coins": [
+          0,
+          7
+        ],
+        "streak": [
+          0,
+          7
+        ],
+        "hazard": [
+          0,
+          1
+        ]
+      },
+      "matches": 6,
+      "total": 128,
+      "public_matches": 1,
+      "public_total": 16,
+      "assessment_matches": 5,
+      "assessment_total": 112,
+      "behavioral_match_in_declared_domain": false,
+      "function_text_byte_match": false,
+      "reference_text_sha256": "afe9638ab52ad81bd89123f4fa1a569ee332ce5e81986266ba8d048ab15993d3",
+      "candidate_text_sha256": "da54cdf31d6cf58016d5e63168614635e075c90464289051c0ca415e5a897389",
+      "counterexamples": [
+        {
+          "input": [
+            0,
+            3,
+            0
+          ],
+          "expected": 6,
+          "actual": 0
+        },
+        {
+          "input": [
+            0,
+            3,
+            1
+          ],
+          "expected": 3,
+          "actual": 0
+        },
+        {
+          "input": [
+            0,
+            4,
+            0
+          ],
+          "expected": 8,
+          "actual": 0
+        },
+        {
+          "input": [
+            0,
+            4,
+            1
+          ],
+          "expected": 4,
+          "actual": 0
+        },
+        {
+          "input": [
+            0,
+            5,
+            0
+          ],
+          "expected": 10,
+          "actual": 0
+        },
+        {
+          "input": [
+            0,
+            5,
+            1
+          ],
+          "expected": 5,
+          "actual": 0
+        },
+        {
+          "input": [
+            0,
+            6,
+            0
+          ],
+          "expected": 12,
+          "actual": 0
+        },
+        {
+          "input": [
+            0,
+            6,
+            1
+          ],
+          "expected": 6,
+          "actual": 0
+        }
+      ],
+      "elapsed_seconds": 0.156,
+      "limitation": "Only this pure function and the 128 declared inputs are assessed. This does not recover original names/comments, verify a whole game, or prove equivalence outside the declared domain."
+    },
+    {
+      "attempt": 3,
+      "label": "Repair hazard rule",
+      "decision": "accepted",
+      "schema_version": 1,
+      "candidate_sha256": "56d64fdd8e162c8f6441c865f0d01104724ab9e42ff81339d9fc72c49f16c96d",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+      "compiler_flags": [
+        "-std=c11",
+        "-O2",
+        "-fno-stack-protector",
+        "-fno-asynchronous-unwind-tables"
+      ],
+      "domain": {
+        "coins": [
+          0,
+          7
+        ],
+        "streak": [
+          0,
+          7
+        ],
+        "hazard": [
+          0,
+          1
+        ]
+      },
+      "matches": 128,
+      "total": 128,
+      "public_matches": 16,
+      "public_total": 16,
+      "assessment_matches": 112,
+      "assessment_total": 112,
+      "behavioral_match_in_declared_domain": true,
+      "function_text_byte_match": true,
+      "reference_text_sha256": "afe9638ab52ad81bd89123f4fa1a569ee332ce5e81986266ba8d048ab15993d3",
+      "candidate_text_sha256": "afe9638ab52ad81bd89123f4fa1a569ee332ce5e81986266ba8d048ab15993d3",
+      "counterexamples": [],
+      "elapsed_seconds": 0.146,
+      "limitation": "Only this pure function and the 128 declared inputs are assessed. This does not recover original names/comments, verify a whole game, or prove equivalence outside the declared domain."
+    }
+  ]
+}
