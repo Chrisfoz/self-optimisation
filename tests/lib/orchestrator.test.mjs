@@ -1086,3 +1086,30 @@ test('runGeneration: when the suggester\'s own edits ship, the summary is its CH
   assert.equal(result.selfImplemented, true);
   assert.equal(result.summary, 'add a pause button to index.html');
 });
+
+test('runGeneration: every record carries the context sizes and the provenance a replay needs', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') throw new Error('404 model not found');
+    throw new Error('unexpected call: ' + model);
+  };
+
+  const result = await runGeneration(baseConfig(repoRoot, { provenance: { baseCommit: 'abc123', contextStrategy: 'full-dump' } }), { call });
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.equal(record.provenance.baseCommit, 'abc123');
+  assert.equal(record.provenance.contextStrategy, 'full-dump');
+  assert.match(record.provenance.suggestPromptSha256, /^[0-9a-f]{64}$/);
+  assert.equal(record.contextSize.sourcesChars, 'SOURCE BUNDLE'.length);
+  assert.ok(record.contextSize.estimatedTokens > 0);
+
+  // The same inputs hash the same; a different source does not.
+  const again = tempRepo();
+  t.after(() => fs.rmSync(again, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(again, 'index.html'), 'original content');
+  const second = await runGeneration(baseConfig(again, { context: { manifest: 'MANIFEST', testIndex: null, sources: 'OTHER SOURCE' } }), { call });
+  const other = JSON.parse(fs.readFileSync(path.join(again, second.attemptRecordPath), 'utf8'));
+  assert.notEqual(other.provenance.suggestPromptSha256, record.provenance.suggestPromptSha256);
+});

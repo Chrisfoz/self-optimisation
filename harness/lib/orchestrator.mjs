@@ -62,6 +62,8 @@ import {
 import { summarizeApiIssues } from './api-errors.mjs';
 import { harnessVersion } from './version.mjs';
 import { createSpendLedger, withSpend, projectedFanOut } from './spend.mjs';
+import { estimateContextSize } from './context-pack.mjs';
+import crypto from 'node:crypto';
 import { summarizeTestRun, renderTestFailure, renderTestPass, failureExcerpt } from './test-runner.mjs';
 
 // ---------------------------------------------------------------------------
@@ -715,7 +717,7 @@ Implement the proposal above using the required edit format.`,
  * since the next generation reads this back and can see which ideas
  * already died and why.
  */
-export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize, apiIssues = [], pullRequestUrl = null, spend = null, campaign = false, seatPromotion = null, run = null, tests = null }) {
+export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generations', genNumber, outcome, suggestResult, proposal, attempts, fanOut, implementedBy, implementModel, scope, escalations, contextSize, provenance = null, apiIssues = [], pullRequestUrl = null, spend = null, campaign = false, seatPromotion = null, run = null, tests = null }) {
   const dir = path.join(repoRoot, generationsDir, `gen-${genNumber}`);
   fs.mkdirSync(dir, { recursive: true });
   const relative = `${generationsDir}/gen-${genNumber}/attempts.json`;
@@ -758,7 +760,14 @@ export function writeAttemptRecord({ repoRoot, generationsDir = 'docs/generation
         selfImplemented: Boolean(implementedBy) && implementedBy !== implementModel,
         proposalSummary,
         escalations: escalations ?? null,
+        // Per-block sizes of the suggestion prompt and its token estimate
+        // (context-pack.mjs's estimateContextSize()).
         contextSize: contextSize ?? null,
+        // What a replay needs to reproduce this run, or a comparison needs to
+        // tell two runs apart: the commit it started from, hashes of the
+        // adapter and both briefs, the context strategy, and a hash of the
+        // exact suggestion prompt. See harness/lib/assemble-context.mjs.
+        provenance: provenance ?? null,
         // What this generation cost, in tokens, per model and per stage —
         // see harness/lib/spend.mjs. Null only for a record written by
         // something other than runGeneration().
@@ -1149,6 +1158,9 @@ export async function runGeneration(config, deps = {}) {
     goal = null,
     run = null,
     runTests = null,
+    // Run-level provenance from the caller (base commit, adapter and brief
+    // hashes); the prompt hash and context sizes are added below.
+    provenance: callerProvenance = null,
   } = config;
 
   const rawCall = deps.call ?? callModelWithHeadroom;
@@ -1214,6 +1226,20 @@ export async function runGeneration(config, deps = {}) {
     implementModel,
   };
 
+  // Measured once, from the prompt every suggesting model is sent, and
+  // stamped on whichever record this run ends with.
+  const suggestSystem = buildSuggestSystemPrompt(promptConfig);
+  const suggestUser = buildSuggestUserPrompt(promptConfig);
+  const contextSize = estimateContextSize({
+    blocks: { system: suggestSystem, ...Object.fromEntries(Object.entries(promptConfig.context).filter(([, v]) => typeof v === 'string')) },
+    imageCount: screenshots?.images?.length ?? 0,
+  });
+  const provenance = {
+    ...(callerProvenance ?? {}),
+    suggestPromptSha256: crypto.createHash('sha256').update(`${suggestSystem}\n${suggestUser}`).digest('hex'),
+  };
+  const record = (fields) => writeAttemptRecord({ ...fields, contextSize, provenance });
+
   const pristine = snapshotEditableFiles(repoRoot, editableFiles);
 
   // What the in-loop tests found on the untouched tree, and whether they
@@ -1227,12 +1253,12 @@ export async function runGeneration(config, deps = {}) {
   // this run will cost. A run that cannot fit under the cap is refused
   // here, recorded, and reported — not discovered after N labs were paid.
   if (maxGenerationTokens !== null) {
-    const promptChars = buildSuggestSystemPrompt(promptConfig).length + buildSuggestUserPrompt(promptConfig).length;
+    const promptChars = suggestSystem.length + suggestUser.length;
     const projected = projectedFanOut({ promptChars, models: asking.length, maxTokens: maxGenerationTokens });
     if (projected.over) {
       const detail = `projected ${projected.estimatedTokens.toLocaleString()} input tokens across ${asking.length} model(s) exceeds budget.max_generation_tokens (${maxGenerationTokens.toLocaleString()}); nothing was called`;
       log(`💸 Over budget before the fan-out — ${detail}`);
-      const recordPath = writeAttemptRecord({
+      const recordPath = record({
         repoRoot, generationsDir, genNumber, campaign, seatPromotion, run, tests: testsRecord,
         outcome: 'over-budget',
         suggestResult: null,
@@ -1280,7 +1306,7 @@ export async function runGeneration(config, deps = {}) {
   const { proposals, failures } = await gatherProposals(promptConfig, asking, { call: callFor('suggest'), log });
 
   if (proposals.length === 0) {
-    const recordPath = writeAttemptRecord({
+    const recordPath = record({
       repoRoot, generationsDir, genNumber, campaign, seatPromotion, run, tests: testsRecord,
       outcome: 'no-proposal',
       suggestResult: null,
@@ -1578,7 +1604,7 @@ export async function runGeneration(config, deps = {}) {
         implementModel, reviewModel, scope, briefFeedback: winner.briefFeedback,
       });
 
-      const attemptRecordPath = writeAttemptRecord({
+      const attemptRecordPath = record({
         repoRoot, generationsDir, genNumber, campaign, seatPromotion, run, tests: testsRecord,
         outcome: 'approved', suggestResult, proposal, attempts: attemptLog,
         fanOut, implementedBy, implementModel, scope, escalations: escalationRound,
@@ -1620,7 +1646,7 @@ export async function runGeneration(config, deps = {}) {
     // the record of what was tried — that file is the whole value of a
     // failed run.
     restoreTree();
-    const attemptRecordPath = writeAttemptRecord({
+    const attemptRecordPath = record({
       repoRoot, generationsDir, genNumber, campaign, seatPromotion, run, tests: testsRecord,
       outcome: 'abandoned', suggestResult, proposal, attempts: attemptLog,
       fanOut, implementedBy: null, implementModel, scope, escalations: escalationRound,
@@ -1655,7 +1681,7 @@ export async function runGeneration(config, deps = {}) {
     // hide the original error, so it is recorded beside it instead.
     let restoreError = null;
     try { restoreTree(); } catch (e) { restoreError = e; }
-    const attemptRecordPath = writeAttemptRecord({
+    const attemptRecordPath = record({
       repoRoot, generationsDir, genNumber, campaign, seatPromotion, run, tests: testsRecord,
       outcome: 'crashed',
       suggestResult: crashState.suggestResult,
