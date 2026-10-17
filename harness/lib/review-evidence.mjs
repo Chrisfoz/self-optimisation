@@ -70,7 +70,16 @@ export function createReviewEvidence({ repoRoot, files, maxChars = DEFAULT_EVIDE
     try { return fs.statSync(path.join(repoRoot, f)).size <= MAX_FILE_BYTES; } catch { return false; }
   }).slice(0, MAX_INDEXED_FILES);
   let graph = null;
-  const read = (f) => fs.readFileSync(path.join(repoRoot, f), 'utf8');
+  // Every attempt in a run asks again. Cached content is only ever used for
+  // files OUTSIDE the attempt's changes (dependents exclude the changed
+  // files, and the tree is restored to pristine between attempts), so a
+  // cached copy is the file as it is. Files the reviewer asks for are read
+  // fresh, since one may be a file this attempt changed.
+  const cache = new Map();
+  const read = (f) => {
+    if (!cache.has(f)) cache.set(f, fs.readFileSync(path.join(repoRoot, f), 'utf8'));
+    return cache.get(f);
+  };
 
   return {
     /**
@@ -79,7 +88,7 @@ export function createReviewEvidence({ repoRoot, files, maxChars = DEFAULT_EVIDE
      * are none, which drops the section from the review request.
      */
     dependents(changedFiles, edits = []) {
-      graph ??= buildImportGraph(indexed, { repoRoot });
+      graph ??= buildImportGraph(indexed, { repoRoot, read });
       const symbols = touchedSymbols(edits);
       const byImport = dependentsOf(changedFiles, graph.importers);
       const bySymbol = symbols.length
@@ -115,7 +124,7 @@ export function createReviewEvidence({ repoRoot, files, maxChars = DEFAULT_EVIDE
       for (const f of paths) {
         if (!servable(f) || !files.includes(f)) { refused.push(`${f} (not a tracked, readable source file)`); continue; }
         let source;
-        try { source = read(f); } catch { refused.push(`${f} (unreadable)`); continue; }
+        try { source = fs.readFileSync(path.join(repoRoot, f), 'utf8'); } catch { refused.push(`${f} (unreadable)`); continue; }
         if (used + source.length > maxChars) { refused.push(`${f} (over the ${maxChars.toLocaleString('en-US')}-character cap)`); continue; }
         blocks.push(`#### ${f}\n\`\`\`\n${source}\n\`\`\``);
         served.push(f);
