@@ -309,10 +309,7 @@ jobs:
           GEN_NUMBER: ${{ steps.gen.outputs.number }}
           RUN_ID: ${{ steps.gen.outputs.run-id }}
           RUN_URL: ${{ steps.gen.outputs.run-url }}
-          # Game-only research: disabled unless repository variable is true.
-          GAME_REFERENCE_WEB_SEARCH: ${{ vars.GAME_REFERENCE_WEB_SEARCH }}
-          GAME_REFERENCE_WEB_QUERY: ${{ vars.GAME_REFERENCE_WEB_QUERY }}
-          BRAVE_SEARCH_API_KEY: ${{ secrets.BRAVE_SEARCH_API_KEY }}
+{{CONTEXT_PROVIDER_ENV_LINES}}
           SUGGEST_MODELS: ${{ steps.probe.outputs.models }}
           SCOPE: ${{ {{INPUTS}}.scope }}
           CAMPAIGN: ${{ steps.campaign.outputs.has-new }}

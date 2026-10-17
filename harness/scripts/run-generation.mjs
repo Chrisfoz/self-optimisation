@@ -46,7 +46,7 @@ import { assembleContext, measureContext, headCommit, fileHash, sha256 } from '.
 import { loadVisualEvidence, loadEvaluatorPlugin, createVisualCapture } from '../lib/evaluators.mjs';
 import { createReviewEvidence } from '../lib/review-evidence.mjs';
 import { runGeneration } from '../lib/orchestrator.mjs';
-import { loadGameReferences, discoverGameReferences, formatDiscoveredReferences, discoverWebGameReferences, formatWebGameReferences } from '../lib/game-references.mjs';
+import { contextProvidersConfig, runContextProviders } from '../lib/context-providers.mjs';
 
 function parseArgs(argv) {
   const out = {};
@@ -149,22 +149,7 @@ const readRequired = (relative, what) => {
   return fs.readFileSync(absolute, 'utf8');
 };
 
-const baseAgentBrief = readRequired(briefs.agentBriefPath, 'agent brief');
-// Opt-in is explicit in the project brief: ordinary projects remain unchanged.
-const gameResearchEnabled = baseAgentBrief.includes('GAME REFERENCE RESEARCH — active');
-const referenceEvidence = loadGameReferences({ repoRoot, enabled: gameResearchEnabled });
-// Live discovery is separately opt-in: metadata only and never needed for a successful generation.
-const liveResearch = await discoverGameReferences({ enabled: gameResearchEnabled && process.env.GAME_REFERENCE_LIVE_SEARCH === 'true', query: process.env.GAME_REFERENCE_QUERY || '' });
-const webResearch = await discoverWebGameReferences({
- enabled: gameResearchEnabled && process.env.GAME_REFERENCE_WEB_SEARCH === 'true',
- query: process.env.GAME_REFERENCE_WEB_QUERY || process.env.GAME_REFERENCE_QUERY || '',
- apiKey: process.env.BRAVE_SEARCH_API_KEY || ''
-});
-const agentBrief = baseAgentBrief + referenceEvidence + formatDiscoveredReferences(liveResearch) + formatWebGameReferences(webResearch);
-if (gameResearchEnabled && process.env.GAME_REFERENCE_WEB_SEARCH === 'true')
- console.error('Game web discovery: '+webResearch.status+', candidates: '+webResearch.candidates.length);
-if (gameResearchEnabled && process.env.GAME_REFERENCE_LIVE_SEARCH === 'true') console.error(`🎮 Game reference discovery: ${liveResearch.status}, ${liveResearch.candidates.length} candidate(s)`);
-if (gameResearchEnabled) console.error(`🎮 Game reference evidence: ${referenceEvidence ? 'loaded from docs/GAME-REFERENCE-PILOT.md' : 'missing; research-only prompt remains active'}`);
+const agentBrief = readRequired(briefs.agentBriefPath, 'agent brief');
 const reviewerBrief = readRequired(briefs.reviewerBriefPath, 'reviewer brief');
 
 const generationsDir = assembled.generationsDir;
@@ -262,6 +247,18 @@ const scope = scopeEnv === 'focused' || scopeEnv === 'ambitious'
 console.error(`🎚️  Scope: ${scope.scope} — ${scope.reason}`);
 
 // --- context ---
+// Project-configured context providers (harness/lib/context-providers.mjs):
+// each sees only the environment variables it declared, fails safe, and its
+// output is fenced as data in the user prompt — never the system prompt.
+const providers = contextProvidersConfig(adapter);
+if (providers.length) {
+  console.error(`🧩 Context providers: ${providers.map((p) => p.module).join(', ')}`);
+  context.providers = await runContextProviders({ repoRoot, configured: providers, log: (msg) => console.error(msg) });
+} else if (agentBrief.includes('GAME REFERENCE RESEARCH — active')) {
+  // The marker used to switch on a loader built into the harness. It is a
+  // plugin now, and runs only when the adapter names it.
+  console.error('⚠️  The agent brief asks for game reference research, but context.providers does not name harness/plugins/context/game-references/index.mjs — no reference evidence was loaded. See docs/Game-Reference-Research.md.');
+}
 const measured = measureContext({ context, agentBrief, scoped: assembled.scoped });
 console.error(
   `📚 Context: ~${measured.estimatedTokens.toLocaleString()} tokens estimated, ${assembled.scoped ? `scoped: a code map of ${editableFiles.length} files, each suggester reads up to ${assembled.scoped.maxSourceChars.toLocaleString()} chars` : `${context.sources.length} chars of editable source`}, ` +

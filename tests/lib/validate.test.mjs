@@ -244,3 +244,15 @@ test('context.strategy: scoped and full-dump are accepted; anything else is warn
   const { warnings } = validateAdapter({ ...adapter, context: { strategy: 'retrieval' } }, { repoRoot, env: { ANTHROPIC_API_KEY: 'x' } });
   assert.match(warnings.join('\n'), /context\.strategy is "retrieval"/);
 });
+
+test('context.providers: a module outside the project or one asking for a lab key is an error', (t) => {
+  const { repoRoot, adapter } = validSetup();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'p.mjs'), 'export default {}');
+  const env = { ANTHROPIC_API_KEY: 'x' };
+  assert.deepEqual(validateAdapter({ ...adapter, context: { providers: [{ module: 'p.mjs', env: ['BRAVE_SEARCH_API_KEY'] }] } }, { repoRoot, env }), { errors: [], warnings: [] });
+  const bad = validateAdapter({ ...adapter, context: { providers: [{ module: '../p.mjs' }, { module: 'p.mjs', env: ['OPENAI_API_KEY'] }, { module: 'missing.mjs' }] } }, { repoRoot, env });
+  assert.match(bad.errors.join('\n'), /outside the project/);
+  assert.match(bad.errors.join('\n'), /OPENAI_API_KEY, a lab key/);
+  assert.match(bad.warnings.join('\n'), /missing\.mjs" does not exist/);
+});
