@@ -489,7 +489,8 @@ should on paper.
 2. Port Bucket A (`learning/`) into `self_optimisation/learning/` — lowest
    risk, highest immediate value, mostly a copy + light edit pass.
 3. Reconstruct carrotgame's own `project-adapter.yml` by hand from its real
-   brief/guard/workflow, as `examples/carrotgame/` — this becomes the test
+   brief/guard/workflow, as `examples/carrotgame/` (removed October 2026: it
+   had fallen behind both carrotgame's own adapter and this schema) — this becomes the test
    case for whether the adapter schema is actually sufficient, before any
    scaffolding code is written against it.
 4. Port and genericise Bucket B file by file, in the dependency order the

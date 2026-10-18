@@ -203,7 +203,7 @@ record; never hand-maintain it."
 
 This is **not** the same thing as the `tests/` convention a target project's
 own adapter expects (append-only, checked by a guard, run as the
-`evaluation.test_commands` in `examples/carrotgame/project-adapter.yml`).
+`evaluation.test_commands` in `harness/project-adapter.example.yml`).
 That convention is for the project *being improved*; this suite is for the
 harness *doing the improving*. Keep the distinction — conflating them was
 never intended.
@@ -220,7 +220,6 @@ never intended.
 | The concepts, principles, and incidents this is built from — written to be lifted into any project | [`learning/`](learning/), starting with [`learning/README.md`](learning/README.md) |
 | Copy-paste templates (agent brief, reviewer brief, guard config, edit format) | [`learning/06-starter-kit.md`](learning/06-starter-kit.md) |
 | What's being ported from the reference implementation, what needs genericising, and the proposed repo/CLI structure | [`Portable-Harness-Design.md`](Portable-Harness-Design.md) |
-| A real project's configuration written out in the adapter schema, and what that exercise found | [`examples/carrotgame/`](examples/carrotgame/) — for a blank template to actually copy, use [`harness/project-adapter.example.yml`](harness/project-adapter.example.yml) instead |
 | The academic framing — the ten-component kernel, research questions, threat model, related work | [`Model-Release-Driven-Software-Improvement-Paper-Outline.md`](Model-Release-Driven-Software-Improvement-Paper-Outline.md) |
 | The research corpus this draws on (AlphaEvolve, Darwin Gödel Machine, self-rewarding/self-adapting LMs, harness engineering) | [`docs/`](docs/), indexed in [`docs/SOURCES.md`](docs/SOURCES.md) |
 | A proposal for a second longitudinal pass — one that asks what the project still doesn't understand about itself, rather than what pattern is repeating | [`docs/Curiosity-Engine-Design.md`](docs/Curiosity-Engine-Design.md), with a build spec per component in [`docs/curiosity/`](docs/curiosity/) |

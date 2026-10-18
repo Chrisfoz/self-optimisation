@@ -4,7 +4,7 @@
  * Loads a project's project-adapter.yml — the file that answers "which
  * paths may this project's agent edit, which providers should it watch,
  * what commands must pass" for one specific installation. See
- * examples/carrotgame/project-adapter.yml for a real, worked instance and
+ * harness/project-adapter.example.yml for the commented schema and
  * Portable-Harness-Design.md §5 for the schema this was validated against.
  *
  * THIS IS THE ONLY FILE IN THE HARNESS THAT KNOWS ABOUT YAML. Every other
@@ -120,7 +120,7 @@ export function goalConfig(adapter) {
  * Accepts both shapes seen in the wild: a bare list of names
  * (`['anthropic', 'openai']`) and the more explicit list of objects
  * (`[{lab: 'anthropic', env_var: 'ANTHROPIC_API_KEY'}]`) used in
- * examples/carrotgame/project-adapter.yml — the env var name itself is
+ * harness/project-adapter.example.yml — the env var name itself is
  * documentation for a human reading the file, since llm-provider.mjs's
  * getProvider() already knows each registered provider's real envKey.
  */
@@ -210,7 +210,7 @@ export function normalizeApprovalClass(value) {
 /**
  * Which approval class this project chose — read from
  * `constitution.approval_class`, which is where
- * examples/carrotgame/project-adapter.yml already puts it, with a
+ * the reference installation's adapter already put it, with a
  * top-level `approval_class` accepted as a fallback because
  * harness/project-adapter.example.yml documented it there while the field
  * was RESERVED.
@@ -386,7 +386,7 @@ export function contextConfig(adapter) {
 export function deploymentConfig(adapter) {
   return {
     strategy: adapter?.deployment?.verify_strategy ?? 'none',
-    // Matches examples/carrotgame/project-adapter.yml's existing field name
+    // Matches the reference installation's adapter's existing field name
     // — that file predates this accessor, so the accessor conforms to it
     // rather than the reverse.
     siteUrl: adapter?.deployment?.production_url ?? null,

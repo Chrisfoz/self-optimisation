@@ -36,7 +36,7 @@ API, not a restatement of why they matter.
 4. **Add the file to `harness/providers/index.mjs`** if this provider should
    ship by default, or leave it out and have the target project's own setup
    import it directly — a project's `providers.watched` list (see
-   `examples/carrotgame/project-adapter.yml`) only needs the labs it
+   `harness/project-adapter.example.yml`) only needs the labs it
    actually watches imported.
 
 5. **Add the env var to whatever secret store the target CI uses**, and

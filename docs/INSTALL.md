@@ -184,8 +184,8 @@ providers there instead — `harness/lib/adapter.mjs` reads it automatically
 (a CLI flag or env var still overrides it, in that order). This is also the
 one file that will carry forward everything else the harness eventually
 reads as more of it gets built — see
-[`examples/carrotgame/project-adapter.yml`](../examples/carrotgame/project-adapter.yml)
-for the fuller schema, real values and all, and `ARCHITECTURE.md` for which
+[`harness/project-adapter.example.yml`](../harness/project-adapter.example.yml)
+for the full commented schema, and `ARCHITECTURE.md` for which
 of its sections are actually consumed today versus still reserved.
 
 Once `project-adapter.yml`, `constitution.allowed_paths`, and the two brief

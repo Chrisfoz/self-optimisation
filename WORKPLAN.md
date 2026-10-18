@@ -1123,7 +1123,7 @@ Recorded here so the list above can be read without wondering what's missing
 from it.
 
 - Bucket A (`learning/`) ported; `examples/carrotgame/` reconstructed as the
-  adapter-schema test case (§10 steps 2–3).
+  adapter-schema test case (§10 steps 2–3; removed October 2026).
 - Bucket B genericised in dependency order: provider router, edit-format,
   release detector, reachability probe, adapter loader, guard, escalations,
   themes (read side), context-pack, orchestrator, independent reviewer

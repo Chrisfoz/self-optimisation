@@ -646,9 +646,6 @@ self_optimisation/
 │                                     # reference implementation, written to
 │                                     # need no project-specific knowledge
 ├── examples/
-│   ├── carrotgame/                  # a real installation's config, hand-written
-│   │                                 # in the proposed adapter schema, plus notes
-│   │                                 # on where the schema had to grow
 │   └── workflows/
 │       └── watch-releases.yml       # what `init --detector-only` renders, for reading
 └── harness/

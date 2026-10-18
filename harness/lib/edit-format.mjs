@@ -7,7 +7,7 @@
  * character-for-character; what's genericised is the allowlist, which used
  * to be a module-level constant (`EDITABLE_FILES`) and is now supplied by
  * the caller from a project's adapter config — see
- * examples/carrotgame/project-adapter.yml's `constitution.allowed_paths`
+ * harness/project-adapter.example.yml's `constitution.allowed_paths`
  * and `constitution.create_only_paths`.
  *
  * HARD CONSTRAINT, unchanged from the reference implementation: improvements

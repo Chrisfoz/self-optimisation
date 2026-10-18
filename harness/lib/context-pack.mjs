@@ -619,8 +619,8 @@ export function buildTestIndex({ repoRoot = process.cwd(), testFiles = [], extra
  * @param {{repoRoot?: string, purposes: Record<string,string>, allowlist: object, appendOnlyPaths?: RegExp[], createOnlyDescription?: string}} opts
  *   `purposes` is a path -> one-line-description map — always
  *   project-specific, supplied by the caller (a project's adapter config
- *   is the natural source; see examples/carrotgame/project-adapter.yml's
- *   file list for the shape, though the reference implementation itself
+ *   is the natural source; see harness/project-adapter.example.yml's
+ *   `context.purposes` for the shape, though the reference implementation itself
  *   still keeps this as a literal, not yet an adapter field). `allowlist`
  *   is edit-format.mjs's compileAllowlist() result. `appendOnlyPaths` is
  *   guard.mjs-style RegExp[], for a status column that isn't just
