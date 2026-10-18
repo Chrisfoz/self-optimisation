@@ -1092,9 +1092,10 @@ for but cannot take.
   **Owner, before publishing:** the name (`self-optimisation` and
   `self-optimisation-harness` were both unclaimed on 2026-09-26; `npx
   self-optimisation init` needs the first), removing `"private": true`, and
-  bumping `harness/VERSION` — it has read 0.1.0 through every change so far,
-  although `version.mjs` says it is bumped on each, so `--check-upgrade`
-  cannot yet tell any two copies apart.
+  bumping `harness/VERSION` — it read 0.1.0 through every change until
+  October 2026. **Now 0.2.0**, and a bump is a release: `release.yml` tags
+  `v<VERSION>` at the merge commit and its notes give the SHA a shared
+  install pins (CONTRIBUTING.md, "Releasing").
 - [ ] **D3 — Public repository, shared install by default.** **Owner:** the
   repository is private until the owner says otherwise. *Done when:* it is
   public and `init` defaults to `--shared` at the current release, the

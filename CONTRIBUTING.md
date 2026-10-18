@@ -203,6 +203,26 @@ mechanical traps" before spending an afternoon on Mermaid.
 
 ---
 
+## Releasing
+
+A release is a deliberate version bump, not every merge. Change
+`harness/VERSION` and `package.json`'s `version` together (a test fails when
+they disagree), say in the pull request what the release contains, and merge
+it. [`release.yml`](.github/workflows/release.yml) then tags `v<VERSION>` at
+the merge commit and publishes a GitHub release whose notes carry that
+commit's full SHA and the `init --shared <sha> --shared-label v<VERSION>`
+line. It refuses a version that is already tagged or not newer than the
+latest release.
+
+Installations never follow `main`. A shared install pins one commit SHA, with
+the release tag beside it as a label; a copied install is whatever `harness/`
+it copied. Either moves only when its owner upgrades, so a bad commit here
+reaches nobody until it is released and someone chooses it. Bump the minor
+version while the major is 0, and the patch for a fix that changes nothing an
+installation configures.
+
+---
+
 ## Please open an issue first for
 
 - **Anything that weakens a safety claim** — the guard, the allowlist, the

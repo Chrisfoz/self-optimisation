@@ -619,10 +619,12 @@ self_optimisation/
 ├── .devcontainer/                   # Node 22 + the GitHub CLI, for Codespaces
 ├── .github/
 │   └── workflows/
-│       └── self-improve.yml         # NOT this repo improving itself — this is THE SHARED
-│                                     # WORKFLOW, rendered from harness/templates/ by
-│                                     # scripts/render-shared-workflow.mjs, and what a
-│                                     # `--shared` install calls at a pinned commit
+│       ├── self-improve.yml         # NOT this repo improving itself — this is THE SHARED
+│       │                             # WORKFLOW, rendered from harness/templates/ by
+│       │                             # scripts/render-shared-workflow.mjs, and what a
+│       │                             # `--shared` install calls at a pinned commit
+│       └── release.yml              # tags v<harness/VERSION> when it changes on main —
+│                                     # the commit a shared install pins
 ├── package.json                     # no dependencies; `npm test` runs harness/'s own suite
 ├── docs/                            # research corpus, the design documents,
 │                                     # campaigns/ — real-model runs written up with their

@@ -275,9 +275,12 @@ already in agreement.
 
 **Or install it shared, once this repository is public.** Instead of keeping a
 copy of `harness/` in your project, `node <path-to>/harness/cli/init.mjs
---shared <commit-sha>` writes a short workflow that calls this repository's
-shared workflow at that commit. Upgrading is then a one-line change to the
-commit. Test and dependency setup commands live in `project-adapter.yml`
+--shared <commit-sha> --shared-label v<version>` writes a short workflow that
+calls this repository's shared workflow at that commit. Take both from a
+[release](https://github.com/Chrisfoz/self-optimisation/releases): each one's
+notes give its commit SHA and the exact command. Upgrading is then changing
+the SHA and label to a newer release's, on purpose; nothing moves under you
+when this repository changes. Test and dependency setup commands live in `project-adapter.yml`
 (`evaluation.test_commands`, `evaluation.setup_commands`) and are read once per
 run, from your default branch. While this repository is private, other
 repositories cannot read it, so use the copied install above. See
