@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1920" height="1080" viewBox="0 0 1920 1080">
+<defs>
+<filter id="shadow" x="-25%" y="-25%" width="150%" height="150%"><feDropShadow dx="0" dy="9" stdDeviation="14" flood-color="#3B5079" flood-opacity="0.09"/></filter>
+<marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1 1 L9 5 L1 9 Z" fill="#91A3BE"/></marker>
+<marker id="arrowLav" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M1 1 L9 5 L1 9 Z" fill="#AB83CE"/></marker>
+</defs>
+<rect x="0" y="0" width="1920" height="1080" rx="0" fill="#FBFCFF"/>
+<ellipse cx="1646.0" cy="84.0" rx="8.0" ry="8.0" fill="#F3EBFF"/>
+<ellipse cx="1704.5" cy="145.5" rx="4.5" ry="4.5" fill="#BCD1F3"/>
+<ellipse cx="1835.0" cy="93.0" rx="7.0" ry="7.0" fill="#B8E9D9"/>
+<rect x="70" y="63" width="60" height="60" rx="16" fill="#E8F2FF" stroke="#BCD1F3" stroke-width="2"/>
+<ellipse cx="99.5" cy="93.5" rx="12.5" ry="12.5" fill="#548BDF" stroke="#24324E" stroke-width="1"/>
+<ellipse cx="99.5" cy="93.5" rx="5.5" ry="5.5" fill="#FFFFFF"/>
+<text x="149" y="110" fill="#24324E" font-family="DejaVu Sans, Arial, sans-serif" font-size="61" font-weight="700" text-anchor="start">Self-Optimisation</text>
+<text x="800" y="82" fill="#9269D6" font-family="DejaVu Sans, Arial, sans-serif" font-size="34" font-weight="700" text-anchor="start">2</text>
+<text x="153" y="153" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="400" text-anchor="start">A recursive, evidence-driven harness for improving software — and learning how to improve itself.</text>
+<rect x="151" y="178" width="390" height="38" rx="17" fill="#E8F2FF" stroke="#BCD1F3" stroke-width="1.2"/>
+<text x="346.0" y="204" fill="#548BDF" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="700" text-anchor="middle">GOVERNED SOFTWARE IMPROVEMENT</text>
+<rect x="554" y="178" width="271" height="38" rx="17" fill="#F3EBFF" stroke="#D8C1F5" stroke-width="1.2"/>
+<text x="689.5" y="204" fill="#9269D6" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="700" text-anchor="middle">TWO CONNECTED LOOPS</text>
+<rect x="838" y="178" width="285" height="38" rx="17" fill="#E9F8F2" stroke="#B8E9D9" stroke-width="1.2"/>
+<text x="980.5" y="204" fill="#4AAE97" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="700" text-anchor="middle">LEARNING FROM EVIDENCE</text>
+<rect x="56" y="261" width="1260" height="656" rx="32" fill="#F3F7FF" stroke="#BCD1F3" stroke-width="2"/>
+<rect x="1343" y="261" width="521" height="656" rx="32" fill="#FBF6FF" stroke="#D8C1F5" stroke-width="2" stroke-dasharray="9 8"/>
+<text x="92" y="309" fill="#548BDF" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="700" text-anchor="start">01</text>
+<text x="147" y="309" fill="#24324E" font-family="DejaVu Sans, Arial, sans-serif" font-size="25" font-weight="700" text-anchor="start">PRODUCT-LEVEL RECURSION</text>
+<rect x="1040" y="280" width="235" height="38" rx="17" fill="#E9F8F2" stroke="#B8E9D9" stroke-width="1.2"/>
+<text x="1157.5" y="306" fill="#237D68" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="700" text-anchor="middle">OPERATIONAL</text>
+<text x="92" y="342" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="18" font-weight="400" text-anchor="start">Improve games, apps and software through a controlled generation cycle</text>
+<text x="1375" y="308" fill="#9269D6" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="700" text-anchor="start">02</text>
+<text x="1429" y="307" fill="#24324E" font-family="DejaVu Sans, Arial, sans-serif" font-size="23" font-weight="700" text-anchor="start">HARNESS-LEVEL</text>
+<text x="1374" y="340" fill="#24324E" font-family="DejaVu Sans, Arial, sans-serif" font-size="23" font-weight="700" text-anchor="start">RECURSION</text>
+<rect x="1635" y="323" width="197" height="38" rx="17" fill="#FFF2E6" stroke="#F3D0B2" stroke-width="1.2"/>
+<text x="1733.5" y="349" fill="#AC6F45" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="700" text-anchor="middle">PROPOSED</text>
+<text x="1375" y="373" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="16" font-weight="400" text-anchor="start">Improve the operating strategy of the harness</text>
+<rect x="92" y="389" width="263" height="240" rx="24" fill="#FFFFFF" stroke="#BCD1F3" stroke-width="2" filter="url(#shadow)"/>
+<rect x="92" y="389" width="263" height="13" rx="6" fill="#548BDF"/>
+<ellipse cx="223.0" cy="465.0" rx="52.0" ry="52.0" fill="#FFFFFF" stroke="#D9E3F3" stroke-width="2"/>
+<path d="M223 426 L223 412" fill="none" stroke="#548BDF" stroke-width="3" stroke-linecap="round" />
+<ellipse cx="223.0" cy="409.0" rx="7.0" ry="7.0" fill="#548BDF"/>
+<rect x="178" y="450" width="13" height="24" rx="5" fill="#548BDF" stroke="#548BDF" stroke-width="1"/>
+<rect x="255" y="450" width="13" height="24" rx="5" fill="#548BDF" stroke="#548BDF" stroke-width="1"/>
+<rect x="185" y="432" width="76" height="62" rx="18" fill="#F5FAFF" stroke="#548BDF" stroke-width="3"/>
+<ellipse cx="223.0" cy="451.0" rx="7.0" ry="7.0" fill="#FFF7DD" stroke="#D09C42" stroke-width="2"/>
+<ellipse cx="223.0" cy="451.0" rx="2.0" ry="2.0" fill="#D09C42"/>
+<ellipse cx="206.0" cy="465.0" rx="5.0" ry="5.0" fill="#24324E"/>
+<ellipse cx="240.0" cy="465.0" rx="5.0" ry="5.0" fill="#24324E"/>
+<ellipse cx="206.5" cy="464.5" rx="1.5" ry="1.5" fill="#FFFFFF"/>
+<ellipse cx="240.5" cy="464.5" rx="1.5" ry="1.5" fill="#FFFFFF"/>
+<path d="M214 480 L232 480" fill="none" stroke="#548BDF" stroke-width="2" stroke-linecap="round" />
+<ellipse cx="277.5" cy="432.5" rx="3.5" ry="3.5" fill="#FFF7DD" stroke="#D09C42" stroke-width="1"/>
+<text x="223" y="554" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="20" font-weight="700" text-anchor="middle">Discover + context</text>
+<text x="223" y="585" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="16" font-weight="400" text-anchor="middle">New model or manual run</text>
+<text x="223" y="607" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="400" text-anchor="middle">Goal · source · memory</text>
+<path d="M366 507 L393 507" fill="none" stroke="#8AA7CF" stroke-width="4" stroke-linecap="round" />
+<polygon points="393,507 382.0,500.0 382.0,514.0" fill="#8AA7CF"/>
+<rect x="407" y="389" width="263" height="240" rx="24" fill="#FFFFFF" stroke="#D8C1F5" stroke-width="2" filter="url(#shadow)"/>
+<rect x="407" y="389" width="263" height="13" rx="6" fill="#9269D6"/>
+<ellipse cx="538.0" cy="465.0" rx="52.0" ry="52.0" fill="#FFFFFF" stroke="#D9E3F3" stroke-width="2"/>
+<path d="M538 426 L538 412" fill="none" stroke="#9269D6" stroke-width="3" stroke-linecap="round" />
+<ellipse cx="538.0" cy="409.0" rx="7.0" ry="7.0" fill="#9269D6"/>
+<rect x="493" y="450" width="13" height="24" rx="5" fill="#9269D6" stroke="#9269D6" stroke-width="1"/>
+<rect x="570" y="450" width="13" height="24" rx="5" fill="#9269D6" stroke="#9269D6" stroke-width="1"/>
+<rect x="500" y="432" width="76" height="62" rx="18" fill="#F5FAFF" stroke="#9269D6" stroke-width="3"/>
+<text x="538" y="454" fill="#9269D6" font-family="DejaVu Sans, Arial, sans-serif" font-size="20" font-weight="700" text-anchor="middle">✦</text>
+<ellipse cx="521.0" cy="465.0" rx="5.0" ry="5.0" fill="#24324E"/>
+<ellipse cx="555.0" cy="465.0" rx="5.0" ry="5.0" fill="#24324E"/>
+<ellipse cx="521.5" cy="464.5" rx="1.5" ry="1.5" fill="#FFFFFF"/>
+<ellipse cx="555.5" cy="464.5" rx="1.5" ry="1.5" fill="#FFFFFF"/>
+<path d="M529 480 L547 480" fill="none" stroke="#9269D6" stroke-width="2" stroke-linecap="round" />
+<ellipse cx="592.5" cy="432.5" rx="3.5" ry="3.5" fill="#FFF7DD" stroke="#D09C42" stroke-width="1"/>
+<text x="538" y="554" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="20" font-weight="700" text-anchor="middle">Propose + rank</text>
+<text x="538" y="585" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="16" font-weight="400" text-anchor="middle">Multi-lab improvements</text>
+<text x="538" y="607" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="400" text-anchor="middle">Independent candidate rank</text>
+<path d="M681 507 L708 507" fill="none" stroke="#8AA7CF" stroke-width="4" stroke-linecap="round" />
+<polygon points="708,507 697.0,500.0 697.0,514.0" fill="#8AA7CF"/>
+<rect x="722" y="389" width="263" height="240" rx="24" fill="#FFFFFF" stroke="#F3D0B2" stroke-width="2" filter="url(#shadow)"/>
+<rect x="722" y="389" width="263" height="13" rx="6" fill="#E8A06A"/>
+<ellipse cx="853.0" cy="465.0" rx="52.0" ry="52.0" fill="#FFFFFF" stroke="#D9E3F3" stroke-width="2"/>
+<path d="M853 426 L853 412" fill="none" stroke="#E8A06A" stroke-width="3" stroke-linecap="round" />
+<ellipse cx="853.0" cy="409.0" rx="7.0" ry="7.0" fill="#E8A06A"/>
+<rect x="808" y="450" width="13" height="24" rx="5" fill="#E8A06A" stroke="#E8A06A" stroke-width="1"/>
+<rect x="885" y="450" width="13" height="24" rx="5" fill="#E8A06A" stroke="#E8A06A" stroke-width="1"/>
+<rect x="815" y="432" width="76" height="62" rx="18" fill="#F5FAFF" stroke="#E8A06A" stroke-width="3"/>
+<rect x="850" y="442" width="6" height="15" rx="3" fill="#E8A06A"/>
+<ellipse cx="853.0" cy="444.0" rx="7.0" ry="6.0" fill="#FFFFFF" stroke="#E8A06A" stroke-width="2"/>
+<ellipse cx="836.0" cy="465.0" rx="5.0" ry="5.0" fill="#24324E"/>
+<ellipse cx="870.0" cy="465.0" rx="5.0" ry="5.0" fill="#24324E"/>
+<ellipse cx="836.5" cy="464.5" rx="1.5" ry="1.5" fill="#FFFFFF"/>
+<ellipse cx="870.5" cy="464.5" rx="1.5" ry="1.5" fill="#FFFFFF"/>
+<path d="M844 480 L862 480" fill="none" stroke="#E8A06A" stroke-width="2" stroke-linecap="round" />
+<ellipse cx="907.5" cy="432.5" rx="3.5" ry="3.5" fill="#FFF7DD" stroke="#D09C42" stroke-width="1"/>
+<text x="853" y="554" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="20" font-weight="700" text-anchor="middle">Implement + refine</text>
+<text x="853" y="585" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="16" font-weight="400" text-anchor="middle">Atomic edits + local tests</text>
+<text x="853" y="607" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="400" text-anchor="middle">Failures guide next attempt</text>
+<path d="M996 507 L1023 507" fill="none" stroke="#8AA7CF" stroke-width="4" stroke-linecap="round" />
+<polygon points="1023,507 1012.0,500.0 1012.0,514.0" fill="#8AA7CF"/>
+<rect x="1037" y="389" width="263" height="240" rx="24" fill="#FFFFFF" stroke="#B8E9D9" stroke-width="2" filter="url(#shadow)"/>
+<rect x="1037" y="389" width="263" height="13" rx="6" fill="#4AAE97"/>
+<ellipse cx="1168.0" cy="465.0" rx="52.0" ry="52.0" fill="#FFFFFF" stroke="#D9E3F3" stroke-width="2"/>
+<path d="M1168 426 L1168 412" fill="none" stroke="#4AAE97" stroke-width="3" stroke-linecap="round" />
+<ellipse cx="1168.0" cy="409.0" rx="7.0" ry="7.0" fill="#4AAE97"/>
+<rect x="1123" y="450" width="13" height="24" rx="5" fill="#4AAE97" stroke="#4AAE97" stroke-width="1"/>
+<rect x="1200" y="450" width="13" height="24" rx="5" fill="#4AAE97" stroke="#4AAE97" stroke-width="1"/>
+<rect x="1130" y="432" width="76" height="62" rx="18" fill="#F5FAFF" stroke="#4AAE97" stroke-width="3"/>
+<ellipse cx="1168.0" cy="449.5" rx="7.0" ry="7.5" fill="#E9F8F2" stroke="#4AAE97" stroke-width="2"/>
+<text x="1168" y="454" fill="#4AAE97" font-family="DejaVu Sans, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">✓</text>
+<ellipse cx="1151.0" cy="465.0" rx="5.0" ry="5.0" fill="#24324E"/>
+<ellipse cx="1185.0" cy="465.0" rx="5.0" ry="5.0" fill="#24324E"/>
+<ellipse cx="1151.5" cy="464.5" rx="1.5" ry="1.5" fill="#FFFFFF"/>
+<ellipse cx="1185.5" cy="464.5" rx="1.5" ry="1.5" fill="#FFFFFF"/>
+<path d="M1159 480 L1177 480" fill="none" stroke="#4AAE97" stroke-width="2" stroke-linecap="round" />
+<ellipse cx="1222.5" cy="432.5" rx="3.5" ry="3.5" fill="#FFF7DD" stroke="#D09C42" stroke-width="1"/>
+<text x="1168" y="554" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="20" font-weight="700" text-anchor="middle">Review + gate</text>
+<text x="1168" y="585" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="16" font-weight="400" text-anchor="middle">Fresh-context review</text>
+<text x="1168" y="607" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="400" text-anchor="middle">Guard · tests · PR by default</text>
+<rect x="91" y="691" width="1195" height="144" rx="24" fill="#E7EFFB" stroke="#B4C7E9" stroke-width="1.7"/>
+<rect x="109" y="710" width="230" height="109" rx="18" fill="#24324E"/>
+<text x="223" y="750" fill="#FFFFFF" font-family="DejaVu Sans, Arial, sans-serif" font-size="18" font-weight="700" text-anchor="middle">PERSISTENT</text>
+<text x="223" y="777" fill="#FFFFFF" font-family="DejaVu Sans, Arial, sans-serif" font-size="23" font-weight="700" text-anchor="middle">MEMORY</text>
+<text x="223" y="802" fill="#D5E5FF" font-family="DejaVu Sans, Arial, sans-serif" font-size="14" font-weight="400" text-anchor="middle">feeds the next run</text>
+<text x="462.5" y="760" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="17" font-weight="700" text-anchor="middle">Attempts &amp;</text>
+<text x="462.5" y="786" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="17" font-weight="400" text-anchor="middle">token spend</text>
+<path d="M572 724 L572 809" fill="none" stroke="#D0DEF1" stroke-width="1.5" stroke-linecap="round" />
+<text x="688.5" y="760" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="17" font-weight="700" text-anchor="middle">PR decisions &amp;</text>
+<text x="688.5" y="786" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="17" font-weight="400" text-anchor="middle">generation fate</text>
+<path d="M798 724 L798 809" fill="none" stroke="#D0DEF1" stroke-width="1.5" stroke-linecap="round" />
+<text x="914.5" y="760" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="17" font-weight="700" text-anchor="middle">Runtime signals &amp;</text>
+<text x="914.5" y="786" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="17" font-weight="400" text-anchor="middle">recurring themes</text>
+<path d="M1024 724 L1024 809" fill="none" stroke="#D0DEF1" stroke-width="1.5" stroke-linecap="round" />
+<text x="1148.0" y="760" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="17" font-weight="700" text-anchor="middle">Tests &amp;</text>
+<text x="1148.0" y="786" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="17" font-weight="400" text-anchor="middle">evaluator results</text>
+<path d="M1168 628 L1168 689" fill="none" stroke="#6696CB" stroke-width="4" stroke-linecap="round" />
+<polygon points="1168,689 1175.0,678.0 1161.0,678.0" fill="#6696CB"/>
+<path d="M181 689 L181 633" fill="none" stroke="#6696CB" stroke-width="4" stroke-linecap="round" />
+<polygon points="181,633 174.0,644.0 188.0,644.0" fill="#6696CB"/>
+<text x="91" y="871" fill="#548BDF" font-family="DejaVu Sans, Arial, sans-serif" font-size="16" font-weight="700" text-anchor="start">EVIDENCE LOOP</text>
+<text x="267" y="871" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="17" font-weight="400" text-anchor="start">Each generation reuses the recorded history; unshipped attempts remain learning evidence.</text>
+<path d="M1285 758 L1331 758" fill="none" stroke="#AD91D5" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8" />
+<path d="M1331 758 L1331 462" fill="none" stroke="#AD91D5" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8" />
+<path d="M1331 462 L1374 462" fill="none" stroke="#AD91D5" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8" />
+<polygon points="1374,462 1363.0,455.0 1363.0,469.0" fill="#AD91D5"/>
+<rect x="1376" y="402" width="450" height="125" rx="19" fill="#F3EBFF" stroke="#D8C1F5" stroke-width="2" stroke-dasharray="9 8"/>
+<ellipse cx="1430.0" cy="464.0" rx="34.0" ry="34.0" fill="#FFFFFF" stroke="#D8C1F5" stroke-width="2"/>
+<text x="1430" y="473" fill="#9269D6" font-family="DejaVu Sans, Arial, sans-serif" font-size="29" font-weight="700" text-anchor="middle">1</text>
+<text x="1487" y="456" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="21" font-weight="700" text-anchor="start">Measure outcomes</text>
+<text x="1487" y="488" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="400" text-anchor="start">Verified gains · costs · defects</text>
+<rect x="1376" y="566" width="450" height="125" rx="19" fill="#FFF2E6" stroke="#F3D0B2" stroke-width="2" stroke-dasharray="9 8"/>
+<ellipse cx="1430.0" cy="628.0" rx="34.0" ry="34.0" fill="#FFFFFF" stroke="#F3D0B2" stroke-width="2"/>
+<text x="1430" y="637" fill="#E8A06A" font-family="DejaVu Sans, Arial, sans-serif" font-size="29" font-weight="700" text-anchor="middle">2</text>
+<text x="1487" y="620" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="21" font-weight="700" text-anchor="start">Compare strategies</text>
+<text x="1487" y="652" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="400" text-anchor="start">Context · model roles · review rules</text>
+<rect x="1376" y="730" width="450" height="125" rx="19" fill="#E9F8F2" stroke="#B8E9D9" stroke-width="2" stroke-dasharray="9 8"/>
+<ellipse cx="1430.0" cy="792.0" rx="34.0" ry="34.0" fill="#FFFFFF" stroke="#B8E9D9" stroke-width="2"/>
+<text x="1430" y="801" fill="#4AAE97" font-family="DejaVu Sans, Arial, sans-serif" font-size="29" font-weight="700" text-anchor="middle">3</text>
+<text x="1487" y="784" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="21" font-weight="700" text-anchor="start">Review + adopt policy</text>
+<text x="1487" y="816" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="400" text-anchor="start">Only when evidence supports a change</text>
+<path d="M1598 527 L1598 566" fill="none" stroke="#AD91D5" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8" />
+<polygon points="1598,566 1605.0,555.0 1591.0,555.0" fill="#AD91D5"/>
+<path d="M1598 691 L1598 730" fill="none" stroke="#AD91D5" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8" />
+<polygon points="1598,730 1605.0,719.0 1591.0,719.0" fill="#AD91D5"/>
+<text x="1378" y="896" fill="#9269D6" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="400" text-anchor="start">Versioned policy → bounded trial in a future generation</text>
+<path d="M1340 890 L1296 890" fill="none" stroke="#AD91D5" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="10 8" />
+<polygon points="1296,890 1307.0,897.0 1307.0,883.0" fill="#AD91D5"/>
+<rect x="56" y="948" width="1808" height="97" rx="24" fill="#EEF2FA" stroke="#DAE1F0" stroke-width="1.5"/>
+<text x="89" y="988" fill="#24324E" font-family="DejaVu Sans, Arial, sans-serif" font-size="20" font-weight="700" text-anchor="start">KPI LEARNING</text>
+<text x="89" y="1016" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="400" text-anchor="start">Specified · not yet live</text>
+<rect x="360" y="973" width="260" height="51" rx="15" fill="#FFFFFF" stroke="#DFE6F1" stroke-width="1"/>
+<ellipse cx="384.0" cy="998.0" rx="7.0" ry="7.0" fill="#4AAE97"/>
+<text x="402" y="1005" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="start">Verified product gains</text>
+<rect x="637" y="973" width="240" height="51" rx="15" fill="#FFFFFF" stroke="#DFE6F1" stroke-width="1"/>
+<ellipse cx="661.0" cy="998.0" rx="7.0" ry="7.0" fill="#4AAE97"/>
+<text x="679" y="1005" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="start">Tokens per useful change</text>
+<rect x="894" y="973" width="260" height="51" rx="15" fill="#FFFFFF" stroke="#DFE6F1" stroke-width="1"/>
+<ellipse cx="918.0" cy="998.0" rx="7.0" ry="7.0" fill="#4AAE97"/>
+<text x="936" y="1005" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="start">Repeated failed ideas</text>
+<rect x="1171" y="973" width="280" height="51" rx="15" fill="#FFFFFF" stroke="#DFE6F1" stroke-width="1"/>
+<ellipse cx="1195.0" cy="998.0" rx="7.0" ry="7.0" fill="#4AAE97"/>
+<text x="1213" y="1005" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="start">Escaped dependency bugs</text>
+<rect x="1468" y="973" width="344" height="51" rx="15" fill="#FFFFFF" stroke="#DFE6F1" stroke-width="1"/>
+<ellipse cx="1492.0" cy="998.0" rx="7.0" ry="7.0" fill="#4AAE97"/>
+<text x="1510" y="1005" fill="#24334B" font-family="DejaVu Sans, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="start">Independent review accuracy</text>
+<text x="1496" y="213" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="400" text-anchor="start">SOLID = BUILT</text>
+<path d="M1660 209 L1710 209" fill="none" stroke="#548BDF" stroke-width="3" stroke-linecap="round" />
+<text x="1730" y="213" fill="#617087" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="400" text-anchor="start">DASHED = PLANNED</text>
+</svg>
