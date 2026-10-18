@@ -12,11 +12,6 @@
 # closing section for why, and which two fields those are). There is no
 # longer a RESERVED category: every field in this file is one or the other,
 # which was not true when it was first written.
-#
-# examples/carrotgame/project-adapter.yml is a full worked instance of this
-# same schema, reconstructed from a real installation's enforcement code —
-# useful for seeing every field populated with real reasoning attached, not
-# meant to be copied over this file.
 
 project:
   id: <your-project-name>

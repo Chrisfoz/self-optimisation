@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { load as loadYaml } from 'js-yaml';
+import { load as loadYaml } from '../../harness/vendor/js-yaml.mjs';
 import '../../harness/providers/index.mjs';
 import { registeredProviders, getProvider } from '../../harness/lib/llm-provider.mjs';
 import { renderSharedWorkflow, SHARED_WORKFLOW_PATH } from '../../harness/lib/scaffold.mjs';

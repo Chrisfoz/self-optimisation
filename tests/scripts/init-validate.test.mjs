@@ -7,20 +7,17 @@ import { spawnSync } from 'node:child_process';
 
 const REPO_ROOT = path.join(import.meta.dirname, '../..');
 const INIT_SCRIPT = path.join(REPO_ROOT, 'harness/cli/init.mjs');
-const NODE_MODULES = path.join(REPO_ROOT, 'node_modules');
 const HARNESS_DIR = path.join(REPO_ROOT, 'harness');
 
 /**
  * A fresh target-project directory with its own copy of harness/ (init.mjs
  * resolves its templates relative to its own file location, so a symlink to
- * the real harness/ is enough — no need to actually copy it) and js-yaml
- * available via a symlinked node_modules, the same convention
- * check-guarded-paths-goal.test.mjs uses.
+ * the real harness/ is enough — no need to actually copy it). No
+ * node_modules: the harness's one library is vendored.
  */
 function freshProject() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'init-validate-'));
   fs.symlinkSync(HARNESS_DIR, path.join(root, 'harness'));
-  fs.symlinkSync(NODE_MODULES, path.join(root, 'node_modules'));
   return root;
 }
 

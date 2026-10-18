@@ -153,10 +153,6 @@ jobs:
           fi
           echo "HARNESS_DIR=$dir/harness" >> "$GITHUB_ENV"
 
-      - name: Install harness dependencies
-        shell: bash
-        run: npm install --prefix "$RUNNER_TEMP/self-optimisation" --no-save --ignore-scripts js-yaml@5.3.0
-
       # Read once, here, from the default branch this job checked out, before
       # any agent change exists; every later step uses what this saves
       # (harness/lib/workflow-config.mjs). Before the pause check, so a paused
@@ -190,13 +186,14 @@ jobs:
     if: inputs.check_keys != 'true'
     runs-on: ${{ inputs.runner }}
     steps:
-      # Actions pinned by commit SHA, not by tag, and the one npm package
-      # pinned to an exact version with lifecycle scripts disabled. This
+      # Actions pinned by commit SHA, not by tag, and nothing installed from
+      # npm at run time: the harness's one library (js-yaml) is vendored in
+      # harness/vendor/, so what runs is exactly what was committed. This
       # job holds a token that can write to the repository; a tag can be
       # moved and a floating version can be replaced, and either would run
       # inside every gate rather than having to defeat one. See
       # learning/03-failure-modes.md Part 9, "Supply chain, on the build
-      # side". Bump the SHA and the version together, on purpose.
+      # side".
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
@@ -205,14 +202,6 @@ jobs:
         with:
           node-version: '22'
 
-      # The project's own dependencies, before anything runs its tests. A
-      # copied installation has no other step that does this, and preflight
-      # runs the project's real test command: without it, `npm test` exits 127
-      # (command not found), preflight fails, and every generation is skipped
-      # before it starts — a loop that mails "nothing happened" every cycle.
-      # Empty when a project needs no setup (a suite that runs on Node's own
-      # test runner with zero dependencies, say), in which case this whole
-      # step disappears from the file.
       # The harness comes from the repository and commit this workflow file was
       # called at (job.workflow_repository, job.workflow_sha), fetched by SHA
       # and checked after checkout, so a project runs exactly the code it
@@ -243,10 +232,6 @@ jobs:
           fi
           echo "HARNESS_DIR=$dir/harness" >> "$GITHUB_ENV"
 
-      - name: Install harness dependencies
-        shell: bash
-        run: npm install --prefix "$RUNNER_TEMP/self-optimisation" --no-save --ignore-scripts js-yaml@5.3.0
-
       # Read once, here, from the default branch this job checked out, before
       # any agent change exists; every later step uses what this saves
       # (harness/lib/workflow-config.mjs). Before the pause check, so a paused
@@ -258,6 +243,15 @@ jobs:
         shell: bash
         continue-on-error: true
         run: node "$HARNESS_DIR"/scripts/workflow-config.mjs
+
+      # The project's own dependencies, before anything runs its tests. A
+      # copied installation has no other step that does this, and preflight
+      # runs the project's real test command: without it, `npm test` exits 127
+      # (command not found), preflight fails, and every generation is skipped
+      # before it starts — a loop that mails "nothing happened" every cycle.
+      # Empty when a project needs no setup (a suite that runs on Node's own
+      # test runner with zero dependencies, say), in which case this whole
+      # step disappears from the file.
 
       # Once, for every step that commits. It used to be set only by the
       # snapshot step, which campaign runs skip — so on a campaign run the
@@ -485,6 +479,10 @@ jobs:
           GEN_NUMBER: ${{ steps.gen.outputs.number }}
           RUN_ID: ${{ steps.gen.outputs.run-id }}
           RUN_URL: ${{ steps.gen.outputs.run-url }}
+          # Game-only research: disabled unless repository variable is true.
+          GAME_REFERENCE_WEB_SEARCH: ${{ vars.GAME_REFERENCE_WEB_SEARCH }}
+          GAME_REFERENCE_WEB_QUERY: ${{ vars.GAME_REFERENCE_WEB_QUERY }}
+          BRAVE_SEARCH_API_KEY: ${{ secrets.BRAVE_SEARCH_API_KEY }}
           SUGGEST_MODELS: ${{ steps.probe.outputs.models }}
           SCOPE: ${{ inputs.scope }}
           CAMPAIGN: ${{ steps.campaign.outputs.has-new }}

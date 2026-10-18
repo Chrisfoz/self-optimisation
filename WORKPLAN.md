@@ -950,6 +950,159 @@ Most of what broke was the install path and the cost of runs, not the loop.
   did not reproduce locally. *Done when:* the raw response of a failed
   compose is kept in the run log, and the cause is known.
 
+## Tier 8 — make the install easy (2026-09-26)
+
+From [`suggestion.md`](suggestion.md) (#36), a review of the end-user install
+path: about seven manual steps and an 807-line README stood between a new
+project and its first run. Numbered as in that file (D1 = suggestion 1), and
+listed in the order they are being built — each one makes the next smaller.
+Items marked **owner** are publishing decisions the code can be made ready
+for but cannot take.
+
+- [x] **D2 — No runtime dependency.** *Done when:* a copied `harness/` runs
+  `init` and `validate` with no `node_modules` anywhere, the generated
+  workflows install nothing from npm, and a test fails if anything in
+  `harness/` or `console/` imports a package.
+  **Done.** js-yaml 5.3.0's `dist/js-yaml.mjs` is vendored at
+  `harness/vendor/` with its licence, pinned by hash in
+  `tests/lib/vendor.test.mjs`, which also copies `harness/` into an empty
+  directory and runs `init --yes` and `validate` there. Both generated
+  workflows lost their install step, `package.json` has no dependencies, and
+  the README, how-to-run, the console quick start and CONTRIBUTING's first
+  non-negotiable no longer mention `--prefix harness`. Vendoring rather than
+  a hand-written parser: the adapter is safety configuration, and a
+  home-grown YAML subset that misreads it is worse than 126 KB of the real
+  thing.
+- [x] **D9 — One workflow, not two.** *Done when:* the README installs only
+  the generated `self-improve.yml`, and `init --detector-only` renders the
+  release-notice workflow for anyone who wants only that.
+  **Done.** README Step 6 (copy the example, then hand-edit its `env:` lines
+  and `--providers` to agree) is gone; the old Step 7 is now Step 6.
+  `renderDetectorWorkflow()` generates both lists from one answer, pins
+  actions by SHA like the full workflow, and passes lab-supplied names to
+  `gh` through `env:`. The example file is now that function's output for
+  all nine labs, and `tests/lib/detector-workflow.test.mjs` fails if anyone
+  edits one without the other.
+- [x] **D5 — Detect project settings instead of asking.** *Done when:* `init`
+  proposes test commands, setup commands and editable paths from
+  `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod` / `pom.xml` /
+  `*.csproj` / `Makefile`, with a test per ecosystem.
+  **Done.** `harness/lib/detect-project.mjs` reads (never runs) the
+  manifests and proposes defaults; `tests/lib/detect-project.test.mjs` has a
+  fixture per ecosystem plus an `init --yes` run whose adapter comes out with
+  `src/**`, `npm test` and `npm ci --ignore-scripts` and no empty-paths error.
+  `init` also now asks for **setup commands** at all — before this, a CLI
+  install never wrote `evaluation.setup_commands`, so its copied workflow had
+  no dependency step unless the adapter was edited by hand (the I10 failure).
+  Install proposals carry `--ignore-scripts`, because the job holds a write
+  token; a project whose build needs install scripts removes the flag.
+- [x] **D6 — A short setup path.** *Done when:* `init --quick` asks only labs,
+  editable paths, test command and merge model, everything else takes its
+  default, and the context-strategy question no longer offers `scoped`.
+  **Done, with one addition:** five questions, not four — setup commands
+  stay in, because a copied install without them cannot run its tests (I10),
+  and D5 proposes them anyway. Everything else takes the same default the
+  full questionnaire offers. The context-strategy question is gone from both
+  paths rather than trimmed: nothing in the harness reads `context.strategy`,
+  so the adapter records `full-dump`, which is what every run does.
+  `tests/scripts/init-quick.test.mjs` drives a real `init --quick` prompt by
+  prompt and asserts exactly which five were asked. Kept as a flag rather
+  than made the default, so the documented full questionnaire is unchanged;
+  the README now leads with `--quick`.
+- [x] **D4 — `init` configures GitHub through `gh`.** *Done when:* with `gh`
+  present and authenticated, `init --configure-github` sets the needed
+  secrets from the local env file (only the labs the adapter uses), sets the
+  workflow permission and the pull-request tickbox, reads both back and fails
+  loudly if either did not save; without `gh` it prints today's instructions.
+  **Done, with one deliberate narrowing:** it ticks the pull-request box but
+  leaves the repository's default workflow permission as it finds it — that
+  radio governs every *other* workflow in the repository, and the generated
+  one declares its own permissions, so it works under either. On the
+  autonomous-merge path it does not touch permissions at all.
+  `harness/lib/github-setup.mjs` sends secret values to `gh` on stdin, never
+  in argv; reports a blank key rather than uploading it; and reads the
+  tickbox back after saving. `tests/lib/github-setup.test.mjs` drives it
+  against a fake `gh`, including a save that does not stick (the first real
+  install's failure), and runs the CLI with an empty `PATH` for the fallback.
+  The response shapes were checked read-only against this repository. Not
+  yet run end to end against a real repository's settings — that write is
+  the first real install's to make.
+- [x] **D7 — One `doctor` command.** *Done when:* `harness/scripts/doctor.mjs`
+  checks Node, env file present and git-ignored, keys working, GitHub secrets
+  and permission (via `gh`), snapshot committed, adapter valid and harness
+  current, and each failure prints the command that fixes it.
+  **Done.** `harness/lib/doctor.mjs` runs nine checks in the order a person
+  fixes them, stops after the adapter when there is none, and takes every
+  side-effecting dependency as an argument; the script wires in the real
+  ones and runs `check-keys.mjs --json` itself, so "this key works" has one
+  definition. `--offline` calls nothing outside the machine (tested). A
+  git-ignored snapshot fails; an uncommitted one only warns, since the first
+  run commits it. `tests/lib/doctor.test.mjs` breaks one thing per test, and
+  runs the real script on a fresh copied install.
+  **Found on the way:** the generated checklist required
+  `default_workflow_permissions: "write"` "both, not either", which
+  contradicted the README (read-only suffices and is tighter, since the
+  workflow declares its own permissions) and told autonomous-merge installs
+  to change a setting they do not need. Corrected, with a test; the
+  checklist now also ends section 6 on `doctor` reporting **Ready**.
+- [x] **D8 — A README that starts with commands.** *Done when:* Getting
+  Started is a short command list at the top, and the status tables, the
+  bet, the layout tree and the design narrative live in `ARCHITECTURE.md` or
+  `docs/`, linked rather than inline.
+  **Done.** The README went from 819 lines to about 210: what it is, a
+  five-command quickstart, running the console, testing, and where to go
+  next. The walkthrough (Steps 1–6, what only you can provide, OS notes)
+  moved verbatim to `docs/INSTALL.md` with its links rebased; the status
+  table, the three pieces, the bet, the shape and the layout tree moved to
+  the end of `ARCHITECTURE.md`. Every relative link and anchor in the
+  touched files was checked to resolve. The documents that named the old
+  locations were updated with it: CONTRIBUTING's three-way status
+  agreement, the repo-steward, diagram-steward and code-review agent
+  definitions (local: `.claude/agents/` is git-ignored), how-to-run's GitHub
+  link, `console/DESIGN.md`, and two code comments.
+  ARCHITECTURE's table gained rows for detection, GitHub setup and doctor,
+  and `Portable-Harness-Design.md` a dated revision entry, so the three
+  still agree.
+- [ ] **D10 — One-click console, and a template repository.** *Done when:*
+  `console/` has a `Dockerfile` and a `.devcontainer`, and the README has a
+  deploy button. The template repository itself is **owner** (it needs D3).
+  **Buildable half done; left unticked for the owner half.** A root
+  `Dockerfile` (the console reads `harness/` too, so it builds from the
+  root) copies only `package.json`, `harness/` and `console/`, runs as
+  `node`, and has a health check; `.dockerignore` keeps every `.env` file
+  out of the build context. CI's new `console-image` job plants a fake key
+  file, builds, fails if any env file reached the image, and waits for
+  `/healthz`. Docker was not running where this was written; the job's first
+  run (PR #39) built the image, found no env file in it and got `/healthz`. `.devcontainer/` brings Node 22 and
+  the GitHub CLI. **Not done, both owner:** a deploy button (Railway's
+  "deploy from GitHub" and Codespaces links only work for other people once
+  the repository is public) and the template repository. Both move to D3.
+- [x] **D1 — Run via `npx`.** *Done when:* `package.json` has a `bin` that
+  copies `harness/` into the current project and runs `init`, `npm pack`
+  contains exactly what an install needs, and a test runs the packed tarball.
+  Publishing to npm is **owner**.
+  **Done, short of publishing.** `bin/self-optimisation.mjs` has `init`
+  (copy, then run init), `upgrade` (replace `harness/`, keep the key file,
+  regenerate from the adapter), `doctor` and `--version`. The package is 99
+  files: `bin/`, `harness/`, README and LICENSE, never a `.env` file or
+  `node_modules`; its version is `harness/VERSION`, with a test.
+  `tests/scripts/npx-package.test.mjs` packs the real tarball, extracts it,
+  and runs init → upgrade (a planted key survives, a stale file does not) →
+  doctor. It works from a clone today, and the README and INSTALL say how.
+  **Owner, before publishing:** the name (`self-optimisation` and
+  `self-optimisation-harness` were both unclaimed on 2026-09-26; `npx
+  self-optimisation init` needs the first), removing `"private": true`, and
+  bumping `harness/VERSION` — it read 0.1.0 through every change until
+  October 2026. **Now 0.2.0**, and a bump is a release: `release.yml` tags
+  `v<VERSION>` at the merge commit and its notes give the SHA a shared
+  install pins (CONTRIBUTING.md, "Releasing").
+- [ ] **D3 — Public repository, shared install by default.** **Owner:** the
+  repository is private until the owner says otherwise. *Done when:* it is
+  public and `init` defaults to `--shared` at the current release, the
+  README has a deploy button for the console, and a template repository
+  holds the generated workflow, a filled-in example adapter and the brief
+  templates (D10's owner half).
+
 ## Housekeeping, whenever a nearby file is open
 
 - [x] Fold doc-drift fixes in as you touch things: `console/DESIGN.md` §2.1
@@ -971,7 +1124,7 @@ Recorded here so the list above can be read without wondering what's missing
 from it.
 
 - Bucket A (`learning/`) ported; `examples/carrotgame/` reconstructed as the
-  adapter-schema test case (§10 steps 2–3).
+  adapter-schema test case (§10 steps 2–3; removed October 2026).
 - Bucket B genericised in dependency order: provider router, edit-format,
   release detector, reachability probe, adapter loader, guard, escalations,
   themes (read side), context-pack, orchestrator, independent reviewer

@@ -8,9 +8,9 @@ import {
   buildEditFormatSpec, parseResponse, applyEdits, renderForReview,
 } from '../../harness/lib/edit-format.mjs';
 
-// Mirrors examples/carrotgame/project-adapter.yml's real constitution, so
-// this test suite is checking the schema against the same shape the worked
-// example uses, not an invented one.
+// Mirrors a real installation's constitution (the reference game project's),
+// so this suite checks the schema against a shape that was actually used,
+// not an invented one.
 const allowlist = compileAllowlist({
   allowedPaths: ['carrot_maze_game.html', 'index.html', 'SELF-IMPROVEMENT.md'],
   createOnlyPaths: ['tests/game-logic/*.test.js'],

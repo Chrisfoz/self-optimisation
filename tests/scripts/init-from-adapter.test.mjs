@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { load as loadYaml } from 'js-yaml';
+import { load as loadYaml } from '../../harness/vendor/js-yaml.mjs';
 import '../../harness/providers/index.mjs';
 import { getProvider, resolveProvider } from '../../harness/lib/llm-provider.mjs';
 import { buildAdapterObject, answersFromAdapter, renderWorkflowTemplate, renderAdapterYaml, renderReadme } from '../../harness/lib/scaffold.mjs';

@@ -1,0 +1,18 @@
+# The Dockerfile copies only package.json, harness/ and console/. This keeps
+# the rest out of the build context too, and — the reason this file exists —
+# every env file, at any depth, so a real key can never reach an image.
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.harness.example
+**/*.pem
+**/*.key
+
+.git
+**/node_modules
+docs
+tests
+learning
+examples
+.claude
+.agent

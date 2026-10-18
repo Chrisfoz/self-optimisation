@@ -57,9 +57,9 @@ work. A download does not claim to verify repository contents or secrets.
    seats jointly determine required keys. Repository secrets are required; inherited
    organisation/environment secrets are not counted by the current preflight.
 4. Put dependency installation (for example `npm ci --ignore-scripts`) in the
-   dependency setup field, and test execution in the test commands field. Project
-   installation runs before the pinned harness dependency installation, so npm
-   cannot silently remove `js-yaml` halfway through the run.
+   dependency setup field, and test execution in the test commands field. The
+   dependency setup runs before the project's tests; the harness itself needs no
+   install, since its one library is vendored.
    Configure all ten steps and inspect the generated files. Existing installations
    are refused rather than overwritten; use `harness/cli/init.mjs --from-adapter`
    for upgrades. By default the install copies `harness/` into the target. A

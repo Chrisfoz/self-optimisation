@@ -3,10 +3,10 @@
 /**
  * The harness's own version, and the one comparison anyone needs on it.
  *
- * "Install" is copying one folder (README, Getting started), which means a
+ * "Install" is copying one folder (README quickstart, docs/INSTALL.md), which means a
  * vendored copy has no package manifest to say where it came from. This
- * file reads `harness/VERSION` — a one-line file bumped on every change to
- * `harness/` — so that a generated `project-adapter.yml`, every
+ * file reads `harness/VERSION` — a one-line file bumped once per release,
+ * which tags it (`.github/workflows/release.yml`) — so that a generated `project-adapter.yml`, every
  * `attempts.json`, and `init --check-upgrade` can all say which harness
  * produced them. Without that, "your copy has a fix you need" is a sentence
  * nobody can say to an installer.

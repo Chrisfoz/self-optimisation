@@ -60,7 +60,7 @@ Two different people arrive at this differently, and this document has so
 far only been designing for one of them.
 
 **Path A — the repository.** Public, cloneable, already documented in
-`README.md`'s "Getting started": copy `harness/` into a project, fill in
+`docs/INSTALL.md` (the README's quickstart, at length): copy `harness/` into a project, fill in
 `project-adapter.yml` by hand or with a coding agent, run it in your own CI.
 No account, no console, no product — just a git repository someone can read
 end to end before trusting it with write access to their own project. This
@@ -389,7 +389,7 @@ sends the file as the suggestion stage's entire system prompt):
 - **Constraints** — what must remain true no matter what
 - **Hints** — the quality bar, house style, known sharp edges
 
-Each with a real placeholder drawn from `examples/carrotgame/`, not lorem.
+Each with a real placeholder drawn from a real project's adapter, not lorem.
 This is the step where the console earns its existence or doesn't: it is the
 one input no template can supply, and the one a blank textarea will get a
 two-word answer for. Phase 3 idea in §5.

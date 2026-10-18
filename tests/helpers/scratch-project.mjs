@@ -11,8 +11,8 @@
  * evaluator plugin, a committed goal, and a themes-review cadence short
  * enough for a test to reach.
  *
- * harness/ and node_modules/ are symlinked in, the way tests/scripts/
- * rehearse.test.mjs does it, so the scripts under test are the ones in this
+ * harness/ is symlinked in, the way tests/scripts/rehearse.test.mjs does
+ * it, so the scripts under test are the ones in this
  * checkout.
  */
 
@@ -198,7 +198,6 @@ export function createScratchProject({ root = null, ...adapterOpts } = {}) {
   const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 
   fs.symlinkSync(path.join(REPO_ROOT, 'harness'), path.join(dir, 'harness'));
-  fs.symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(dir, 'node_modules'));
 
   git('init', '-q', '-b', 'main');
   git('config', 'user.email', 'scratch@example.com');

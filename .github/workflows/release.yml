@@ -1,0 +1,82 @@
+name: Release
+
+# Cuts a harness release whenever harness/VERSION changes on main: a tag
+# v<VERSION> and a GitHub release at that commit, whose notes give the full
+# commit SHA a shared install pins. The tag is the human name for the
+# release; installs still pin the SHA (renderCallerWorkflow() refuses
+# anything else), because a tag can be moved and a SHA cannot. Releasing is
+# deliberate: bump harness/VERSION and package.json together in a PR, merge
+# it, and this runs. See CONTRIBUTING.md, "Releasing".
+
+on:
+  push:
+    branches: [main]
+    paths: [harness/VERSION]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag and release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Read and check the version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < harness/VERSION)"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::harness/VERSION is not X.Y.Z: $version"
+            exit 1
+          fi
+          package_version="$(node -p "require('./package.json').version")"
+          if [ "$package_version" != "$version" ]; then
+            echo "::error::package.json says $package_version, harness/VERSION says $version"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then
+            echo "::error::v$version is already released at $(git rev-list -n 1 "v$version"). Bump harness/VERSION."
+            exit 1
+          fi
+          latest="$(git tag -l 'v*' --sort=-v:refname | head -n 1)"
+          if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "${latest#v}" "$version" | sort -V | tail -n 1)" != "$version" ]; then
+            echo "::error::$version is not newer than the latest release, $latest"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Create the tag and release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          notes="$(cat <<EOF
+          Harness $VERSION, at commit \`$GITHUB_SHA\`.
+
+          **Shared install** — pin the commit, label it with this release:
+
+          \`\`\`bash
+          node <path-to>/harness/cli/init.mjs --shared $GITHUB_SHA --shared-label v$VERSION
+          \`\`\`
+
+          An existing shared install upgrades by changing the SHA and label on the
+          \`uses:\` line of its workflow, and \`harness.shared\` in its adapter, to
+          the two above.
+
+          **Copied install** — check out this tag, then from your project run
+          \`node <path-to-checkout>/bin/self-optimisation.mjs upgrade\`.
+          EOF
+          )"
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "v$VERSION" --notes "$notes"

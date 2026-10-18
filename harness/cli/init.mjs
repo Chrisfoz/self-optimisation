@@ -9,7 +9,7 @@
  * and a short `SELF-IMPROVE-README.md` explaining what just got installed.
  *
  * Run from a target project's root, AFTER `harness/` has already been
- * copied in (see the root README's "Getting started" step 1) — same
+ * copied in (the README's quickstart, step 1; docs/INSTALL.md) — same
  * convention as every other harness CLI:
  *
  *   node harness/cli/init.mjs
@@ -40,6 +40,21 @@
  *                --shared-label v0.1.0 as a comment beside it), so no copy
  *                of harness/ has to live in the project. With
  *                --from-adapter, it replaces the pin the adapter recorded.
+ *   --quick      asks only what has no safe default: which labs, what may be
+ *                edited, how to test, how to install for the tests, and
+ *                whether to merge without asking. Everything else takes the
+ *                default the full questionnaire offers, and stays editable in
+ *                project-adapter.yml.
+ *   --configure-github  after init: sets the repository secrets this
+ *                installation needs from harness/.env.harness.local, and ticks
+ *                "Allow GitHub Actions to create and approve pull requests",
+ *                through the `gh` CLI — then reads the tickbox back and fails
+ *                if it did not save. Asks before changing anything (--yes
+ *                skips that). Without `gh`, prints the manual steps.
+ *   --detector-only  writes only .github/workflows/watch-releases.yml: the
+ *                release detector on a schedule, opening an issue when a new
+ *                model ships. Asks which labs to watch and nothing else; no
+ *                adapter, no model is ever called.
  *
  * Interactive mode needs a real terminal (a TTY) on stdin — `rl.question()`
  * in a loop over piped/redirected input is unreliable in Node generally
@@ -54,13 +69,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import readline from 'node:readline/promises';
+import { parseEnv } from 'node:util';
 import '../providers/index.mjs';
 import { getProvider, registeredProviders, resolveProvider } from '../lib/llm-provider.mjs';
-import { renderAdapterYaml, renderWorkflowTemplate, renderCallerWorkflow, renderReadme, renderChecklist, buildAdapterObject, answersFromAdapter } from '../lib/scaffold.mjs';
+import { renderAdapterYaml, renderWorkflowTemplate, renderCallerWorkflow, renderDetectorWorkflow, renderReadme, renderChecklist, buildAdapterObject, answersFromAdapter, requiredProviders } from '../lib/scaffold.mjs';
 import { harnessVersion, checkUpgrade } from '../lib/version.mjs';
 import { describeSeats } from '../lib/seats.mjs';
-import { normalizeAmbition, loadAdapter } from '../lib/adapter.mjs';
+import { normalizeAmbition, normalizeApprovalClass, loadAdapter } from '../lib/adapter.mjs';
 import { validateAdapter } from '../lib/validate.mjs';
+import { detectProject } from '../lib/detect-project.mjs';
+import { ghRunner, ghReady, repoSlug, setSecrets, allowPullRequests, manualSteps } from '../lib/github-setup.mjs';
 import { detectDefaultBranch, gitRunner, remoteDefaultBranch } from '../lib/git-default-branch.mjs';
 
 // path.join(..., '../x'), not import.meta.dirname — kept as the one idiom every
@@ -74,6 +92,7 @@ const AUTO_YES = process.argv.includes('--yes') || process.argv.includes('-y');
 // already-filled-in brief or adapter is exactly the kind of thing that
 // should need its own explicit flag, not fall out of "accept defaults."
 const FORCE = process.argv.includes('--force');
+const QUICK = process.argv.includes('--quick');
 
 // A shared installation (renderCallerWorkflow()). Validated when the workflow
 // is rendered, before anything is written.
@@ -162,54 +181,111 @@ async function ask(rl, question, { default: def = '' } = {}) {
   return answer || def;
 }
 
+/**
+ * A question --quick does not ask: its default is taken silently. Kept to the
+ * questions with a default that is safe to run on (the seats, the schedule,
+ * the paths a generation may never touch), so the short path never trades
+ * safety for speed.
+ */
+async function detail(rl, question, opts) {
+  return QUICK ? (opts?.default ?? '') : ask(rl, question, opts);
+}
+
+/** Explanatory text for a question --quick skips. */
+function explain(...lines) {
+  if (!QUICK) for (const line of lines) console.log(line);
+}
+
+/** "Which labs?" — shared by the full install and --detector-only. Exits when none is valid. */
+async function askProviders(rl) {
+  const known = registeredProviders();
+  const providersRaw = await ask(rl, `Providers to watch (comma-separated; known: ${known.join(', ')})`, { default: 'anthropic,openai' });
+  const providerNames = splitList(providersRaw).filter((name) => {
+    const ok = known.includes(name);
+    if (!ok) console.log(`   ⚠️  "${name}" is not a registered provider — skipping. Known: ${known.join(', ')}.`);
+    return ok;
+  });
+  if (providerNames.length === 0) {
+    console.log('\n❌ No valid provider selected — at least one is required to check for new model releases.');
+    rl.close();
+    process.exit(1);
+  }
+  return { providerNames, providers: providerNames.map((name) => ({ name, envKey: getProvider(name).envKey })) };
+}
+
+/**
+ * `--detector-only`: the release notice without the loop. One question, one
+ * workflow file, and the env file so `check-keys` can prove the keys first.
+ */
+async function detectorOnly() {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  console.log('Self-optimisation harness — release detector only\n');
+  const { providers } = await askProviders(rl);
+  const cadenceCron = await ask(rl, 'Cadence (cron, UTC)', { default: '0 0 1 * *' });
+  rl.close();
+
+  console.log('\nWriting files...\n');
+  writeIfAbsentOrForced('.github/workflows/watch-releases.yml', renderDetectorWorkflow({ providers, cadenceCron }), 'the detector workflow');
+  writeEnvTemplate();
+  console.log(
+    '\nDone. Add one repository secret per lab (Settings → Secrets and variables → Actions):\n' +
+    providers.map((p) => `  - ${p.envKey}`).join('\n') +
+    '\n\nThen commit, push, and use "Run workflow" in the Actions tab to try it now.' +
+    '\nThe full loop is plain `node harness/cli/init.mjs`, whenever you want it.'
+  );
+}
+
 async function main() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  console.log('Self-optimisation harness — installation scaffolder\n');
+  console.log(`Self-optimisation harness — installation scaffolder${QUICK ? ' (quick: five questions; everything else takes its default)' : ''}\n`);
   let answersAmbitionOverride = null;
 
   try {
-    const projectId = await ask(rl, 'Project id', { default: path.basename(repoRoot) });
-    const repository = await ask(rl, 'Repository URL', { default: detectGitRemote() });
+    const projectId = await detail(rl, 'Project id', { default: path.basename(repoRoot) });
+    const repository = await detail(rl, 'Repository URL', { default: detectGitRemote() });
     // The repository's default branch, not the one you're on: the
     // walkthrough has you on a setup branch by now. See git-default-branch.mjs.
-    const defaultBranch = await ask(rl, 'Default branch', { default: detectDefaultBranch(gitRunner(repoRoot)) || detectGitBranch() || 'main' });
+    const defaultBranch = await detail(rl, 'Default branch', { default: detectDefaultBranch(gitRunner(repoRoot)) || detectGitBranch() || 'main' });
 
     // The committed goal (docs/curiosity/C1). Optional, strongly
     // recommended, and the one thing every stage is judged against once it
     // exists. Direction, not a metric — a number here would be gamed.
-    console.log('\nWhat is this project trying to become? One or two sentences of direction, not a metric.');
-    console.log('Optional, but every proposal and every review is judged against it once it exists.\n');
-    const goalStatement = await ask(rl, 'Goal (blank to skip)');
+    explain('\nWhat is this project trying to become? One or two sentences of direction, not a metric.',
+      'Optional, but every proposal and every review is judged against it once it exists.\n');
+    const goalStatement = await detail(rl, 'Goal (blank to skip)');
 
-    const allowedPathsRaw = await ask(rl, 'Editable paths (comma-separated globs, e.g. index.html,src/**/*.js)');
+    // Proposals from the repository itself (package.json, pyproject.toml,
+    // Cargo.toml, go.mod, pom.xml, *.csproj, Makefile): the defaults below,
+    // which Enter accepts and anything typed replaces.
+    const detected = detectProject(repoRoot);
+    if (detected.ecosystems.length) {
+      console.log(`\nDetected: ${detected.ecosystems.join(', ')}. The defaults below come from your project's own files — check them.\n`);
+    }
+
+    const allowedPathsRaw = await ask(rl, 'Editable paths (comma-separated globs, e.g. index.html,src/**/*.js)', { default: detected.allowedPaths.join(',') });
     const allowedPaths = splitList(allowedPathsRaw);
     if (allowedPaths.length === 0) {
       console.log('\n⚠️  No editable paths given — the agent will have nothing it may edit until you add some to constitution.allowed_paths by hand.\n');
     }
 
     const frozenDefaults = ['.github/**', '.claude/agents/**'];
-    const frozenPathsRaw = await ask(rl, 'Frozen paths — never touched autonomously (comma-separated globs)', { default: frozenDefaults.join(',') });
+    const frozenPathsRaw = await detail(rl, 'Frozen paths — never touched autonomously (comma-separated globs)', { default: frozenDefaults.join(',') });
     const frozenPaths = splitList(frozenPathsRaw);
 
-    const appendOnlyPathsRaw = await ask(rl, 'Append-only paths — new files may be added, existing ones may not change (comma-separated globs)', { default: 'tests/**' });
+    const appendOnlyPathsRaw = await detail(rl, 'Append-only paths — new files may be added, existing ones may not change (comma-separated globs)', { default: 'tests/**' });
     const appendOnlyPaths = splitList(appendOnlyPathsRaw);
 
-    const testCommandsRaw = await ask(rl, 'Test commands — one or more shell commands that must exit 0 (comma-separated)', { default: 'npm test' });
+    const testCommandsRaw = await ask(rl, 'Test commands — one or more shell commands that must exit 0 (comma-separated)', { default: detected.testCommands.join(',') || 'npm test' });
     const testCommands = splitList(testCommandsRaw);
 
+    // What the workflow runs before the tests, on a fresh runner. Without it a
+    // copied install's preflight cannot find the project's own test runner
+    // (WORKPLAN I10) — so it is asked here rather than left for the adapter.
+    const setupCommandsRaw = await ask(rl, 'Setup commands — install what the tests need on a fresh machine (comma-separated, blank for none)', { default: detected.setupCommands.join(',') });
+    const setupCommands = splitList(setupCommandsRaw);
+
     const known = registeredProviders();
-    const providersRaw = await ask(rl, `Providers to watch (comma-separated; known: ${known.join(', ')})`, { default: 'anthropic,openai' });
-    const providerNames = splitList(providersRaw).filter((name) => {
-      const ok = known.includes(name);
-      if (!ok) console.log(`   ⚠️  "${name}" is not a registered provider — skipping. Known: ${known.join(', ')}.`);
-      return ok;
-    });
-    if (providerNames.length === 0) {
-      console.log('\n❌ No valid provider selected — at least one is required to check for new model releases.');
-      rl.close();
-      process.exit(1);
-    }
-    const providers = providerNames.map((name) => ({ name, envKey: getProvider(name).envKey }));
+    const { providerNames, providers } = await askProviders(rl);
 
     // The three pinned seats. The suggest seat rotates — whichever watched
     // lab shipped something new wins it — but implement, review and rank
@@ -217,15 +293,15 @@ async function main() {
     // point of pinning them (see learning/01-principles.md). Defaulting all
     // three to claude-opus-5 matches the reference implementation; a
     // project is free to point any of them at any registered lab's model.
-    console.log('\nThe pinned seats — the suggest seat rotates to whichever watched lab ships something new,');
-    console.log('but these three stay on a model you choose. Blank accepts the default.\n');
-    const implementModel = await ask(rl, 'Implement model — writes the actual edit when the suggester offers none', { default: 'claude-opus-5' });
-    const reviewModel = await ask(rl, 'Review model — the independent gate; fails closed. Prefer a DIFFERENT lab than the implementer', { default: 'claude-opus-5' });
+    explain('\nThe pinned seats — the suggest seat rotates to whichever watched lab ships something new,',
+      'but these three stay on a model you choose. Blank accepts the default.\n');
+    const implementModel = await detail(rl, 'Implement model — writes the actual edit when the suggester offers none', { default: 'claude-opus-5' });
+    const reviewModel = await detail(rl, 'Review model — the independent gate; fails closed. Prefer a DIFFERENT lab than the implementer', { default: 'claude-opus-5' });
     // Blank means "let the run choose a different family from the snapshot"
     // (harness/lib/seats.mjs), which is the better default than echoing the
     // implementer — see run-generation.mjs for why the rank seat can be
     // auto-assigned and the review seat cannot.
-    const rankModel = await ask(rl, 'Rank model — only called when more than one lab proposed; blank picks another lab\'s model at run time', { default: '' });
+    const rankModel = await detail(rl, 'Rank model — only called when more than one lab proposed; blank picks another lab\'s model at run time', { default: '' });
 
     const seats = describeSeats({ implementModel, reviewModel, rankModel: rankModel || implementModel });
     for (const warning of seats.warnings) {
@@ -277,10 +353,10 @@ async function main() {
     // the same at every setting, but what a run ATTEMPTS is not, and an
     // owner who picks "ambitious" with autonomous merge has chosen to have
     // structural change land unattended. docs/Ambition-Control.md.
-    console.log('\nHow ambitious may each generation be? "focused" is one small localised change every time;');
-    console.log('"earned" (the default) unlocks one ambitious generation after a clean streak; "ambitious" attempts');
-    console.log('structural work on every run. Every setting passes the same gates.\n');
-    const ambition = normalizeAmbition(await ask(rl, 'Ambition (focused / earned / ambitious)', { default: 'earned' }));
+    explain('\nHow ambitious may each generation be? "focused" is one small localised change every time;',
+      '"earned" (the default) unlocks one ambitious generation after a clean streak; "ambitious" attempts',
+      'structural work on every run. Every setting passes the same gates.\n');
+    const ambition = normalizeAmbition(await detail(rl, 'Ambition (focused / earned / ambitious)', { default: 'earned' }));
     if (ambition === 'ambitious') {
       console.log('   ⚠️  Ambitious on every run. Expect more rejected attempts and more tokens per generation, and');
       console.log('      read docs/Ambition-Control.md — in particular, keep the pull-request merge model, and know');
@@ -294,18 +370,21 @@ async function main() {
       }
     }
 
-    const cadenceCron = await ask(rl, 'Cadence (cron, UTC)', { default: '0 0 1 * *' });
+    const cadenceCron = await detail(rl, 'Cadence (cron, UTC)', { default: '0 0 1 * *' });
     // Defaulted ON here and OFF for the console (console/DESIGN.md §Step 9):
     // someone running this CLI in their own checkout has already done the
     // equivalent of reviewing and merging the install, which is the step the
     // console's two-phase onboarding is protecting.
-    const includeSchedule = !(await ask(rl, 'Leave the schedule off until you have rehearsed a run by hand? (y/N)', { default: 'n' }))
+    const includeSchedule = !(await detail(rl, 'Leave the schedule off until you have rehearsed a run by hand? (y/N)', { default: 'n' }))
       .toLowerCase()
       .startsWith('y');
-    const runner = await ask(rl, 'CI runner (ubuntu-latest / windows-latest / macos-latest)', { default: 'ubuntu-latest' });
-    const contextStrategy = await ask(rl, 'Context strategy (full-dump / scoped — "scoped" has no implementation yet, see ARCHITECTURE.md)', { default: 'full-dump' });
+    const runner = await detail(rl, 'CI runner (ubuntu-latest / windows-latest / macos-latest)', { default: 'ubuntu-latest' });
+    // context.strategy is not asked: nothing in the harness reads it yet, and a
+    // question whose answer changes nothing is a question in the way. The
+    // adapter still records full-dump, which is what every run does.
+    const contextStrategy = 'full-dump';
 
-    const deploymentStrategy = await ask(rl, 'Deployment verify strategy (url / registry / artifact / none)', { default: 'none' });
+    const deploymentStrategy = await detail(rl, 'Deployment verify strategy (url / registry / artifact / none)', { default: 'none' });
     let deploymentUrl, deploymentRegistry, deploymentArtifact;
     if (deploymentStrategy === 'url') {
       const productionUrl = await ask(rl, '  Production URL');
@@ -328,7 +407,7 @@ async function main() {
       deploymentArtifact = { buildCommand: buildCommand || undefined, path: artifactPath || undefined, smokeCommand: smokeCommand || undefined };
     }
 
-    const wantsNotify = (await ask(rl, 'Set up email notifications via SendGrid? (y/N)', { default: 'n' })).toLowerCase().startsWith('y');
+    const wantsNotify = (await detail(rl, 'Set up email notifications via SendGrid? (y/N)', { default: 'n' })).toLowerCase().startsWith('y');
     let notify = null;
     if (wantsNotify) {
       const recipient = await ask(rl, '  Recipient email');
@@ -345,8 +424,8 @@ async function main() {
       } catch { /* the terse fallback still sends */ }
     }
 
-    const agentBriefPath = await ask(rl, 'Agent brief path', { default: '.claude/agents/improve.md' });
-    const reviewerBriefPath = await ask(rl, 'Reviewer brief path', { default: '.claude/agents/review.md' });
+    const agentBriefPath = await detail(rl, 'Agent brief path', { default: '.claude/agents/improve.md' });
+    const reviewerBriefPath = await detail(rl, 'Reviewer brief path', { default: '.claude/agents/review.md' });
 
     rl.close();
 
@@ -356,7 +435,7 @@ async function main() {
       goalStatement: goalStatement || undefined,
       projectId, repository, defaultBranch,
       allowedPaths, createOnlyPaths: [], frozenPaths, appendOnlyPaths,
-      testCommands, providers, roleProviders, snapshotPath: '.agent/model-snapshot.json',
+      testCommands, setupCommands, providers, roleProviders, snapshotPath: '.agent/model-snapshot.json',
       implementModel, reviewModel, rankModel,
       approvalClass, cadenceCron, includeSchedule, runner, contextStrategy,
       agentBriefPath, reviewerBriefPath,
@@ -471,14 +550,20 @@ function writeFiles(answers) {
   for (const w of warnings) console.log(`   ⚠️  ${w}`);
   if (!errors.length && !warnings.length) console.log('   No issues found.');
   console.log(
-    '\nDone. Two things next, in this order:\n' +
+    (QUICK ? '\nEvery other setting took its default — see project-adapter.yml, or re-run without --quick.\n' : '') +
+    '\nDone. Three things next, in this order:\n' +
     '\n  1. Prove your keys work — this is the cheapest failure to catch, and the\n' +
     '     only one that otherwise surfaces mid-generation after money is spent:\n' +
     '       node --env-file=harness/.env.harness.local harness/scripts/check-keys.mjs\n' +
-    '\n  2. Work through SELF-IMPROVE-CHECKLIST.md, then SELF-IMPROVE-README.md —\n' +
+    '\n  2. Put the same keys on GitHub, and allow the workflow to open pull\n' +
+    '     requests (with the GitHub CLI signed in; it prints the steps otherwise):\n' +
+    '       node harness/cli/init.mjs --configure-github\n' +
+    '\n  3. Work through SELF-IMPROVE-CHECKLIST.md, then SELF-IMPROVE-README.md —\n' +
     '     between them they say exactly what still needs a human before the\n' +
-    '     schedule should run unattended.' +
-    (errors.length ? ' Fix the error(s) above first — `node harness/scripts/validate.mjs` re-checks them any time.' : '')
+    '     schedule should run unattended.\n' +
+    '\n  Any time after that, one command says what is still missing:\n' +
+    '       node harness/scripts/doctor.mjs' +
+    (errors.length ? '\n\n  Fix the error(s) above first — `node harness/scripts/validate.mjs` re-checks them any time.' : '')
   );
 }
 
@@ -518,5 +603,69 @@ async function fromAdapter() {
   process.exit(errors.length ? 1 : 0);
 }
 
-if (process.argv.includes('--from-adapter')) await fromAdapter();
+/**
+ * `--configure-github`: the secrets and the pull-request tickbox, from the
+ * adapter and the local env file that already exist. Only the labs this
+ * installation calls get a secret; a blank key is reported, never uploaded.
+ */
+async function configureGithub() {
+  const adapter = await loadAdapter(path.join(repoRoot, 'project-adapter.yml'));
+  if (!adapter) {
+    console.error('No project-adapter.yml here. Run init first, then --configure-github.');
+    process.exit(1);
+  }
+  const answers = answersFromAdapter(adapter, {
+    providerEnvKey: (name) => getProvider(name)?.envKey ?? `${String(name).toUpperCase()}_API_KEY`,
+    modelProvider: (model) => { try { return resolveProvider(model); } catch { return null; } },
+  });
+  const names = [...requiredProviders(answers).map((p) => p.envKey), ...(answers.notify?.envKey ? [answers.notify.envKey] : [])];
+  const pullRequests = normalizeApprovalClass(answers.approvalClass) !== 'autonomous-merge';
+  const slug = repoSlug(answers.repository || detectGitRemote());
+
+  const gh = ghRunner({ cwd: repoRoot });
+  if (!slug || !ghReady(gh)) {
+    console.log(slug
+      ? 'The GitHub CLI (`gh`) is not installed or not signed in (`gh auth login`), so here are the steps by hand:\n'
+      : 'Could not tell which GitHub repository this is (project.repository in the adapter), so here are the steps by hand:\n');
+    console.log(manualSteps(slug, names, { pullRequests }));
+    process.exit(1);
+  }
+
+  const envPath = path.join(repoRoot, 'harness', '.env.harness.local');
+  const env = fs.existsSync(envPath) ? parseEnv(fs.readFileSync(envPath, 'utf8')) : {};
+  console.log(`Repository: ${slug}`);
+  console.log(`Secrets to set from harness/.env.harness.local: ${names.join(', ')}`);
+  if (pullRequests) console.log('Setting: allow GitHub Actions to create pull requests (your default workflow permission is left as it is).');
+  if (!AUTO_YES) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const go = (await rl.question('Proceed? (y/N): ')).trim().toLowerCase().startsWith('y');
+    rl.close();
+    if (!go) { console.log('Nothing changed.'); process.exit(1); }
+  }
+
+  let failed = false;
+  const secrets = setSecrets(gh, slug, names, env);
+  for (const n of secrets.set) console.log(`   ✅ secret ${n}`);
+  for (const n of secrets.missing) {
+    console.log(`   ❌ ${n} is blank or missing in harness/.env.harness.local — not set. Paste the key in and re-run.`);
+    failed = true;
+  }
+  for (const { name, error } of secrets.failed) {
+    console.log(`   ❌ secret ${name}: ${error}`);
+    failed = true;
+  }
+  if (pullRequests) {
+    const pr = allowPullRequests(gh, slug);
+    if (pr.ok) console.log(`   ✅ pull requests allowed${pr.alreadySet ? ' (already on)' : ', and it reads back as saved'}`);
+    else {
+      console.log(`   ❌ pull-request permission: ${pr.error}`);
+      failed = true;
+    }
+  }
+  process.exit(failed ? 1 : 0);
+}
+
+if (process.argv.includes('--configure-github')) await configureGithub();
+else if (process.argv.includes('--from-adapter')) await fromAdapter();
+else if (process.argv.includes('--detector-only')) await detectorOnly();
 else await main();

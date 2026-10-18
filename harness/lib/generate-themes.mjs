@@ -11,7 +11,7 @@
  * Genericised in one place: the reference implementation's system prompt
  * named "two children's browser games" directly. buildThemesSystemPrompt()
  * takes a `projectDescription` instead — see
- * examples/carrotgame/project-adapter.yml's `project.id` for where that
+ * harness/project-adapter.example.yml's `project.id` for where that
  * text would come from in a real installation, or just write a sentence
  * describing what the reviewed generations changed.
  */

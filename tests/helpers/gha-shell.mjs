@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
-import { load as loadYaml } from 'js-yaml';
+import { load as loadYaml } from '../../harness/vendor/js-yaml.mjs';
 import { renderWorkflowTemplate } from '../../harness/lib/scaffold.mjs';
 
 export const GITHUB_BASH_ARGS = ['--noprofile', '--norc', '-eo', 'pipefail'];

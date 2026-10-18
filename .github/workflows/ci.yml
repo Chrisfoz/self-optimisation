@@ -54,3 +54,33 @@ jobs:
         env:
           REQUIRE_SHELL_TESTS: 'true'
         run: npm test
+
+  # The console's Dockerfile, built and run for real: it must answer /healthz,
+  # and no env file may reach the image even when the build context holds
+  # one (a fake key is planted first to prove .dockerignore keeps it out).
+  console-image:
+    name: Console image builds, answers /healthz, and holds no env file
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Plant a key file where a real checkout might have one
+        run: echo 'ANTHROPIC_API_KEY=sk-ant-must-not-ship' > harness/.env.harness.local
+
+      - name: Build
+        run: docker build -t self-optimisation-console .
+
+      - name: No env file in the image
+        run: |
+          found=$(docker run --rm self-optimisation-console find /app -name '.env*' ! -name '*.example')
+          if [ -n "$found" ]; then echo "::error::env file in the image: $found"; exit 1; fi
+
+      - name: Answers /healthz
+        run: |
+          docker run -d --name console -p 3000:3000 self-optimisation-console
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:3000/healthz && exit 0
+            sleep 1
+          done
+          docker logs console
+          exit 1

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { load as loadYaml } from 'js-yaml';
+import { load as loadYaml } from '../../harness/vendor/js-yaml.mjs';
 import { renderAdapterYaml } from '../../harness/lib/scaffold.mjs';
 
 // `init --shared <sha>`: a project whose workflow calls the shared workflow at
