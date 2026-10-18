@@ -75,8 +75,8 @@ jobs:
           \`uses:\` line of its workflow, and \`harness.shared\` in its adapter, to
           the two above.
 
-          **Copied install** — \`npx self-optimisation-harness upgrade\` from a
-          checkout of this tag, or copy \`harness/\` from it.
+          **Copied install** — check out this tag, then from your project run
+          \`node <path-to-checkout>/bin/self-optimisation.mjs upgrade\`.
           EOF
           )"
           gh release create "v$VERSION" --target "$GITHUB_SHA" --title "v$VERSION" --notes "$notes"
