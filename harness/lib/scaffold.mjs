@@ -1257,6 +1257,16 @@ Every run rebuilds two files from the records it leaves, and commits them to
 
 Both are regenerated, never edited by hand. The next run replaces them.
 
+These are operational measures of process outcomes and resource use.
+A kept or merged change is not a verified successful change, and promotion
+precision is not review accuracy. Independently verified harness KPIs require
+acceptance evidence, follow-up and labels for each review decision; that
+collection and scorecard are not installed by this setup.
+
+The [harness KPI design](https://github.com/Chrisfoz/self-optimisation/tree/main/docs/harness-kpis)
+describes the proposed measurement and strategy-learning loop. It does not
+change this installation's workflow, gates or approval model.
+
 ## Undoing a generation
 
 Every gate is a prediction; this is the correction. From a checkout with

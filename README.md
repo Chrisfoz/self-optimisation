@@ -2,6 +2,8 @@
 
 MIT licensed — see [`LICENSE`](LICENSE).
 
+Browse the [prompt library](docs/prompt-library/README.md) for reusable project prompts, including the ReXGlue Xbox 360 → Windows example.
+
 A portable harness for model-release-driven software improvement: point it at
 a project, and a governed suggest → implement → review → gate → promote loop
 lets each newly released frontier model propose one improvement, gated by
@@ -40,6 +42,13 @@ run, and the Actions runs are in a private repository rather than a public
 example. See [`WORKPLAN.md`](WORKPLAN.md) Tier 6. See
 [`ARCHITECTURE.md`](ARCHITECTURE.md) for the five diagrams, and
 [its status table](ARCHITECTURE.md#status-in-detail) for the per-component view.
+
+## Harness KPIs and practical learning
+
+[Harness KPIs](docs/harness-kpis/README.md) defines how to measure verified
+product improvement, cost, repeated failures, dependency defects and review
+accuracy, then test better harness operating strategies. This is a design and
+implementation plan; live KPI collection and policy adaptation are not enabled.
 
 ---
 
@@ -207,6 +216,7 @@ never intended.
 | The status of every component, how install / run / learn fit together, the bet on model releases, and the repo layout | [`ARCHITECTURE.md`](ARCHITECTURE.md#status-in-detail) |
 | What's actually built here, as a picture — and the reference implementation's real 7-job workflow alongside it | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | The design rules a change to this repository has to keep — the dependency rule, the three-way status agreement, where a new file goes | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| How real outcomes could improve the harness's own context, memory and review strategy | [`docs/harness-kpis/README.md`](docs/harness-kpis/README.md), including [workflow integration](docs/harness-kpis/workflow-integration.md) and [the proposed diagram](ARCHITECTURE.md#proposed-kpi-learning-loop) |
 | The concepts, principles, and incidents this is built from — written to be lifted into any project | [`learning/`](learning/), starting with [`learning/README.md`](learning/README.md) |
 | Copy-paste templates (agent brief, reviewer brief, guard config, edit format) | [`learning/06-starter-kit.md`](learning/06-starter-kit.md) |
 | What's being ported from the reference implementation, what needs genericising, and the proposed repo/CLI structure | [`Portable-Harness-Design.md`](Portable-Harness-Design.md) |

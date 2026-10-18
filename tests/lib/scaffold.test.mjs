@@ -541,6 +541,18 @@ test('renderReadme: names the project, the generated files, and every secret nee
   assert.match(text, /\.claude\/agents\/improve\.md/);
 });
 
+test('renderReadme: distinguishes operational reports from planned verified KPIs in both approval classes', () => {
+  for (const approvalClass of ['human-approval-required', 'autonomous-merge']) {
+    const text = renderReadme(baseAnswers({ approvalClass, generationsDir: 'custom/runs' }));
+    assert.match(text, /custom\/runs\/REPORT\.md/);
+    assert.match(text, /kept or merged change is not a verified successful change/);
+    assert.match(text, /promotion\s+precision is not review accuracy/);
+    assert.match(text, /collection and scorecard are not installed by this setup/);
+    assert.match(text, /https:\/\/github\.com\/Chrisfoz\/self-optimisation\/tree\/main\/docs\/harness-kpis/);
+    assert.match(text, /does not\s+change this installation's workflow, gates or approval model/);
+  }
+});
+
 test('renderReadme: without a notifier configured, says so rather than listing nothing silently', () => {
   const text = renderReadme(baseAnswers({ notify: null }));
   assert.match(text, /ANTHROPIC_API_KEY/); // provider secrets still listed

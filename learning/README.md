@@ -54,6 +54,20 @@ stronger.
 
 ---
 
+## Learning from practical outcomes
+
+The built loop uses external model capabilities and persisted run history.
+[Harness KPIs](../docs/harness-kpis/README.md) proposes a further loop that learns
+which operating strategies work for which tasks: assess real product outcomes,
+compare context, memory or review policies, then adopt supported changes through
+the existing review route. This is a design and implementation plan, not a live
+scorecard or autonomous policy optimiser.
+
+A merged change and passing tests are process evidence. Verified benefit needs
+project acceptance evidence and follow-up. Keep failed attempts, unknown outcomes
+and the rationale for decisions so later experiments can distinguish a useful
+lesson from an unsupported reflection.
+
 ## What's in here
 
 | File | What it gives you |
@@ -66,6 +80,7 @@ stronger.
 | [`06-starter-kit.md`](06-starter-kit.md) | Copy-paste templates: the agent brief, the reviewer's brief, the guard config, the launch checklist. |
 | [`07-whats-actually-new.md`](07-whats-actually-new.md) | Where this sits against the 2026 literature on harnesses and self-improving agents — what's mainstream, what's behind the frontier, what's genuinely unusual, and what the research says we got wrong. |
 | [`blog-post.md`](blog-post.md) | The story in article form, written for a general audience. |
+| [Practical outcome learning](../docs/harness-kpis/README.md) | Proposed KPI definitions, the two-loop diagram, evidence mapping and controlled strategy experiments. |
 | [`diagrams/`](diagrams/) | The pictures, in a form you can drop into your own docs. |
 
 ---
@@ -102,7 +117,9 @@ If you read nothing else:
    published none of them.
 10. **Know what you are not measuring.** Every gate here proves the product is
     *not broken*. Nothing proves it got *better*. That gap is real and unsolved,
-    and pretending otherwise is the most expensive mistake available.
+    and pretending otherwise is the most expensive mistake available. The
+    [KPI design](../docs/harness-kpis/README.md) specifies an evidence-based way
+    to address it; automated assessment is not implemented.
 
 ---
 

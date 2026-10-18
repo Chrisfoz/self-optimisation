@@ -19,7 +19,7 @@ usually wants. Read this page for that. Read `learning/diagrams/` for the
 portable pattern you'd lift into another project. Read
 `Portable-Harness-Design.md` §7 for the prose mapping between the two.
 
-## The five diagram layers, and which one you want
+## Diagram layers, and which one you want
 
 | Layer | Where | Shows |
 |---|---|---|
@@ -28,6 +28,7 @@ portable pattern you'd lift into another project. Read
 | **Portable pattern** | [`learning/diagrams/generic-loop.mmd`](learning/diagrams/generic-loop.mmd), `generic-guardrails.mmd`, `generic-context.mmd` — embedded and viewable in [`learning/02-blueprint.md`](learning/02-blueprint.md) and [`learning/05-guardrails-and-trust.md`](learning/05-guardrails-and-trust.md) | The abstract loop and guardrail layers, project-neutral — what you'd draw for *any* installation, including one that isn't this harness at all |
 | **Reference implementation, concretely** | [`learning/diagrams/worked-example-run.mmd`](learning/diagrams/worked-example-run.mmd), `worked-example-harness.mmd` — both embedded below since GitHub doesn't render a bare `.mmd` file as a picture | The same pattern as it actually runs in the reference implementation (real job names, real check counts, real token costs) — useful for seeing what the abstraction looks like once it's hit a real, live system |
 | **Proposed, not built** | [`learning/diagrams/proposed-curiosity-run.mmd`](learning/diagrams/proposed-curiosity-run.mmd), `proposed-curiosity-memory.mmd`, `proposed-curiosity-authorisation.mmd`, indexed at [`docs/curiosity/README.md`](docs/curiosity/README.md) | The curiosity design's own three diagrams — a second longitudinal pass, four of its ten components built and the rest proposed. Do not read the dashed nodes as documentation of the harness. |
+| **Proposed KPI learning** | [Two-loop design below](#proposed-kpi-learning-loop), with [sidecar source](learning/diagrams/proposed-kpi-learning-loop.mmd) and [measurement specification](docs/harness-kpis/README.md) | Existing product-run records feed proposed outcome assessments, controlled operating-strategy experiments and reviewed policy adoption. Measurement automation is not built. |
 
 ## Historical project snapshot, in one picture
 
@@ -281,6 +282,58 @@ about the file rather than a promise about the process.
 prose, kept in sync by hand — if the two ever disagree, trust whichever was
 edited more recently and fix the other.
 
+## Proposed KPI learning loop
+
+The product loop already records attempts, spend, tests and PR disposition.
+The second loop is a proposed measurement and policy-evaluation design; no live
+KPI scorecard, experiment scheduler or automatic strategy adaptation is installed.
+A merged PR supplies disposition evidence, not proof of product effectiveness.
+Warm-toned dashed nodes and their connecting design flow describe proposed work.
+
+```mermaid
+flowchart TD
+  subgraph product["Product loop: implemented"]
+    investigate["Investigate and propose"]
+    change["Implement and review"]
+    gates["Guard, test and configured approval"]
+    records["Attempt, spend and PR records"]
+    investigate --> change --> gates --> records
+    records -->|"History informs next run"| investigate
+  end
+
+  subgraph learning["Harness learning: proposed"]
+    evidence["Join later outcome evidence"]
+    assess["Independent assessments and KPI report"]
+    experiment["Compare operating strategies"]
+    decision{"Held-out evidence supports adoption?"}
+    adopt["Reviewed and versioned policy change"]
+    preserve["Preserve results and limitations"]
+    evidence --> assess --> experiment --> decision
+    decision -->|"Yes"| adopt
+    decision -->|"No or uncertain"| preserve
+    adopt --> preserve
+  end
+
+  records -.-> evidence
+  adopt -.->|"Bounded trial and observation"| investigate
+  preserve -.->|"Inform future hypotheses"| experiment
+  classDef proposed fill:#F3E3D4,stroke:#9F7960,stroke-dasharray:5 5
+  class evidence,assess,experiment,decision,adopt,preserve proposed
+  style learning stroke:#9F7960,stroke-dasharray:5 5
+```
+
+Candidate strategies may change context selection, memory retrieval or retry
+policy. They cannot change their own assessment labels, weaken gates, expand
+write permissions or bypass the configured approval class. Adoption requires
+held-out evaluation followed by a bounded real-project trial and continued
+observation. This learns operating policy from experience; it does not train
+foundation-model weights.
+
+The current generated operational report describes merged or kept changes and
+resource use. The proposed independently assessed scorecard is distinct. See
+[workflow evidence mapping](docs/harness-kpis/workflow-integration.md) for existing
+artifacts, missing collection points and the workflow changes that depend on them.
+
 ## The reference implementation, concretely
 
 The abstract loop above, as it actually runs in the reference implementation
@@ -431,6 +484,7 @@ trust whichever was edited more recently.
 | Rollback (`harness/lib/rollback.mjs`, `harness/scripts/revert-generation.mjs`) | ✅ Built, tested against a real remote on both merge paths — reverts the shipped merge, records `reverted`, the next run reads it as a failure |
 | The ambition dial (`context.ambition`, [`docs/Ambition-Control.md`](docs/Ambition-Control.md)) and scope-aware ranking | ✅ Built, tested — `focused` / `earned` (default) / `ambitious`, read at run time, per-run override from the Actions tab; the ranking rubric follows the scope; a lone ambitious failure no longer resets the streak |
 | Seats (`harness/lib/seats.mjs`) — cross-family ranker, seat promotion | ✅ Built, tested — the rank seat defaults to another lab's model from the snapshot; a rotating model whose own edits keep being approved and kept can earn the implement seat (`roles.promotion`, off by default); the review seat is never auto-assigned |
+| Harness KPIs and practical strategy learning ([`docs/harness-kpis/`](docs/harness-kpis/)) | Design and templates only. Existing spend, attempt and PR records are inputs; independent outcome assessments, a verified KPI scorecard and controlled policy adaptation are not implemented. |
 | Operational report (`harness/lib/report.mjs` → `<generationsDir>/REPORT.md`) | ✅ Built, tested — the paper's §7 metrics from the records, regenerated every cycle, never hand-edited |
 | Run history page (`harness/lib/run-history.mjs` → `<generationsDir>/index.html`) | ✅ Built, tested — one self-contained page for the owner: every generation newest first, the change in plain words, its outcome and pull request, failed attempts with their reasons, tokens and cache savings, pull requests waiting for review, open escalations. Rebuilt after every run with the record and at the start of each cycle once fates are read back. Every installation gets it; no configuration |
 | Campaign mode (`harness/lib/campaign.mjs`, the workflow's `models` input) | ✅ Built, tested — a generation now, on models named by hand, recorded as `campaign: true` |
@@ -475,6 +529,11 @@ marks in the table above don't read as contradictions:
    file the loop already writes and renders nothing when its input is
    absent, so a repository with no run history yet is unaffected — see "Cold
    start" in [`docs/curiosity/README.md`](docs/curiosity/README.md#cold-start-the-first-runs-must-work-with-none-of-this).
+   Separately, [harness KPIs](docs/harness-kpis/README.md) proposes learning
+   operating strategy from independently assessed real-world outcomes. It
+   compares policies on held-out tasks and bounded project trials; live KPI
+   collection and policy adaptation are not built. Curiosity raises questions;
+   KPI experiments test whether a proposed way of working actually helps.
 
 **The seam between stage 1 and stage 2, now closed:** the generated workflow
 used to always auto-merge an approved change (`harness/lib/promote.mjs`),
