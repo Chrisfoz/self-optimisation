@@ -802,4 +802,9 @@ test('context provider env: secret-shaped names come from secrets, others from v
   assert.equal(contextProviderEnvLines(['GAME_REFERENCE_WEB_SEARCH', 'BRAVE_SEARCH_API_KEY', 'bad name', 'BRAVE_SEARCH_API_KEY']),
     '          GAME_REFERENCE_WEB_SEARCH: ${{ vars.GAME_REFERENCE_WEB_SEARCH }}\n          BRAVE_SEARCH_API_KEY: ${{ secrets.BRAVE_SEARCH_API_KEY }}\n');
   assert.equal(contextProviderEnvLines(), '');
+  // The test runner's rule, not a second one: a PAT, AUTH or DSN is a secret
+  // too, and a name merely containing KEY is not.
+  const lines = contextProviderEnvLines(['NOTION_PAT', 'JIRA_AUTH', 'SENTRY_DSN', 'MONKEY_COUNT']);
+  for (const n of ['NOTION_PAT', 'JIRA_AUTH', 'SENTRY_DSN']) assert.ok(lines.includes(`${n}: \${{ secrets.${n} }}`), n);
+  assert.ok(lines.includes('MONKEY_COUNT: ${{ vars.MONKEY_COUNT }}'));
 });

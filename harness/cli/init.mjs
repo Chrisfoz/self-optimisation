@@ -379,7 +379,8 @@ async function main() {
       .toLowerCase()
       .startsWith('y');
     const runner = await detail(rl, 'CI runner (ubuntu-latest / windows-latest / macos-latest)', { default: 'ubuntu-latest' });
-    const contextStrategy = await detail(rl, 'Context strategy (full-dump / scoped — scoped sends a code map and lets each model choose files; for large projects)', { default: 'full-dump' });
+    // Normalised like the ambition answer: "Scoped " would otherwise run as full-dump with only a warning.
+    const contextStrategy = (await detail(rl, 'Context strategy (full-dump / scoped — scoped sends a code map and lets each model choose files; for large projects)', { default: 'full-dump' })).trim().toLowerCase();
 
     const deploymentStrategy = await detail(rl, 'Deployment verify strategy (url / registry / artifact / none)', { default: 'none' });
     let deploymentUrl, deploymentRegistry, deploymentArtifact;

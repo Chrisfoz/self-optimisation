@@ -34,6 +34,15 @@ import { fenceUntrusted } from './context-pack.mjs';
  * GIT_AUTHOR_NAME (which a suite that commits needs) and KEYBOARD_LAYOUT stay.
  */
 const SECRET_NAME = /(^|_)(KEY|KEYS|TOKEN|TOKENS|SECRET|SECRETS|PASSWORD|PASSWD|PASS|PAT|CREDENTIAL|CREDENTIALS|AUTH|COOKIE|DSN)(_|$)/i;
+/**
+ * Whether a variable name looks like a credential. The one rule for it: the
+ * test runner scrubs by it, and scaffold.mjs uses it to wire a provider's
+ * variable from repository secrets rather than plaintext variables.
+ */
+export function isSecretName(name) {
+  return SECRET_NAME.test(String(name ?? ''));
+}
+
 /** Variables that are only ever about the CI system's own authority. */
 const CI_AUTHORITY = /^(ACTIONS_(ID_TOKEN|RUNTIME)_|GITHUB_TOKEN$|GH_TOKEN$|GH_ENTERPRISE_TOKEN$)/;
 

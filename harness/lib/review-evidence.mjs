@@ -23,9 +23,40 @@ const MAX_INDEXED_FILES = 5000;
 const SECRET_PATH = /(^|\/)(\.env(\.|$)|\.npmrc$|\.pypirc$|\.netrc$|id_(rsa|ed25519|ecdsa)|.*\.(pem|key|p12|pfx|keystore|jks)$)|secret|credential|password/i;
 const TEXT_FILE = /\.(m?[jt]sx?|cjs|py|go|rs|rb|java|kt|cs|php|swift|c|cc|cpp|h|hpp|html?|css|scss|vue|svelte|json|ya?ml|toml|md|sql|sh)$/i;
 
+// Credential-shaped CONTENT, for a secret committed under an innocent name
+// (config/database.yml, src/config.js). A file containing one is never sent
+// to a lab, whatever its path. Shapes, not a scanner: the provider keys this
+// harness itself handles, cloud and VCS tokens, and private-key blocks.
+const SECRET_CONTENT = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(sk-ant-[A-Za-z0-9_-]{20,}|sk-(proj-)?[A-Za-z0-9_-]{32,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|xox[abpr]-[A-Za-z0-9-]{10,}|SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,})\b/;
+
 /** True for a path the reviewer may be shown. */
 export function servable(file) {
   return typeof file === 'string' && !file.startsWith('/') && !file.split('/').includes('..') && !SECRET_PATH.test(file) && TEXT_FILE.test(file);
+}
+
+/** True when the text carries something credential-shaped. */
+export function looksSecret(text) {
+  return SECRET_CONTENT.test(String(text ?? ''));
+}
+
+/**
+ * The file's size when it is a regular file that resolves inside the
+ * repository, else null. A tracked symlink is refused outright, and so is
+ * any path whose real location (a symlinked directory on the way) is
+ * outside the root: either could point the reviewer at /proc/self/environ
+ * or a key file, and send it to a lab with the review.
+ */
+function regularFileSize(realRoot, repoRoot, file) {
+  try {
+    const abs = path.join(repoRoot, file);
+    if (fs.lstatSync(abs).isSymbolicLink()) return null;
+    const real = fs.realpathSync(abs);
+    if (!real.startsWith(realRoot + path.sep)) return null;
+    const stat = fs.statSync(real);
+    return stat.isFile() ? stat.size : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -66,8 +97,12 @@ function excerpt(source, symbols, importLines) {
  *   the dependents are found in.
  */
 export function createReviewEvidence({ repoRoot, files, maxChars = DEFAULT_EVIDENCE_MAX_CHARS }) {
+  let realRoot;
+  try { realRoot = fs.realpathSync(repoRoot); } catch { realRoot = path.resolve(repoRoot); }
+  const inRepo = (f) => regularFileSize(realRoot, repoRoot, f);
   const indexed = files.filter(servable).filter((f) => {
-    try { return fs.statSync(path.join(repoRoot, f)).size <= MAX_FILE_BYTES; } catch { return false; }
+    const size = inRepo(f);
+    return size !== null && size <= MAX_FILE_BYTES;
   }).slice(0, MAX_INDEXED_FILES);
   let graph = null;
   // Every attempt in a run asks again. Cached content is only ever used for
@@ -102,6 +137,7 @@ export function createReviewEvidence({ repoRoot, files, maxChars = DEFAULT_EVIDE
       for (const f of [...byImport, ...bySymbol]) {
         let source;
         try { source = read(f); } catch { continue; }
+        if (looksSecret(source)) continue;
         const importRes = changedFiles.map((c) => new RegExp(`['"(/]${path.posix.basename(c).replace(/\.\w+$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\.\\w+)?['")]`));
         const text = excerpt(source, symbols, byImport.includes(f) ? importRes : []);
         if (!text) continue;
@@ -122,9 +158,10 @@ export function createReviewEvidence({ repoRoot, files, maxChars = DEFAULT_EVIDE
       const blocks = [];
       let used = 0;
       for (const f of paths) {
-        if (!servable(f) || !files.includes(f)) { refused.push(`${f} (not a tracked, readable source file)`); continue; }
+        if (!servable(f) || !files.includes(f) || inRepo(f) === null) { refused.push(`${f} (not a tracked, readable source file)`); continue; }
         let source;
         try { source = fs.readFileSync(path.join(repoRoot, f), 'utf8'); } catch { refused.push(`${f} (unreadable)`); continue; }
+        if (looksSecret(source)) { refused.push(`${f} (contains something credential-shaped)`); continue; }
         if (used + source.length > maxChars) { refused.push(`${f} (over the ${maxChars.toLocaleString('en-US')}-character cap)`); continue; }
         blocks.push(`#### ${f}\n\`\`\`\n${source}\n\`\`\``);
         served.push(f);
