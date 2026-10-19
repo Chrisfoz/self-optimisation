@@ -1164,6 +1164,12 @@ and no harness change could be shown to help.
   provider there runs without its environment. *Done when:* the caller
   workflow can pass declared names through, or this is shown to be
   unnecessary.
+  *Half done, 2026-10-19:* a provider shipped in `harness/plugins/context/`
+  declares the variables it reads (its default export's `env`), the shared
+  workflow wires every shipped provider's names, and a shipped provider
+  loads from the running harness when the project has no copy of its own.
+  Game-reference research works in shared installs again. Still open: a
+  project's **own** provider, which a shared workflow cannot see.
 - [ ] **M10 — Escalation and themes briefs are partly model-written and
   unfenced.** They mix the harness's own instructions with quoted model
   text, so fencing them whole would neutralise the instructions. *Done

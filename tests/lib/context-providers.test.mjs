@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { contextProvidersConfig, runContextProviders, loadContextProvider } from '../../harness/lib/context-providers.mjs';
+import { contextProvidersConfig, runContextProviders, loadContextProvider, shippedContextProviderEnv } from '../../harness/lib/context-providers.mjs';
 
 function project(t, plugins) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'context-providers-'));
@@ -61,4 +61,33 @@ test('providers fail safe: a throw, a hang, nothing returned or a missing export
 test('a provider module outside the project is refused', async (t) => {
   const root = project(t, {});
   await assert.rejects(() => loadContextProvider({ repoRoot: root, module: '../elsewhere.mjs' }), /outside the project/);
+});
+
+// A shared installation: the harness runs from a checkout outside the
+// project, so a project naming a shipped provider has no such file itself.
+test('a shipped provider the project does not hold loads from the running harness', async (t) => {
+  const root = project(t, {});
+  const harnessParent = project(t, {
+    'harness/plugins/context/demo/index.mjs': "export default { name: 'shipped-demo', provide: () => 'from the harness' };",
+    'harness/lib/other.mjs': "export default { name: 'not-a-provider', provide: () => 'no' };",
+  });
+  const plugin = await loadContextProvider({ repoRoot: root, module: 'harness/plugins/context/demo/index.mjs', harnessParent });
+  assert.equal(plugin.name, 'shipped-demo');
+  // Only harness/plugins/context/ falls back; any other harness path does not.
+  await assert.rejects(() => loadContextProvider({ repoRoot: root, module: 'harness/lib/other.mjs', harnessParent }));
+  // ...and a traversal that names the prefix cannot climb out of it.
+  await assert.rejects(() => loadContextProvider({ repoRoot: root, module: 'harness/plugins/context/../../lib/other.mjs', harnessParent }));
+});
+
+test("a project's own copy of a shipped provider wins over the harness's", async (t) => {
+  const root = project(t, { 'harness/plugins/context/demo/index.mjs': "export default { name: 'project-copy', provide: () => 'x' };" });
+  const harnessParent = project(t, { 'harness/plugins/context/demo/index.mjs': "export default { name: 'shipped-demo', provide: () => 'y' };" });
+  const plugin = await loadContextProvider({ repoRoot: root, module: 'harness/plugins/context/demo/index.mjs', harnessParent });
+  assert.equal(plugin.name, 'project-copy');
+});
+
+test('shippedContextProviderEnv lists what the shipped providers declare, game references included', async () => {
+  const names = await shippedContextProviderEnv();
+  for (const n of ['GAME_REFERENCE_LIVE_SEARCH', 'GAME_REFERENCE_WEB_SEARCH', 'GAME_REFERENCE_WEB_QUERY', 'BRAVE_SEARCH_API_KEY']) assert.ok(names.includes(n), n);
+  assert.equal(new Set(names).size, names.length);
 });

@@ -25,9 +25,14 @@
  *     README — and goes in the user prompt, never the system prompt.
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { fenceUntrusted } from './context-pack.mjs';
+
+/** The directory holding the running harness/ — the project root for a copied install, a checkout under RUNNER_TEMP for a shared one. */
+const HARNESS_PARENT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const SHIPPED_PREFIX = 'harness/plugins/context/';
 
 export const DEFAULT_PROVIDER_MAX_CHARS = 12000;
 export const DEFAULT_PROVIDER_TIMEOUT_MS = 30000;
@@ -46,14 +51,41 @@ export function contextProvidersConfig(adapter) {
 }
 
 /** A provider module must live inside the project: a path that leaves it is refused. */
-export async function loadContextProvider({ repoRoot, module: modulePath, importModule = (url) => import(url) }) {
+export async function loadContextProvider({ repoRoot, module: modulePath, importModule = (url) => import(url), harnessParent = HARNESS_PARENT }) {
   const root = path.resolve(repoRoot);
-  const absolute = path.resolve(root, modulePath);
+  let absolute = path.resolve(root, modulePath);
   if (absolute !== root && !absolute.startsWith(root + path.sep)) throw new Error(`context provider ${modulePath} is outside the project`);
+  // A shared installation runs the harness from outside the project, so a
+  // provider that ships with it is not in the project tree. Only that one
+  // falls back to the running harness's own copy, and only inside its
+  // plugins/context directory.
+  if (!fs.existsSync(absolute) && modulePath.replace(/\\/g, '/').startsWith(SHIPPED_PREFIX)) {
+    const shipped = path.resolve(harnessParent, modulePath);
+    if (shipped.startsWith(path.join(harnessParent, ...SHIPPED_PREFIX.split('/')) + path.sep)) absolute = shipped;
+  }
   const mod = await importModule(pathToFileURL(absolute).href);
   const plugin = mod.default ?? mod;
   if (typeof plugin?.provide !== 'function') throw new Error(`context provider ${modulePath} exports no provide() function`);
   return { name: String(plugin.name || modulePath), provide: plugin.provide };
+}
+
+/**
+ * Every environment variable the providers shipped in harness/plugins/context/
+ * declare (their default export's `env`). The shared workflow wires these,
+ * since it cannot see any one project's adapter when it is rendered; a
+ * provider still receives only the ones its adapter entry lists.
+ */
+export async function shippedContextProviderEnv({ harnessParent = HARNESS_PARENT } = {}) {
+  const dir = path.join(harnessParent, ...SHIPPED_PREFIX.split('/'));
+  const names = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort()) {
+    const file = path.join(dir, entry, 'index.mjs');
+    if (!fs.existsSync(file)) continue;
+    const mod = await import(pathToFileURL(file).href);
+    const env = (mod.default ?? mod).env;
+    if (Array.isArray(env)) names.push(...env.filter((n) => typeof n === 'string' && /^[A-Z_][A-Z0-9_]*$/.test(n)));
+  }
+  return [...new Set(names)];
 }
 
 function withTimeout(promise, ms) {

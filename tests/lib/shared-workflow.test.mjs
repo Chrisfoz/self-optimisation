@@ -8,6 +8,7 @@ import { load as loadYaml } from '../../harness/vendor/js-yaml.mjs';
 import '../../harness/providers/index.mjs';
 import { registeredProviders, getProvider } from '../../harness/lib/llm-provider.mjs';
 import { renderSharedWorkflow, SHARED_WORKFLOW_PATH } from '../../harness/lib/scaffold.mjs';
+import { shippedContextProviderEnv } from '../../harness/lib/context-providers.mjs';
 import { findStep, runStep, fakeTool, shellTestOptions } from '../helpers/gha-shell.mjs';
 
 // The workflow every project calls at a pinned commit instead of carrying a
@@ -18,6 +19,7 @@ import { findStep, runStep, fakeTool, shellTestOptions } from '../helpers/gha-sh
 const root = path.join(import.meta.dirname, '../..');
 const template = fs.readFileSync(path.join(root, 'harness/templates/workflow.yml.tmpl'), 'utf8');
 const providers = registeredProviders().map((name) => ({ name, envKey: getProvider(name).envKey }));
+const contextProviderEnv = await shippedContextProviderEnv();
 const committed = fs.readFileSync(path.join(root, SHARED_WORKFLOW_PATH), 'utf8').replace(/\r\n/g, '\n');
 const doc = loadYaml(committed);
 const steps = doc.jobs['self-improve'].steps;
@@ -25,7 +27,7 @@ const index = (idOrName) => steps.findIndex((s) => s.id === idOrName || s.name =
 const opts = shellTestOptions();
 
 test('the committed shared workflow is exactly what the template renders', () => {
-  assert.equal(committed, renderSharedWorkflow(template, { providers }),
+  assert.equal(committed, renderSharedWorkflow(template, { providers, contextProviderEnv }),
     `${SHARED_WORKFLOW_PATH} is out of date. Run: node harness/scripts/render-shared-workflow.mjs`);
 });
 
