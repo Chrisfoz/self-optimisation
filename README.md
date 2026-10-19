@@ -2,8 +2,6 @@
 
 MIT licensed — see [`LICENSE`](LICENSE).
 
-Browse the [prompt library](docs/prompt-library/README.md) for reusable project prompts, including the ReXGlue Xbox 360 → Windows example.
-
 A portable harness for model-release-driven software improvement: point it at
 a project, and a governed suggest → implement → review → gate → promote loop
 lets each newly released frontier model propose one improvement, gated by
