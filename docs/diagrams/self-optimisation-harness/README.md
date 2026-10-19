@@ -15,6 +15,8 @@ This is a presentation-oriented overview of the recursive improvement architectu
 
 **Harness-level recursion — proposed:** independently assessed outcomes and KPI measurements → strategy comparisons and experiments → reviewed, versioned changes to context selection, investigation, model seats, and review policies. This learning system is **not yet automated**: existing attempt records, spend accounting and reporting are foundations, not verified product-benefit or review-accuracy measurements.
 
+**What the memory panel stands for:** the generation records, and what is derived from them for the next prompt: the lessons ledger (anchored to file hashes, candidate until supported, stale when its files change), the escalation ledger and any work order a person accepted, the themes review every N generations, and runtime evidence. A person's merge or close on each pull request is read back into the records every cycle; it is the one verdict from outside the loop. ARCHITECTURE.md's "Inside the loop" diagram shows each of these.
+
 **Visual legend:** solid connections describe the operational loop; dashed connections and warm-toned areas indicate planned harness-learning capability. This diagram is an overview, not an executable workflow or a claim that the proposed feedback loop runs in production.
 
 For executable-stage detail see [ARCHITECTURE.md](../../../ARCHITECTURE.md); for measurement definitions and implementation status see [Harness KPIs](../../harness-kpis/README.md).

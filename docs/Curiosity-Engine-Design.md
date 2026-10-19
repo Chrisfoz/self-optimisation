@@ -117,7 +117,10 @@ flowchart TD
 
   guard -->|"clean"| tests{"full suites<br/>ON the agent branch"}
   guard -->|"touched a frozen path"| held(["left unmerged,<br/>for a human to look at"])
-  tests -->|"all green"| merge["merge, tag, log"]
+  tests -->|"all green"| who{"who merges?<br/>set once, at install"}
+  who -->|"human approval · DEFAULT"| pr["open a pull request —<br/>the owner's call"]
+  who -->|"autonomous merge · OPT-IN"| merge["merge, tag, log"]
+  pr --> rec
   tests -->|"any check red"| held
   merge --> live["verify the LIVE product<br/>actually carries the change"]
 
@@ -862,6 +865,7 @@ flowchart TB
   trev --> unknown["C2 · UNKNOWN<br/>the frontier of the abstraction —<br/>what the principle exposes<br/>and does not answer"]
 
   subgraph t2["TIER 2 · THEMATIC — accumulates, and is meant to decay"]
+    lessons[("lessons.json — decays: stale<br/>when its files change")]
     themes[("themes/review-NNN.json")]
     esc[("escalations/ledger.json")]
     ques[("C3 · curiosity/ledger.json")]
@@ -890,13 +894,14 @@ flowchart TB
     prin[("C7 · the handful of things that keep<br/>turning out to be true.<br/>promotion criterion = the consensus logic,<br/>with the axis rotated from models to time")]
   end
 
+  lessons --> out
   prin -.-> out
   themes -.-> out
   esc -.-> out
   ques -.-> out
   out(["the context pack —<br/>every future generation"])
 
-  note["this is the mechanism principle 21 has been missing:<br/>'constraints never expire, hints should' is currently<br/>an intention, because nothing in the harness decays anything"]
+  note["this is the mechanism principle 21 has been missing:<br/>'constraints never expire, hints should' is currently<br/>an intention for themes and questions. lessons already decay<br/>(stale when their anchored files change); nothing else does yet"]
   note ~~~ t3
 
   legendA["solid = built today<br/>C n = the spec in docs/curiosity/"]
@@ -934,8 +939,9 @@ exists.
 Two consequences worth stating:
 
 **This is the mechanism [principle 21](../learning/01-principles.md#21-constraints-never-expire-hints-should)
-has been missing.** "Constraints never expire, hints should" is currently an
-intention — nothing in the harness decays anything. Promotion-by-re-derivation
+has been missing.** "Constraints never expire, hints should" is still mostly
+an intention: lessons already decay (stale when their anchored files change,
+`harness/lib/lessons.mjs`), but themes and open questions do not yet. Promotion-by-re-derivation
 makes decay automatic and evidence-driven rather than a human periodically
 deciding a hint has gone stale.
 
