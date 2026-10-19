@@ -173,3 +173,32 @@ test('reviewChanges: a truncated result from the provider is a rejection', async
   assert.equal(r.approved, false);
   assert.match(r.problem, /truncated/);
 });
+
+test('parseVerdict: INSUFFICIENT_CONTEXT is well-formed, and never an approval', async () => {
+  const v = parseVerdict(`VERDICT: INSUFFICIENT_CONTEXT\n\nREASON: cannot see the caller in api.js\n\n${REVIEW_END_MARKER}`);
+  assert.equal(v.approved, false);
+  assert.equal(v.verdict, 'insufficient-context');
+  assert.equal(v.problem, null);
+  assert.match(v.reason, /api\.js/);
+});
+
+test('requestedReviewFiles: a request instead of a verdict is read; one beside a verdict is not', async () => {
+  const { requestedReviewFiles } = await import('../../harness/lib/review.mjs');
+  assert.deepEqual(requestedReviewFiles('NEED FILES: src/api.js, `src/db.js`'), ['src/api.js', 'src/db.js']);
+  assert.deepEqual(requestedReviewFiles(`NEED FILES: src/api.js\nVERDICT: APPROVED\n${REVIEW_END_MARKER}`), []);
+  assert.deepEqual(requestedReviewFiles('Looks fine.'), []);
+});
+
+test('reviewChanges: dependents and the file-request offer reach the request only when given', async () => {
+  let seen;
+  const call = async (req) => { seen = req; return { text: 'NEED FILES: src/x.js' }; };
+  const offered = await reviewChanges({ reviewerBrief: 'brief', genLabel: 'g', diff: 'd', dependents: '#### src/y.js — imports a changed file', canRequestFiles: true, call });
+  assert.match(seen.user, /Unchanged files that depend on this change/);
+  assert.match(seen.user, /NEED FILES: <path>/);
+  assert.deepEqual(offered.needFiles, ['src/x.js']);
+  assert.equal(offered.approved, false);
+  const notOffered = await reviewChanges({ reviewerBrief: 'brief', genLabel: 'g', diff: 'd', call });
+  assert.doesNotMatch(seen.user, /Unchanged files that depend|NEED FILES: <path>/);
+  assert.deepEqual(notOffered.needFiles, []);
+  assert.equal(notOffered.problem, 'no VERDICT line');
+});

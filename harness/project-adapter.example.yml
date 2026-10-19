@@ -260,6 +260,21 @@ context:
   #   Runs in any current browser. No specific device or network assumptions.
 
   history_limit: 3       # how many recent generations get full detail in the prompt
+  index_rows: 60         # generations listed one per row; older ones are counted by outcome
+
+  # --- LIVE: how the suggestion stage sees the source.
+  #   full-dump   every editable file, in full, to every suggesting model.
+  #               Right for small projects; the cost grows with the source. (DEFAULT)
+  #   scoped      a code map (files, sizes, symbols, imports) instead; each
+  #               suggesting model names the files it wants, and a second call
+  #               shows it those, up to scoped.max_source_chars. Two calls per
+  #               model, a fraction of the input on a large project. Compare
+  #               the two on your own project with harness/scripts/bench.mjs
+  #               (docs/Replay-Bench.md) before switching a default.
+  strategy: full-dump
+  # scoped:
+  #   max_source_chars: 200000   # per suggesting model, on its second call
+  #   map_max_chars: 60000       # the map itself; files past it are counted, not listed
   scope_required: 2      # clean first-attempt merges in a row before "ambitious" unlocks
 
   # --- LIVE: the ambition dial, read at RUN time by run-generation.mjs.

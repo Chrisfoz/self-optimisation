@@ -25,6 +25,8 @@ import { loadAdapter, contextConfig, memoryConfig } from '../lib/adapter.mjs';
 import { persistRecords } from '../lib/persist-records.mjs';
 import { writeReports } from '../lib/run-history.mjs';
 import { setOutput } from '../lib/gh-output.mjs';
+import { refreshLessons, LESSONS_FILE } from '../lib/lessons.mjs';
+import { execFileSync } from 'node:child_process';
 
 function parseArgs(argv) {
   const out = { remote: 'origin' };
@@ -69,8 +71,20 @@ try {
   console.error(`⚠️  Could not rebuild the run history: ${err.message}. Persisting the record without it.`);
 }
 
+// The lessons ledger (harness/lib/lessons.mjs), re-derived from every record
+// including this one. Like the reports, a failure here never costs the record.
+let lessonsFile = [];
+try {
+  const commit = (() => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); } catch { return null; } })();
+  const ledger = refreshLessons({ repoRoot, generationsDir, commit, statusRef: args.remote ? `${args.remote}/${base}` : base });
+  if (ledger.lessons.length) lessonsFile = [`${generationsDir}/${LESSONS_FILE}`];
+} catch (err) {
+  console.error(`⚠️  Could not update the lessons: ${err.message}. Persisting the record without them.`);
+}
+
 const roots = [...new Set([
   genDir,
+  ...lessonsFile,
   ...reportFiles,
   memory.ledgerPath || 'docs/escalations/ledger.json',
   memory.themesDir || 'docs/themes',

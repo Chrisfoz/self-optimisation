@@ -362,12 +362,23 @@ export function contextConfig(adapter) {
     purposes: adapter?.context?.purposes ?? {},
     platformNotes: adapter?.context?.platform_notes ?? null,
     historyLimit: Number.isFinite(adapter?.context?.history_limit) ? adapter.context.history_limit : null,
+    // Rows of the generation index shown one per generation; older ones are
+    // summarised as counts. Null: context-pack.mjs's default.
+    indexRows: Number.isFinite(adapter?.context?.index_rows) ? adapter.context.index_rows : null,
     scopeRequired: Number.isFinite(adapter?.context?.scope_required) ? adapter.context.scope_required : null,
     // The ambition dial — see normalizeAmbition() above. Read at RUN time
     // by run-generation.mjs (unlike approval_class, which is baked into the
     // workflow), because it changes what a run attempts, not what a run is
     // permitted to do: the gates are the same at every setting.
     ambition: normalizeAmbition(adapter?.context?.ambition),
+    // How the suggestion stage sees the source. 'full-dump' (the default, and
+    // where any unrecognised value lands) sends every editable file in full.
+    // 'scoped' sends a code map instead; each suggesting model chooses which
+    // files to read in full, up to scoped.max_source_chars (code-map.mjs,
+    // orchestrator.mjs's suggest()).
+    strategy: adapter?.context?.strategy === 'scoped' ? 'scoped' : 'full-dump',
+    scopedMaxSourceChars: Number.isFinite(adapter?.context?.scoped?.max_source_chars) ? adapter.context.scoped.max_source_chars : 200000,
+    mapMaxChars: Number.isFinite(adapter?.context?.scoped?.map_max_chars) ? adapter.context.scoped.map_max_chars : null,
   };
 }
 

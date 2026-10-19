@@ -379,10 +379,7 @@ async function main() {
       .toLowerCase()
       .startsWith('y');
     const runner = await detail(rl, 'CI runner (ubuntu-latest / windows-latest / macos-latest)', { default: 'ubuntu-latest' });
-    // context.strategy is not asked: nothing in the harness reads it yet, and a
-    // question whose answer changes nothing is a question in the way. The
-    // adapter still records full-dump, which is what every run does.
-    const contextStrategy = 'full-dump';
+    const contextStrategy = await detail(rl, 'Context strategy (full-dump / scoped — scoped sends a code map and lets each model choose files; for large projects)', { default: 'full-dump' });
 
     const deploymentStrategy = await detail(rl, 'Deployment verify strategy (url / registry / artifact / none)', { default: 'none' });
     let deploymentUrl, deploymentRegistry, deploymentArtifact;

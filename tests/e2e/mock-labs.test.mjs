@@ -229,6 +229,14 @@ test('the chain, three generations, every lab, with the curiosity mechanisms cha
   assert.ok(fs.existsSync(path.join(dir, 'docs/generations/gen-001/comparison.json')), 'evaluator before/after compared');
   assert.doesNotMatch(read('index.html'), /Improved by/, 'the code change is on the agent branch, not main');
 
+  // Lessons: derived from the record, anchored to index.html as it was when
+  // the attempts were made — which is main's copy — so they are current here.
+  const lessons1 = json('docs/generations/lessons.json').lessons;
+  const failures1 = lessons1.filter((l) => l.kind === 'failure');
+  assert.equal(failures1.length, 2, 'one per failed attempt');
+  assert.ok(failures1.every((l) => l.status === 'candidate' && Object.keys(l.files).join() === 'index.html'), JSON.stringify(failures1, null, 1));
+  assert.equal(lessons1.find((l) => l.kind === 'success').status, 'stale', 'the shipped change is not on main yet');
+
   const ledger1 = json('docs/escalations/ledger.json');
   const esc1 = ledger1.escalations.find((e) => e.id === 'esc-001');
   assert.equal(esc1.status, 'flagged');
@@ -259,6 +267,8 @@ test('the chain, three generations, every lab, with the curiosity mechanisms cha
   assert.ok(p2.includes('What the last runs actually observed at runtime'), 'runtime evidence in the prompt');
   assert.ok(p2.includes('ESCALATION REVIEW:'), 'the resurfaced entry is put to the models');
   assert.ok(p2.includes('Most recent generations, in full detail'), 'history in the prompt');
+  assert.ok(p2.includes('Lessons from earlier generations'), 'lessons in the prompt');
+  assert.ok(p2.includes("failed the project's tests"), 'the failed attempt became a lesson');
   assert.ok(!p2.includes('THIS GENERATION HAS BEEN ASSIGNED A DECIDED CHANGE'), 'a focused run takes no work order');
   discardBranch('002');
   const ledger2 = json('docs/escalations/ledger.json');

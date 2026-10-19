@@ -54,6 +54,10 @@ validation exist.
 
 ## Start here
 
+*2026-10-17:* **Tier 9 is built; M8 is next.** Run the replay bench on a
+project large enough to need `scoped`, before any default changes. That run
+is also the first real data for KPI4.
+
 **→ A person's verdict, then 2.1a.** The generated workflow has now run real
 generations on GitHub Actions (Tier 6, 2026-09-11,
 [`docs/campaigns/`](docs/campaigns/)). What has not happened is a human
@@ -435,7 +439,11 @@ gaps are solved by better documentation — they are missing code.
   `campaign: true` and the index and report say so. Principle 1 is about
   the product loop; evaluating the harness needs a faster clock.
 
-- [ ] **2.2 — Implement `context.strategy: scoped`.**
+- [x] **2.2 — Implement `context.strategy: scoped`.** *2026-10-17:* built
+  (Tier 9, M4). It uses the two-pass shape over a lexical code map
+  (`harness/lib/code-map.mjs`), and `init` no longer warns. The half of
+  *done when* that is still open, a run on a large real project, is M8.
+  The original entry follows.
   It has no implementation at all; `harness/cli/init.mjs`'s `scoped` warning tells the user to
   their face when they pick it. `context-pack.mjs` sends every editable file in
   full because carrotgame's editable surface is ~7 files. §8.2 names the two
@@ -1102,6 +1110,81 @@ for but cannot take.
   README has a deploy button for the console, and a template repository
   holds the generated workflow, a filled-in example adapter and the brief
   templates (D10's owner half).
+
+## Tier 9 — memory, context and evidence (2026-10-17)
+
+From a review of the repository against current research on memory and
+context management in self-improving harnesses (Reflexion, Agentic Context
+Engineering, the Darwin Gödel Machine, Recursive Language Models, Aider's
+repository map, SWE-agent's history processors). The review found that the
+governance spine was sound. The context the models saw grew with the project,
+and no harness change could be shown to help.
+
+- [x] **M1 — `main` green.** The shared workflow had not been re-rendered after
+  #40. *Done when:* `tests/lib/shared-workflow.test.mjs` passes. **True.**
+- [x] **M2 — Records a replay can use.** `attempts.json` carries `provenance`
+  (base commit, adapter and brief hashes, context strategy, suggestion-prompt
+  hash) and `contextSize`, which used to be accepted and never passed.
+  `harness/lib/assemble-context.mjs` builds the context once for the loop, the
+  probe and the bench. `context.history_limit` is honoured, where it used to
+  be read and ignored. The probe measures the prompt from the adapter, so
+  `checkContextFit()` runs in the generated workflow. **True.**
+- [x] **M3 — A replay bench.** `harness/scripts/bench.mjs`
+  ([docs/Replay-Bench.md](docs/Replay-Bench.md)): pinned commits, the same
+  models and budget, held-out oracle commands, Wilson intervals, and an
+  adoption rule that never calls an overlap "better". Variants cannot touch
+  the constitution, the gates, the review seat or the budget. Covered by a
+  mock-lab end-to-end test across three variants. **True.** This is the
+  groundwork for KPI4, not KPI4: no real cohort has been run.
+- [x] **M4 — `context.strategy: scoped`.** See 2.2.
+- [x] **M5 — Review evidence.** The reviewer sees unchanged files that import a
+  changed file or mention a touched definition, may ask for files once
+  (`NEED FILES:`, tracked source only, secret-shaped paths refused), and may
+  answer `INSUFFICIENT_CONTEXT`, which never ships. **True.**
+- [x] **M6 — Lessons, not a growing log.** `<generationsDir>/lessons.json`
+  (`harness/lib/lessons.mjs`) is derived from the records and rebuildable. It
+  is deduplicated, and each lesson is anchored to the hashes of its files and
+  their imports. A lesson stays a candidate until a second generation or a
+  person's verdict supports it, goes stale when its files change, and is
+  superseded only by a person. The generation index counts generations older
+  than `context.index_rows` instead of listing them. Records, history,
+  runtime observations and lessons are fenced as data in the prompt.
+  **True.**
+- [x] **M7 — Project-specific code out of the core.** Context providers
+  (`harness/lib/context-providers.mjs`) are a generic socket. Game-reference
+  research is a plugin under `harness/plugins/context/`. A provider sees only
+  the environment variables it declares, never a lab key. **True.**
+- [ ] **M8 — Measure M4–M6 on a real repository.** *Done when:* a bench report
+  on Hospital of the Future or NetworkinAI compares `full-dump` and `scoped`.
+  It needs at least three planted or replayed tasks and three trials each, and
+  the write-up states the decision and its limits. Until then, `scoped` is
+  built but unproven, and `full-dump` stays the default.
+- [ ] **M9 — Context-provider environment in shared installs.** The shared
+  workflow cannot know a project's provider variables at render time, so a
+  provider there runs without its environment. *Done when:* the caller
+  workflow can pass declared names through, or this is shown to be
+  unnecessary.
+- [ ] **M10 — Escalation and themes briefs are partly model-written and
+  unfenced.** They mix the harness's own instructions with quoted model
+  text, so fencing them whole would neutralise the instructions. *Done
+  when:* the quoted fields are fenced on their own.
+
+**Deferred on purpose.** Each item has the evidence that would justify
+building it:
+
+- **State preservation before compaction.** Every stage is one stateless
+  call, so nothing is compacted today. Build it with the first multi-turn,
+  tool-using stage (docs/Tool-Use-Design.md phases 2–5), not before.
+- **Recursive decomposition (RLM-style).** Build it only if M8 shows that
+  tasks still exceed the window under `scoped` with a reasonable
+  `max_source_chars`.
+- **An archive of alternative policies (DGM-style).** Build it once the bench
+  has a task set worth keeping and at least two strategies worth comparing
+  repeatedly.
+- **Semantic (embedding) retrieval.** Build it only if the bench shows the
+  lexical map and import graph miss relevant files often enough to cost
+  verified successes. It would also be the first dependency outside the two
+  named files.
 
 ## Housekeeping, whenever a nearby file is open
 

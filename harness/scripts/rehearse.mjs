@@ -261,7 +261,7 @@ function persistLocally() {
   const ctx = contextConfig(adapter);
   // REPORT.md and the run history are rebuilt by persist-records.mjs and
   // committed with the record, so they block the checkout the same way.
-  const roots = [...new Set([genDirRel, `${generationsDir}/REPORT.md`, `${generationsDir}/index.html`, memory.ledgerPath || 'docs/escalations/ledger.json', memory.themesDir || 'docs/themes', ctx.runtimeEvidenceDir || 'docs/runtime'])];
+  const roots = [...new Set([genDirRel, `${generationsDir}/REPORT.md`, `${generationsDir}/index.html`, `${generationsDir}/lessons.json`, memory.ledgerPath || 'docs/escalations/ledger.json', memory.themesDir || 'docs/themes', ctx.runtimeEvidenceDir || 'docs/runtime'])];
   try { git('clean', '-fdq', '--', ...roots); } catch { /* nothing untracked */ }
   for (const root of roots) {
     try { git('checkout', '-q', '--', root); } catch { /* not tracked on this branch */ }

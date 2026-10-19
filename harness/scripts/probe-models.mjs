@@ -14,24 +14,23 @@
  *
  * Logs go to stderr; the file is the only output that matters to callers.
  *
- * Context-window fit checking (`checkContextFit()` in probe-models.mjs) is
- * OPTIONAL here and deliberately not wired to a context-size estimator by
- * default: the reference implementation's estimateContextSize() lives in
- * context-pack.mjs, which hasn't been ported into this harness yet (see
- * Portable-Harness-Design.md §10 — it's real work, not a rename, because
- * carrotgame's version is tightly coupled to project-specific context
- * blocks). Pass `--estimated-tokens <n>` or set CONTEXT_ESTIMATE_TOKENS once
- * a project has its own estimator; without it, every candidate is treated
- * as "no evidence it won't fit" — the same conservative default
- * checkContextFit() already applies to any provider that reports no context
- * window at all.
+ * Context-window fit checking (`checkContextFit()` in probe-models.mjs): the
+ * estimate is `--estimated-tokens <n>` or CONTEXT_ESTIMATE_TOKENS when given,
+ * and otherwise measured from the project's own adapter — the same context
+ * run-generation.mjs will send (harness/lib/assemble-context.mjs), plus the
+ * agent brief and any renders. A candidate is only dropped when its lab
+ * reports a context window and the estimate does not fit it; an unknown
+ * window is "no evidence it won't fit", never a reason to drop.
  */
 
 import fs from 'fs';
 import '../providers/index.mjs';
 import { callModel } from '../lib/llm-provider.mjs';
 import { probeCandidates, probePinnedSeats, pinnedSeats, PROBE_SYSTEM, PROBE_USER } from '../lib/probe-models.mjs';
-import { loadAdapter, rolesConfig, notifyConfig } from '../lib/adapter.mjs';
+import path from 'path';
+import { loadAdapter, rolesConfig, notifyConfig, briefPaths } from '../lib/adapter.mjs';
+import { assembleContext, measureContext } from '../lib/assemble-context.mjs';
+import { loadVisualEvidence } from '../lib/evaluators.mjs';
 
 function parseArgs(argv) {
   const out = {};
@@ -76,7 +75,25 @@ const prober = ({ model, provider }) =>
     timeoutMs: 60000,
   });
 
-const estimatedTokens = Number(args.estimatedTokens ?? process.env.CONTEXT_ESTIMATE_TOKENS ?? NaN);
+const adapter = await loadAdapter(process.env.PROJECT_ADAPTER_PATH || undefined).catch(() => null);
+
+// Measured from the adapter when nobody supplied a number, so the fit check
+// actually runs in the generated workflow instead of waiting for a variable
+// nothing set. A failure to measure costs the check, never the probe.
+let estimatedTokens = Number(args.estimatedTokens ?? process.env.CONTEXT_ESTIMATE_TOKENS ?? NaN);
+if (!Number.isFinite(estimatedTokens) && adapter) {
+  try {
+    const repoRoot = process.cwd();
+    const assembled = assembleContext({ repoRoot, adapter });
+    const briefPath = briefPaths(adapter).agentBriefPath;
+    const agentBrief = briefPath && fs.existsSync(path.join(repoRoot, briefPath)) ? fs.readFileSync(path.join(repoRoot, briefPath), 'utf8') : '';
+    const images = loadVisualEvidence({ repoRoot, generationsDir: assembled.generationsDir }).images.length;
+    estimatedTokens = measureContext({ context: assembled.context, agentBrief, imageCount: images, scoped: assembled.scoped }).estimatedTokens;
+    console.error(`📏 Suggestion prompt estimated at ~${estimatedTokens.toLocaleString()} tokens (from project-adapter.yml)`);
+  } catch (err) {
+    console.error(`⚠️  Could not estimate the prompt size (${err.message}); no candidate is dropped for its context window.`);
+  }
+}
 
 const { survivors, dropped } = await probeCandidates(
   candidates,
@@ -92,7 +109,6 @@ const { survivors, dropped } = await probeCandidates(
 // no adapter to read, as in a bare test of this script.
 let pinnedBlocked = [];
 if (survivors.length) {
-  const adapter = await loadAdapter(process.env.PROJECT_ADAPTER_PATH || undefined).catch(() => null);
   if (adapter) {
     const seats = pinnedSeats({ roles: rolesConfig(adapter), notify: adapter.notify ? notifyConfig(adapter) : null, env: process.env });
     pinnedBlocked = await probePinnedSeats(seats, prober, (msg) => console.error(msg));

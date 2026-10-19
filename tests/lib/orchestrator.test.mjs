@@ -1086,3 +1086,135 @@ test('runGeneration: when the suggester\'s own edits ship, the summary is its CH
   assert.equal(result.selfImplemented, true);
   assert.equal(result.summary, 'add a pause button to index.html');
 });
+
+test('runGeneration: every record carries the context sizes and the provenance a replay needs', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') throw new Error('404 model not found');
+    throw new Error('unexpected call: ' + model);
+  };
+
+  const result = await runGeneration(baseConfig(repoRoot, { provenance: { baseCommit: 'abc123', contextStrategy: 'full-dump' } }), { call });
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.equal(record.provenance.baseCommit, 'abc123');
+  assert.equal(record.provenance.contextStrategy, 'full-dump');
+  assert.match(record.provenance.suggestPromptSha256, /^[0-9a-f]{64}$/);
+  assert.equal(record.contextSize.sourcesChars, 'SOURCE BUNDLE'.length);
+  assert.ok(record.contextSize.estimatedTokens > 0);
+
+  // The same inputs hash the same; a different source does not.
+  const again = tempRepo();
+  t.after(() => fs.rmSync(again, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(again, 'index.html'), 'original content');
+  const second = await runGeneration(baseConfig(again, { context: { manifest: 'MANIFEST', testIndex: null, sources: 'OTHER SOURCE' } }), { call });
+  const other = JSON.parse(fs.readFileSync(path.join(again, second.attemptRecordPath), 'utf8'));
+  assert.notEqual(other.provenance.suggestPromptSha256, record.provenance.suggestPromptSha256);
+});
+
+test('runGeneration, scoped: each suggester sees the map, names its files, and is shown only those', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  fs.writeFileSync(path.join(repoRoot, 'other.js'), 'OTHER FILE BODY');
+  const sourcesFor = (files) => files.map((f) => `## ${f}\n${fs.readFileSync(path.join(repoRoot, f), 'utf8')}`).join('\n');
+
+  const suggestUsers = [];
+  const call = async ({ model, user }) => {
+    if (model === 'suggest-model') {
+      suggestUsers.push(user);
+      return suggestUsers.length === 1
+        ? { text: 'READ FILES: index.html', truncated: false, provider: 'anthropic', sentImages: 0 }
+        : { text: VALID_SUGGESTION.replace('add a pause button to index.html', 'add a pause button'), truncated: false, provider: 'anthropic', sentImages: 0 };
+    }
+    if (model === 'implement-model') {
+      assert.match(user, /## index\.html/);
+      assert.doesNotMatch(user, /OTHER FILE BODY/);
+      return { text: VALID_IMPLEMENTATION, truncated: false };
+    }
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: good.\n\nEND OF REVIEW' };
+    throw new Error('unexpected call: ' + model);
+  };
+
+  const result = await runGeneration(baseConfig(repoRoot, {
+    editableFiles: ['index.html', 'other.js'],
+    allowlist: compileAllowlist({ allowedPaths: ['index.html', 'other.js'] }),
+    context: { manifest: 'MANIFEST', testIndex: null, sources: null, codeMap: 'index.html (16 chars)\nother.js (15 chars)' },
+    sourcesFor,
+    scoped: { maxSourceChars: 1000 },
+  }), { call });
+
+  assert.equal(result.outcome, 'approved');
+  assert.equal(suggestUsers.length, 2);
+  assert.match(suggestUsers[0], /# Code map/);
+  assert.match(suggestUsers[0], /READ FILES:/);
+  assert.doesNotMatch(suggestUsers[0], /original content/);
+  assert.match(suggestUsers[1], /original content/);
+  assert.doesNotMatch(suggestUsers[1], /OTHER FILE BODY/);
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.deepEqual(record.fanOut.read, { 'suggest-model': ['index.html'] });
+});
+
+test('runGeneration, scoped: a suggester that names no file has failed the stage, not crashed the run', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  const call = async ({ model }) => {
+    if (model === 'suggest-model') return { text: 'I would like to see everything.', truncated: false, provider: 'anthropic', sentImages: 0 };
+    throw new Error('unexpected call: ' + model);
+  };
+  const result = await runGeneration(baseConfig(repoRoot, {
+    context: { manifest: 'MANIFEST', testIndex: null, sources: null, codeMap: 'index.html' },
+    sourcesFor: () => '',
+    scoped: { maxSourceChars: 1000 },
+  }), { call });
+  assert.equal(result.outcome, 'no-proposal');
+  assert.match(result.summary, /Named no editable file/);
+});
+
+test('selectFiles keeps the model\'s order and stops at the character cap', async () => {
+  const { selectFiles } = await import('../../harness/lib/orchestrator.mjs');
+  const sizes = { 'a.js': 600, 'b.js': 600, 'c.js': 100 };
+  const out = selectFiles('READ FILES: b.js, a.js, c.js', ['a.js', 'b.js', 'c.js'], { maxSourceChars: 800, sizeOf: (f) => sizes[f] });
+  assert.deepEqual(out.selected, ['b.js', 'c.js']);
+  assert.deepEqual(out.dropped, ['a.js']);
+  // The first file always fits, however large: a cap below one file must not leave nothing to read.
+  assert.deepEqual(selectFiles('READ FILES: a.js', ['a.js'], { maxSourceChars: 10, sizeOf: (f) => sizes[f] }).selected, ['a.js']);
+});
+
+test('runGeneration: the reviewer is shown dependents, may ask for a file once, and an insufficient-context verdict never ships', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+
+  const asked = [];
+  const reviewEvidence = {
+    dependents: (changed) => { asked.push(['dependents', changed]); return '#### app.js — imports a changed file'; },
+    read: (paths) => { asked.push(['read', paths]); return { text: '#### app.js\n```\nAPP BODY\n```', served: paths, refused: [] }; },
+  };
+  const reviewUsers = [];
+  const call = async ({ model, user }) => {
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', sentImages: 0 };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false };
+    if (model === 'review-model') {
+      reviewUsers.push(user);
+      if (reviewUsers.length === 1) return { text: 'NEED FILES: app.js' };
+      return { text: 'VERDICT: INSUFFICIENT_CONTEXT\n\nREASON: cannot tell how app.js renders it\n\nEND OF REVIEW' };
+    }
+    throw new Error('unexpected call: ' + model);
+  };
+
+  const result = await runGeneration(baseConfig(repoRoot, { maxAttempts: 1, reviewEvidence }), { call });
+  assert.equal(result.outcome, 'abandoned');
+  assert.equal(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), 'original content');
+  assert.match(reviewUsers[0], /imports a changed file/);
+  assert.match(reviewUsers[0], /NEED FILES: <path>/);
+  assert.match(reviewUsers[1], /APP BODY/);
+  assert.doesNotMatch(reviewUsers[1], /NEED FILES: <path>/);
+  assert.deepEqual(asked, [['dependents', ['index.html']], ['read', ['app.js']]]);
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.equal(record.attempts[0].outcome, 'review-insufficient-context');
+  assert.deepEqual(record.attempts[0].reviewEvidence, { dependents: true, requested: ['app.js'], refused: [] });
+});

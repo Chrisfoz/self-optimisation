@@ -851,3 +851,33 @@ See [the proposed architecture](ARCHITECTURE.md#proposed-kpi-learning-loop),
 [workflow integration](docs/harness-kpis/workflow-integration.md) and the open
 KPI1-KPI5 workstream in [WORKPLAN.md](WORKPLAN.md). New policy adoption retains
 the existing tests, permission boundaries and configured approval class.
+
+## Memory and context revision — 17 October 2026
+
+The §8.2 gap is closed in code: `context.strategy: scoped` sends a lexical code
+map (`harness/lib/code-map.mjs`: files, sizes, symbols, relative imports and
+their reverse edges) in place of the full source. Each suggesting model then
+names the files it wants, and a second call shows only those, up to a
+character ceiling. It has not yet been run on a real repository above the
+full-dump threshold. `harness/scripts/bench.mjs` ([Replay
+bench](docs/Replay-Bench.md)) exists to make that comparison against
+full-dump before any default changes.
+
+Also added:
+
+- **Replay provenance in every record:** base commit, adapter and brief
+  hashes, context strategy, a suggestion-prompt hash and per-block context
+  sizes.
+- **Review evidence:** the reviewer is shown unchanged dependents of a
+  change, may ask for other files once (read-only, no secret-shaped paths),
+  and may answer `INSUFFICIENT_CONTEXT`, which never ships.
+- **Lessons:** records derived from the generation records, anchored to file
+  hashes, candidate until independently supported, stale when their files
+  change.
+- **A capped generation index.**
+- **Fencing of model-written memory.**
+- **A generic context-provider socket**, which the game-reference research
+  now uses as a plugin.
+
+Deferred, each with the evidence that would justify building it, in
+[WORKPLAN.md](WORKPLAN.md) Tier 9.

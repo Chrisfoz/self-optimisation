@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {loadGameReferences,discoverGameReferences,formatDiscoveredReferences} from '../harness/lib/game-references.mjs';
+import {loadGameReferences,discoverGameReferences,formatDiscoveredReferences} from '../../harness/plugins/context/game-references/references.mjs';
 test('disabled project adds no reference context',()=>assert.equal(loadGameReferences({enabled:false}), ''));
 test('explicit game project loads only bounded local evidence',()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'game-research-'));
@@ -37,7 +37,7 @@ test('network failure is non-fatal and injects no unverified candidates',async()
 });
 
 test('web discovery enforces opt in, credentials, bounded results and failure fallback',async()=>{
- const {discoverWebGameReferences,formatWebGameReferences}=await import('../harness/lib/game-references.mjs');
+ const {discoverWebGameReferences,formatWebGameReferences}=await import('../../harness/plugins/context/game-references/references.mjs');
  assert.equal((await discoverWebGameReferences({enabled:false})).status,'disabled');
  assert.equal((await discoverWebGameReferences({enabled:true,query:'game'})).status,'missing-key');
  const result=await discoverWebGameReferences({enabled:true,query:'driving mechanics',apiKey:'mock',limit:8,
@@ -47,4 +47,16 @@ test('web discovery enforces opt in, credentials, bounded results and failure fa
  assert.match(formatWebGameReferences(result),/Untrusted live web/);
  const failed=await discoverWebGameReferences({enabled:true,query:'driving',apiKey:'mock',fetchImpl:async()=>{throw Error('offline')}});
  assert.equal(failed.status,'unavailable');
+});
+
+test('the game-references provider returns the local notes and runs no search unless switched on', async () => {
+ const plugin=(await import('../../harness/plugins/context/game-references/index.mjs')).default;
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'game-provider-'));
+ try {
+  fs.mkdirSync(path.join(root,'docs'));fs.writeFileSync(path.join(root,'docs/GAME-REFERENCE-PILOT.md'),'Reference: a traffic game');
+  const out=await plugin.provide({repoRoot:root,config:{},env:{}});
+  assert.match(out,/Reference: a traffic game/);
+  assert.doesNotMatch(out,/GitHub reference candidates|live web/);
+  assert.equal(await plugin.provide({repoRoot:fs.mkdtempSync(path.join(os.tmpdir(),'game-provider-empty-')),config:{},env:{}}),null);
+ } finally {fs.rmSync(root,{recursive:true,force:true});}
 });

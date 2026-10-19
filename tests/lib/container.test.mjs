@@ -5,7 +5,8 @@ import path from 'node:path';
 import { load as loadYaml } from '../../harness/vendor/js-yaml.mjs';
 
 const REPO_ROOT = path.join(import.meta.dirname, '../..');
-const read = (p) => fs.readFileSync(path.join(REPO_ROOT, p), 'utf8');
+// CRLF-normalised: a Windows checkout with core.autocrlf writes these with \r\n.
+const read = (p) => fs.readFileSync(path.join(REPO_ROOT, p), 'utf8').replace(/\r\n/g, '\n');
 
 // The image is built and run for real in CI (the console-image job). These
 // are the rules that make it safe, checked on every machine, Docker or not.

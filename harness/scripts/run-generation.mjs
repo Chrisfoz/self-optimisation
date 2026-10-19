@@ -36,22 +36,17 @@ import { execFileSync } from 'node:child_process';
 import { nextGenerationNumber, runIdentity } from '../lib/generation-id.mjs';
 import '../providers/index.mjs';
 import { setOutput, oneLine } from '../lib/gh-output.mjs';
-import { loadAdapter, constitutionAllowlist, guardConfig, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig, goalConfig, visualCaptureConfig, evaluationConfig, snapshotPath as adapterSnapshotPath } from '../lib/adapter.mjs';
+import { loadAdapter, memoryConfig, briefPaths, rolesConfig, contextConfig, budgetConfig, goalConfig, visualCaptureConfig, evaluationConfig, snapshotPath as adapterSnapshotPath } from '../lib/adapter.mjs';
 import { getProvider, registeredProviders, pinModelProvider } from '../lib/llm-provider.mjs';
 import { runProjectTests, scrubEnv } from '../lib/test-runner.mjs';
 import { pickCrossFamilyRanker, describeSeats, promotionCandidate } from '../lib/seats.mjs';
 import { loadRecords } from '../lib/report.mjs';
-import { compileAllowlist, expandEditablePaths } from '../lib/edit-format.mjs';
-import { globToRegExp } from '../lib/glob.mjs';
-import {
-  buildSourceBundle, buildRepoManifest, buildTestIndex, buildArchitectureNotes,
-  buildGenerationIndex, buildGenerationHistory, buildRuntimeEvidence, recommendScope, fenceUntrusted,
-} from '../lib/context-pack.mjs';
-import { loadLatestThemesReview, buildThemesBrief, buildOpenQuestionsBrief } from '../lib/themes.mjs';
-import { buildMetricsBrief, loadLatestMetrics, loadVisualEvidence, loadEvaluatorPlugin, createVisualCapture } from '../lib/evaluators.mjs';
-import { buildEscalationBrief, loadLedger } from '../lib/escalations.mjs';
+import { recommendScope } from '../lib/context-pack.mjs';
+import { assembleContext, measureContext, headCommit, fileHash, sha256 } from '../lib/assemble-context.mjs';
+import { loadVisualEvidence, loadEvaluatorPlugin, createVisualCapture } from '../lib/evaluators.mjs';
+import { createReviewEvidence } from '../lib/review-evidence.mjs';
 import { runGeneration } from '../lib/orchestrator.mjs';
-import { loadGameReferences, discoverGameReferences, formatDiscoveredReferences, discoverWebGameReferences, formatWebGameReferences } from '../lib/game-references.mjs';
+import { contextProvidersConfig, runContextProviders } from '../lib/context-providers.mjs';
 
 function parseArgs(argv) {
   const out = {};
@@ -122,13 +117,11 @@ if (suggestModels.length === 0) {
 }
 
 // --- config, adapter first, env overrides where the workflow already sets them ---
-const { allowedPaths: editablePaths, createOnlyPaths } = constitutionAllowlist(adapter);
-const allowlist = compileAllowlist({ allowedPaths: editablePaths, createOnlyPaths });
-// The allowlist matches patterns; the prompt needs real files. Expand once,
-// here, so every downstream use (source bundle, snapshots, the record of what
-// was editable) sees the same concrete list the model was actually shown.
-const editableFiles = expandEditablePaths(editablePaths, { repoRoot });
-const guard = guardConfig(adapter);
+// The context the suggestion prompt is built from, plus the editable surface
+// it describes — assembled in harness/lib/assemble-context.mjs, which the
+// probe's context-fit estimate and the replay bench call too.
+const assembled = assembleContext({ repoRoot, adapter });
+const { editableFiles, createOnlyPaths, allowlist, context, sourcesFor } = assembled;
 const memory = memoryConfig(adapter);
 const briefs = briefPaths(adapter);
 const roles = rolesConfig(adapter);
@@ -156,25 +149,10 @@ const readRequired = (relative, what) => {
   return fs.readFileSync(absolute, 'utf8');
 };
 
-const baseAgentBrief = readRequired(briefs.agentBriefPath, 'agent brief');
-// Opt-in is explicit in the project brief: ordinary projects remain unchanged.
-const gameResearchEnabled = baseAgentBrief.includes('GAME REFERENCE RESEARCH — active');
-const referenceEvidence = loadGameReferences({ repoRoot, enabled: gameResearchEnabled });
-// Live discovery is separately opt-in: metadata only and never needed for a successful generation.
-const liveResearch = await discoverGameReferences({ enabled: gameResearchEnabled && process.env.GAME_REFERENCE_LIVE_SEARCH === 'true', query: process.env.GAME_REFERENCE_QUERY || '' });
-const webResearch = await discoverWebGameReferences({
- enabled: gameResearchEnabled && process.env.GAME_REFERENCE_WEB_SEARCH === 'true',
- query: process.env.GAME_REFERENCE_WEB_QUERY || process.env.GAME_REFERENCE_QUERY || '',
- apiKey: process.env.BRAVE_SEARCH_API_KEY || ''
-});
-const agentBrief = baseAgentBrief + referenceEvidence + formatDiscoveredReferences(liveResearch) + formatWebGameReferences(webResearch);
-if (gameResearchEnabled && process.env.GAME_REFERENCE_WEB_SEARCH === 'true')
- console.error('Game web discovery: '+webResearch.status+', candidates: '+webResearch.candidates.length);
-if (gameResearchEnabled && process.env.GAME_REFERENCE_LIVE_SEARCH === 'true') console.error(`🎮 Game reference discovery: ${liveResearch.status}, ${liveResearch.candidates.length} candidate(s)`);
-if (gameResearchEnabled) console.error(`🎮 Game reference evidence: ${referenceEvidence ? 'loaded from docs/GAME-REFERENCE-PILOT.md' : 'missing; research-only prompt remains active'}`);
+const agentBrief = readRequired(briefs.agentBriefPath, 'agent brief');
 const reviewerBrief = readRequired(briefs.reviewerBriefPath, 'reviewer brief');
 
-const generationsDir = ctxConfig.generationsDir || 'docs/generations';
+const generationsDir = assembled.generationsDir;
 
 // The implement seat: the env override, else a rotating model that EARNED
 // it (roles.promotion — a model whose own edits were approved and kept N
@@ -269,46 +247,21 @@ const scope = scopeEnv === 'focused' || scopeEnv === 'ambitious'
 console.error(`🎚️  Scope: ${scope.scope} — ${scope.reason}`);
 
 // --- context ---
-const latestThemes = loadLatestThemesReview({ repoRoot, themesDir: memory.themesDir || 'docs/themes' });
-const context = {
-  // Fenced (context-pack.mjs's fenceUntrusted()): the source and the
-  // architecture notes are the two blocks a stranger with commit access to
-  // the project could have written into. Everything else in this object is
-  // derived by the harness or written by the owner.
-  sources: fenceUntrusted('SOURCE', buildSourceBundle(editableFiles, { repoRoot })) ?? '',
-  manifest: buildRepoManifest({
-    repoRoot,
-    purposes: ctxConfig.purposes,
-    allowlist,
-    appendOnlyPaths: guard.appendOnlyPaths.map(globToRegExp),
-    createOnlyDescription: createOnlyPaths.length ? createOnlyPaths.join(', ') : undefined,
-  }),
-  testIndex: buildTestIndex({ repoRoot, testFiles: ctxConfig.testFiles }),
-  generationIndex: buildGenerationIndex({ repoRoot, generationsDir }),
-  history: buildGenerationHistory({ repoRoot, generationsDir, limit: 3 }),
-  architectureNotes: fenceUntrusted('ARCHITECTURE NOTES', buildArchitectureNotes({ repoRoot, docPath: ctxConfig.architectureNotesPath, appendOnlyMarker: ctxConfig.architectureNotesMarker })),
-  themes: buildThemesBrief(latestThemes),
-  // The UNKNOWN field of the same review — docs/curiosity/C2, phase A. Null
-  // for every review written before the field existed, which drops it.
-  openQuestions: buildOpenQuestionsBrief(latestThemes),
-  escalations: buildEscalationBrief(
-    loadLedger({ repoRoot, ledgerPath: memory.ledgerPath || undefined }),
-    { threshold: { models: memory.consensus.models ?? 3, labs: memory.consensus.labs ?? 2 } }
-  ),
-  platform: ctxConfig.platformNotes,
-  feedback: null, // player-feedback equivalent: not ported (project-specific, see Portable-Harness-Design.md)
-  // The general form of carrotgame's readiness scorecard: whatever this
-  // project's evaluator plugins measured after the LAST generation, read
-  // back into this one. Null for a project with no evaluators configured,
-  // which drops the section from the prompt entirely.
-  qualityMetrics: buildMetricsBrief(loadLatestMetrics({ repoRoot, generationsDir })),
-  // What the last few runs actually SAW — not a verdict and not a score.
-  // Null for a project that has never written any, which is today's prompt.
-  runtime: buildRuntimeEvidence({ repoRoot, evidenceDir: ctxConfig.runtimeEvidenceDir || undefined }),
-};
-
+// Project-configured context providers (harness/lib/context-providers.mjs):
+// each sees only the environment variables it declared, fails safe, and its
+// output is fenced as data in the user prompt — never the system prompt.
+const providers = contextProvidersConfig(adapter);
+if (providers.length) {
+  console.error(`🧩 Context providers: ${providers.map((p) => p.module).join(', ')}`);
+  context.providers = await runContextProviders({ repoRoot, configured: providers, log: (msg) => console.error(msg) });
+} else if (agentBrief.includes('GAME REFERENCE RESEARCH — active')) {
+  // The marker used to switch on a loader built into the harness. It is a
+  // plugin now, and runs only when the adapter names it.
+  console.error('⚠️  The agent brief asks for game reference research, but context.providers does not name harness/plugins/context/game-references/index.mjs — no reference evidence was loaded. See docs/Game-Reference-Research.md.');
+}
+const measured = measureContext({ context, agentBrief, scoped: assembled.scoped });
 console.error(
-  `📚 Context: ${context.sources.length} chars of editable source, ` +
+  `📚 Context: ~${measured.estimatedTokens.toLocaleString()} tokens estimated, ${assembled.scoped ? `scoped: a code map of ${editableFiles.length} files, each suggester reads up to ${assembled.scoped.maxSourceChars.toLocaleString()} chars` : `${context.sources.length} chars of editable source`}, ` +
   `test index ${context.testIndex ? 'included' : 'unavailable'}, ` +
   `generation index ${context.generationIndex ? 'included' : 'unavailable'}, ` +
   `architecture notes ${context.architectureNotes ? 'included' : 'unavailable'}, ` +
@@ -387,6 +340,20 @@ console.error(testsInLoop
   ? `🧪 In-loop tests: ${loopTestCommands.join(' && ')} (credentials scrubbed; ${evaluation.testTimeoutSeconds}s per command)`
   : `🧪 In-loop tests: off (${loopTestCommands.length ? 'evaluation.test_in_loop is false' : 'no evaluation.test_commands configured'})`);
 
+// --- what the reviewer may see besides the diff ----------------------------
+// Every tracked file is an index for finding the unchanged callers of a
+// change, and a file the reviewer may ask to read. Outside a git checkout,
+// the editable files are the whole index. Secret-shaped paths are never
+// served (review-evidence.mjs's servable()).
+const trackedFiles = (() => {
+  try {
+    return execFileSync('git', ['ls-files', '-z'], { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 }).split('\0').filter(Boolean);
+  } catch {
+    return editableFiles;
+  }
+})();
+const reviewEvidence = createReviewEvidence({ repoRoot, files: trackedFiles });
+
 // --- run ---
 let result;
 try {
@@ -408,7 +375,9 @@ try {
       suggestMaxTokens,
       implementMaxTokens,
       implementEffort: process.env.IMPLEMENT_EFFORT || roles.implementEffort,
-      sourcesFor: (files) => fenceUntrusted('SOURCE', buildSourceBundle(files, { repoRoot })) ?? '',
+      sourcesFor,
+      scoped: assembled.scoped,
+      reviewEvidence,
       implementPromptCache: roles.implementPromptCache !== false,
       reviewEffort: process.env.REVIEW_EFFORT || roles.reviewEffort,
       scope,
@@ -435,6 +404,14 @@ try {
       goal,
       run,
       runTests,
+      provenance: {
+        baseCommit: headCommit((...a) => execFileSync('git', a, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()),
+        adapterSha256: fileHash(repoRoot, adapterPath),
+        agentBriefSha256: sha256(agentBrief),
+        reviewerBriefSha256: sha256(reviewerBrief),
+        contextStrategy: ctxConfig.strategy ?? 'full-dump',
+        editableFiles: editableFiles.length,
+      },
     },
     {
       log: (msg) => console.error(msg),

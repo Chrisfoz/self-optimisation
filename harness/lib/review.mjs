@@ -46,11 +46,32 @@ export const REVIEW_END_MARKER = 'END OF REVIEW';
  */
 export const REVIEW_CONTRACT = `## Response contract — enforced by the harness, not a style request
 
-- Exactly one line that begins \`VERDICT:\`, followed by exactly \`APPROVED\` or \`REJECTED\` and nothing else. Do not write the word "verdict" anywhere else in your response.
+- Exactly one line that begins \`VERDICT:\`, followed by exactly \`APPROVED\`, \`REJECTED\` or \`INSUFFICIENT_CONTEXT\` and nothing else. Do not write the word "verdict" anywhere else in your response.
+- INSUFFICIENT_CONTEXT means you could not judge this change from what you were shown. Say what is missing in REASON. It never ships the change, and it is not a criticism of it.
 - An approval lists no required fixes. If anything must change, the verdict is REJECTED.
 - The last line of your response is exactly: ${REVIEW_END_MARKER}
 
 A response that breaks any of these, or that is cut off before its last line, is treated as a rejection.`;
+
+/**
+ * Offered once per attempt, before the verdict: a reviewer that needs to see
+ * another file asks for it instead of guessing or approving blind.
+ */
+export const REVIEW_FILE_REQUEST = `- Instead of a verdict, you may reply ONCE with only this line, to be shown other files from the repository, read-only, before you decide:
+  NEED FILES: <path>, <path>`;
+
+/**
+ * The paths a review asked to see, when it asked instead of deciding. Empty
+ * for any response that carries a verdict: a verdict with a request attached
+ * is judged as a verdict.
+ */
+export function requestedReviewFiles(raw) {
+  const text = String(raw ?? '');
+  if (text.split(/\r?\n/).some((l) => /^VERDICT\s*:/i.test(bareLine(l)))) return [];
+  const line = text.split(/\r?\n/).map(bareLine).find((l) => /^NEED FILES\s*:/i.test(l));
+  if (!line) return [];
+  return line.replace(/^NEED FILES\s*:/i, '').split(/[,\s]+/).map((p) => p.replace(/^[`'"]+|[`'".]+$/g, '')).filter(Boolean).slice(0, 20);
+}
 
 /** Strip the markdown a model wraps a line in — bold, italics, code, headings, quotes — so `**VERDICT:** APPROVED` reads as what it says. */
 function bareLine(line) {
@@ -73,7 +94,7 @@ function bareLine(line) {
  *
  * @param {string} raw
  * @param {{truncated?: boolean}} [opts]  The provider's own truncation flag.
- * @returns {{approved: boolean, verdict: 'approved'|'rejected', reason: string, problem: string|null}}
+ * @returns {{approved: boolean, verdict: 'approved'|'rejected'|'insufficient-context', reason: string, problem: string|null}}
  *   `problem` is null for a well-formed review (approved or rejected), and
  *   names what was wrong for one that could not be trusted.
  */
@@ -96,8 +117,12 @@ export function parseVerdict(raw, { truncated = false } = {}) {
     return reject(`more than one verdict in the response (${verdictLines.join(', ') || `${mentions} mentions`}) — contradictory or echoed`);
   }
 
-  const value = verdictLines[0].toUpperCase();
-  if (value !== 'APPROVED' && value !== 'REJECTED') return reject(`malformed verdict "${verdictLines[0]}" — expected exactly APPROVED or REJECTED`);
+  const value = verdictLines[0].toUpperCase().replace(/\s+/g, '_');
+  // Not an approval, and not a judgement of the change either: the reviewer
+  // could not see enough. Fails closed like a rejection, labelled apart so
+  // the record does not count it against the implementer.
+  if (value === 'INSUFFICIENT_CONTEXT') return { approved: false, verdict: 'insufficient-context', reason: reason || 'the reviewer could not judge the change from what it was shown', problem: null };
+  if (value !== 'APPROVED' && value !== 'REJECTED') return reject(`malformed verdict "${verdictLines[0]}" — expected exactly APPROVED, REJECTED or INSUFFICIENT_CONTEXT`);
 
   // A well-formed rejection needs nothing more: it cannot be made unsafe by
   // being incomplete.
@@ -178,6 +203,14 @@ export async function reviewChanges({
   // roles.review.effort. Null (the default) leaves the request exactly as it was.
   effort = null,
   goal = null,
+  // Excerpts from unchanged files that depend on this change
+  // (review-evidence.mjs's dependents()). Null drops the section.
+  dependents = null,
+  // Files this reviewer asked for earlier in the same attempt, in full.
+  requestedFiles = null,
+  // Whether this request may answer NEED FILES instead of a verdict. True on
+  // the first ask of an attempt only, so a review always ends in a verdict.
+  canRequestFiles = false,
   call = callModelWithHeadroom,
 }) {
   if (!reviewerBrief || !reviewerBrief.trim()) {
@@ -207,11 +240,12 @@ ${diff}
 ### Full source of every touched file
 ${sources || '(no files reported as changed — treat this as a rejection)'}
 ${testDescription ? `\n### What must still pass\n${testDescription}\n` : ''}${testResults ? `\n### The project's own tests, run against this change\n${testResults}\n\nPassing tests are evidence, not a verdict: they show nothing the suite does not check. Judge the change itself.\n` : ''}
+${dependents ? `\n### Unchanged files that depend on this change — read-only evidence\n\nThese files were not edited. They import a changed file, or mention a name whose definition the edits touched. Check the change does not break them.\n\n${dependents}\n` : ''}${requestedFiles ? `\n### Files you asked to see — read-only\n\n${requestedFiles}\n` : ''}
 ${describeVisual(visual)}
 
 Review the change and give your verdict.
 
-${REVIEW_CONTRACT}`;
+${REVIEW_CONTRACT}${canRequestFiles ? `\n${REVIEW_FILE_REQUEST}` : ''}`;
 
   // The committed goal (docs/curiosity/C1): the reviewer is the thing that
   // judges alignment to it — in prose, inside a gate that already fails
@@ -233,10 +267,15 @@ ${REVIEW_CONTRACT}`;
   const raw = result.text ?? '';
   // Fails closed: truncated, contradictory, malformed or incomplete is a
   // rejection, with `problem` naming which. See parseVerdict().
-  const parsed = parseVerdict(raw, { truncated: Boolean(result.truncated) });
+  // A request to see more, answered before any verdict is read.
+  const needFiles = canRequestFiles ? requestedReviewFiles(raw) : [];
+  const parsed = needFiles.length
+    ? { approved: false, verdict: 'needs-files', reason: `asked to see ${needFiles.join(', ')}`, problem: null }
+    : parseVerdict(raw, { truncated: Boolean(result.truncated) });
 
   return {
     ...parsed,
+    needFiles,
     feedback: raw,
     raw,
     // Handed back so a rejected attempt can be shown what it actually

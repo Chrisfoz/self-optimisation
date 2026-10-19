@@ -475,6 +475,7 @@ export function answersFromAdapter(adapter, { providerEnvKey, modelProvider }) {
     generationsDir: context.generations_dir,
     runtimeEvidenceDir: context.runtime_evidence_dir,
     contextStrategy: context.strategy,
+    contextProviderEnv: (Array.isArray(context.providers) ? context.providers : []).flatMap((p) => (Array.isArray(p?.env) ? p.env : [])),
     testFiles: context.test_files,
     purposes: context.purposes,
     historyLimit: num(context.history_limit),
@@ -860,6 +861,10 @@ function renderWorkflow(template, answers, shared) {
   out = sub(out, '{{PERMISSION_LINES}}', permissionLines);
   out = sub(out, '{{RUNNER}}', shared ? '${{ inputs.runner }}' : answers.runner || 'ubuntu-latest');
   out = sub(out, '{{PROVIDER_ENV_LINES}}', providerEnvLines);
+  // The variables context.providers declared, for the improve step only. A
+  // shared workflow cannot know them when it is rendered, so it passes none
+  // (a provider there runs without its environment and says so).
+  out = out.replace(/^\{\{CONTEXT_PROVIDER_ENV_LINES\}\}\n/m, () => (shared ? '' : contextProviderEnvLines(answers.contextProviderEnv)));
   out = sub(out, '{{PROVIDERS_CSV}}', shared ? '"$PROVIDERS_CSV"' : answers.providers.map((p) => p.name).join(','));
   out = sub(out, '{{SNAPSHOT_PATH}}', shared ? `"${configured('SNAPSHOT_PATH')}"` : answers.snapshotPath || '.agent/model-snapshot.json');
   out = sub(out, '{{TEST_COMMAND_LINES}}', testCommandLines);
@@ -883,6 +888,18 @@ function renderWorkflow(template, answers, shared) {
   );
   out = out.replace('{{NOTIFY_STEPS}}', () => notifySteps);
   return shared ? SHARED_HEADER + out : out;
+}
+
+/**
+ * `NAME: ${{ secrets.NAME }}` for a secret-shaped name, `${{ vars.NAME }}`
+ * otherwise — the improve step's env lines for context.providers[].env.
+ * Names are validated (upper-case shell identifiers) before they reach YAML.
+ */
+export function contextProviderEnvLines(names = []) {
+  const valid = [...new Set((names ?? []).filter((n) => typeof n === 'string' && /^[A-Z_][A-Z0-9_]*$/.test(n)))];
+  return valid
+    .map((n) => `          ${n}: ${'$'}{{ ${/(KEY|TOKEN|SECRET|PASSWORD)/.test(n) ? 'secrets' : 'vars'}.${n} }}\n`)
+    .join('');
 }
 
 /** A copied-in installation's `.github/workflows/self-improve.yml`, with every project value baked in. */

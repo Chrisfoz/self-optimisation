@@ -796,3 +796,10 @@ test('renderChecklist: says start narrow, and that widening later is the normal 
   assert.match(text, /promoting\s+that glob to `allowed_paths`/);
   assert.match(text, /easier to grant a path than to un-ship a change to one/);
 });
+
+test('context provider env: secret-shaped names come from secrets, others from vars, only in the improve step of a copied install', async () => {
+  const { contextProviderEnvLines } = await import('../../harness/lib/scaffold.mjs');
+  assert.equal(contextProviderEnvLines(['GAME_REFERENCE_WEB_SEARCH', 'BRAVE_SEARCH_API_KEY', 'bad name', 'BRAVE_SEARCH_API_KEY']),
+    '          GAME_REFERENCE_WEB_SEARCH: ${{ vars.GAME_REFERENCE_WEB_SEARCH }}\n          BRAVE_SEARCH_API_KEY: ${{ secrets.BRAVE_SEARCH_API_KEY }}\n');
+  assert.equal(contextProviderEnvLines(), '');
+});

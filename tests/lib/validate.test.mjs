@@ -234,3 +234,25 @@ test('does not warn about a missing key when the environment has it', (t) => {
   const { warnings } = validateAdapter(adapter, { repoRoot, env: { ANTHROPIC_API_KEY: 'sk-real' } });
   assert.ok(!warnings.some((w) => /ANTHROPIC_API_KEY/.test(w)));
 });
+
+test('context.strategy: scoped and full-dump are accepted; anything else is warned about', (t) => {
+  const { repoRoot, adapter } = validSetup();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  for (const strategy of ['scoped', 'full-dump']) {
+    assert.deepEqual(validateAdapter({ ...adapter, context: { strategy } }, { repoRoot, env: { ANTHROPIC_API_KEY: 'x' } }).warnings, []);
+  }
+  const { warnings } = validateAdapter({ ...adapter, context: { strategy: 'retrieval' } }, { repoRoot, env: { ANTHROPIC_API_KEY: 'x' } });
+  assert.match(warnings.join('\n'), /context\.strategy is "retrieval"/);
+});
+
+test('context.providers: a module outside the project or one asking for a lab key is an error', (t) => {
+  const { repoRoot, adapter } = validSetup();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'p.mjs'), 'export default {}');
+  const env = { ANTHROPIC_API_KEY: 'x' };
+  assert.deepEqual(validateAdapter({ ...adapter, context: { providers: [{ module: 'p.mjs', env: ['BRAVE_SEARCH_API_KEY'] }] } }, { repoRoot, env }), { errors: [], warnings: [] });
+  const bad = validateAdapter({ ...adapter, context: { providers: [{ module: '../p.mjs' }, { module: 'p.mjs', env: ['OPENAI_API_KEY'] }, { module: 'missing.mjs' }] } }, { repoRoot, env });
+  assert.match(bad.errors.join('\n'), /outside the project/);
+  assert.match(bad.errors.join('\n'), /OPENAI_API_KEY, a lab key/);
+  assert.match(bad.warnings.join('\n'), /missing\.mjs" does not exist/);
+});
