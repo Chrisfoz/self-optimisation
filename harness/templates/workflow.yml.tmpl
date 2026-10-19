@@ -90,13 +90,14 @@ jobs:
     if: {{INPUTS}}.check_keys != 'true'
     runs-on: {{RUNNER}}
     steps:
-      # Actions pinned by commit SHA, not by tag, and the one npm package
-      # pinned to an exact version with lifecycle scripts disabled. This
+      # Actions pinned by commit SHA, not by tag, and nothing installed from
+      # npm at run time: the harness's one library (js-yaml) is vendored in
+      # harness/vendor/, so what runs is exactly what was committed. This
       # job holds a token that can write to the repository; a tag can be
       # moved and a floating version can be replaced, and either would run
       # inside every gate rather than having to defeat one. See
       # learning/03-failure-modes.md Part 9, "Supply chain, on the build
-      # side". Bump the SHA and the version together, on purpose.
+      # side".
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
@@ -104,6 +105,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '{{NODE_VERSION}}'
+
+      {{HARNESS_SETUP_STEPS}}
 
       # The project's own dependencies, before anything runs its tests. A
       # copied installation has no other step that does this, and preflight
@@ -114,7 +117,6 @@ jobs:
       # test runner with zero dependencies, say), in which case this whole
       # step disappears from the file.
 {{PROJECT_SETUP_STEPS}}
-      {{HARNESS_SETUP_STEPS}}
 
       # Once, for every step that commits. It used to be set only by the
       # snapshot step, which campaign runs skip — so on a campaign run the

@@ -26,16 +26,14 @@
       <p class="eyebrow" id="quickstart-heading">Quick start — prefer the terminal?</p>
       <p>
         This console only generates configuration; GitHub Actions runs it. If
-        you're comfortable in a repository, the whole install is three commands
+        you're comfortable in a repository, the whole install is two commands
         in your own project, needs no sign-in, and gives you exactly what the
         ten steps below would.
       </p>
       <pre><code>cp -r ../self-optimisation/harness ./harness
-npm install --prefix harness --no-save --no-package-lock js-yaml@5.3.0
 node harness/cli/init.mjs</code></pre>
       <p class="quickstart-note">
-        Use <code>--prefix harness</code> exactly as written — a top-level
-        install can replace your project's own js-yaml. Node 22.11+.
+        Nothing to install: the harness has no npm dependencies. Node 22.11+.
       </p>
     </div>
     <div class="button-row">

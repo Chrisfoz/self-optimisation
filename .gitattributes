@@ -2,3 +2,9 @@
 # with core.autocrlf would otherwise hand renderWorkflowTemplate() CRLF lines
 # to splice LF blocks into; scaffold.mjs normalises too, this keeps the source clean.
 harness/templates/*.tmpl text eol=lf
+# Vendored third-party code is kept byte for byte as published, on every
+# platform: tests/lib/vendor.test.mjs pins its hash.
+harness/vendor/** -text
+
+# The npx entry point runs on Unix through its shebang, which a CRLF breaks.
+bin/*.mjs text eol=lf

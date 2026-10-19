@@ -4,17 +4,18 @@
  * Loads a project's project-adapter.yml — the file that answers "which
  * paths may this project's agent edit, which providers should it watch,
  * what commands must pass" for one specific installation. See
- * examples/carrotgame/project-adapter.yml for a real, worked instance and
+ * harness/project-adapter.example.yml for the commented schema and
  * Portable-Harness-Design.md §5 for the schema this was validated against.
  *
  * THIS IS THE ONLY FILE IN THE HARNESS THAT KNOWS ABOUT YAML. Every other
  * kernel component (llm-provider.mjs, edit-format.mjs,
  * model-release-detector.mjs, probe-models.mjs) takes plain JS objects and
- * has zero npm dependencies — that stays true. `js-yaml` is scoped to this
- * one file on purpose: it is the one place a project's own config has to be
- * parsed from a human-editable format, and everywhere else in the harness
- * should keep working even if this file, or the dependency it needs, is
- * unavailable for some reason. Callers treat a missing or unparseable
+ * has zero npm dependencies — that stays true. `js-yaml` (vendored at
+ * harness/vendor/js-yaml.mjs, so nothing is ever installed for it) is scoped
+ * to this file and scaffold.mjs on purpose: this is the one place a project's
+ * own config has to be parsed from a human-editable format, and everywhere
+ * else in the harness should keep working even if this file is unavailable
+ * for some reason. Callers treat a missing or unparseable
  * adapter as "no adapter" (see loadAdapter's return value), not as a fatal
  * error — CLI flags and environment variables remain a complete fallback
  * for every value this file can supply. That's deliberate: a project
@@ -28,16 +29,14 @@ import path from 'path';
 /**
  * Load and parse a project-adapter.yml.
  *
- * `js-yaml` is imported dynamically, INSIDE this function, after the
- * existence check below — not as a static top-level import. That's not a
- * style choice: a static top-level `import 'js-yaml'` here would make it
- * a hard dependency of every caller of this module, including
- * check-model-releases.mjs, which imports adapter.mjs unconditionally.
- * Every project that never creates a project-adapter.yml — which is a
- * completely valid, supported way to use this harness — would then need
- * `npm install` for a dependency it never actually exercises. Deferring the
- * import until the file is confirmed to exist keeps that promise true: no
- * project-adapter.yml, no dependency on js-yaml being installed, ever.
+ * The vendored `js-yaml` is imported dynamically, INSIDE this function,
+ * after the existence check below — not as a static top-level import. It
+ * used to be an npm dependency, and deferring the import was what kept a
+ * project with no project-adapter.yml from needing `npm install` at all.
+ * Now that it is vendored there is nothing to install either way, but the
+ * lazy import still keeps a 126 KB parser out of every caller that never
+ * reads an adapter (check-model-releases.mjs imports this module
+ * unconditionally).
  *
  * @param {string} [filePath]  Defaults to project-adapter.yml in the
  *   current working directory — the target project's root, the same
@@ -56,7 +55,7 @@ export async function loadAdapter(filePath = path.join(process.cwd(), 'project-a
   // js-yaml v5 ships named exports only, no default — `load()` is always
   // the safe variant (no arbitrary JS type tags), which is what a
   // project's own config file should be parsed with regardless.
-  const { load: parseYaml } = await import('js-yaml');
+  const { load: parseYaml } = await import('../vendor/js-yaml.mjs');
 
   const raw = fs.readFileSync(filePath, 'utf8');
   let parsed;
@@ -76,11 +75,11 @@ export async function loadAdapter(filePath = path.join(process.cwd(), 'project-a
 /**
  * Parse adapter YAML from a string — for callers that hold the text of a
  * particular git ref rather than a file on disk (the guard comparing the
- * goal before and after a change). Same lazy js-yaml import, same
+ * goal before and after a change). Same lazy import, same
  * fail-loud-on-malformed rule as loadAdapter().
  */
 export async function parseAdapterText(text) {
-  const { load: parseYaml } = await import('js-yaml');
+  const { load: parseYaml } = await import('../vendor/js-yaml.mjs');
   const parsed = parseYaml(text);
   if (parsed === null || typeof parsed !== 'object') throw new Error('adapter text did not parse to an object');
   return parsed;
@@ -121,7 +120,7 @@ export function goalConfig(adapter) {
  * Accepts both shapes seen in the wild: a bare list of names
  * (`['anthropic', 'openai']`) and the more explicit list of objects
  * (`[{lab: 'anthropic', env_var: 'ANTHROPIC_API_KEY'}]`) used in
- * examples/carrotgame/project-adapter.yml — the env var name itself is
+ * harness/project-adapter.example.yml — the env var name itself is
  * documentation for a human reading the file, since llm-provider.mjs's
  * getProvider() already knows each registered provider's real envKey.
  */
@@ -211,7 +210,7 @@ export function normalizeApprovalClass(value) {
 /**
  * Which approval class this project chose — read from
  * `constitution.approval_class`, which is where
- * examples/carrotgame/project-adapter.yml already puts it, with a
+ * the reference installation's adapter already put it, with a
  * top-level `approval_class` accepted as a fallback because
  * harness/project-adapter.example.yml documented it there while the field
  * was RESERVED.
@@ -398,7 +397,7 @@ export function contextConfig(adapter) {
 export function deploymentConfig(adapter) {
   return {
     strategy: adapter?.deployment?.verify_strategy ?? 'none',
-    // Matches examples/carrotgame/project-adapter.yml's existing field name
+    // Matches the reference installation's adapter's existing field name
     // — that file predates this accessor, so the accessor conforms to it
     // rather than the reverse.
     siteUrl: adapter?.deployment?.production_url ?? null,

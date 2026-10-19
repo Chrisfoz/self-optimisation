@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { load as loadYaml } from 'js-yaml';
-import { buildAdapterObject, renderAdapterYaml, renderWorkflowTemplate, renderReadme, renderChecklist, requiredProviders, JS_YAML_VERSION } from '../../harness/lib/scaffold.mjs';
+import { load as loadYaml } from '../../harness/vendor/js-yaml.mjs';
+import { buildAdapterObject, renderAdapterYaml, renderWorkflowTemplate, renderReadme, renderChecklist, requiredProviders } from '../../harness/lib/scaffold.mjs';
 
 const TEMPLATE_PATH = path.join(import.meta.dirname, '../../harness/templates/workflow.yml.tmpl');
 const template = fs.readFileSync(TEMPLATE_PATH, 'utf8');
@@ -315,14 +315,13 @@ const digestStep = (answers) =>
 // own dependencies unless this one renders, and preflight runs the project's
 // real test command — the first real install on a jest project exited 127
 // (command not found) and skipped every generation before it started.
-test('renderWorkflowTemplate: a copied install installs the project dependencies, before the harness ones', () => {
+test('renderWorkflowTemplate: a copied install installs the project dependencies, before its tests run', () => {
   const out = renderWorkflowTemplate(template, baseAnswers({ setupCommands: ['npm ci --ignore-scripts'] }));
   const steps = loadYaml(out).jobs['self-improve'].steps;
   const project = steps.findIndex((s) => s.name === "Install the project's own dependencies");
-  const harness = steps.findIndex((s) => s.name === 'Install harness dependencies');
+  const preflight = steps.findIndex((s) => /^Run this project's own tests \(preflight/.test(s.name || ''));
   assert.ok(project >= 0, 'expected a project dependency step');
-  // Order matters: `npm ci` deletes node_modules, so the project goes first.
-  assert.ok(project < harness, 'project dependencies must install before the harness dependency');
+  assert.ok(preflight > project, 'project dependencies must install before preflight runs the tests');
   assert.match(steps[project].run, /npm ci --ignore-scripts/);
   // And not in the key check, which calls lab APIs and needs none of it.
   assert.ok(
@@ -581,21 +580,18 @@ test('renderReadme: with the schedule left off, says so rather than quoting a cr
 
 // --- Tier 0: supply-chain pins, the kill switch, provenance ---------------
 
-test('renderWorkflowTemplate: actions are pinned by commit SHA and js-yaml by exact version with scripts disabled', () => {
+test('renderWorkflowTemplate: actions are pinned by commit SHA, and a copied install installs nothing from npm', () => {
   const out = renderWorkflowTemplate(template, baseAnswers());
   assert.match(out, /uses: actions\/checkout@[0-9a-f]{40} # v4/);
   assert.match(out, /uses: actions\/setup-node@[0-9a-f]{40} # v4/);
   assert.doesNotMatch(out, /uses: actions\/[a-z-]+@v\d/);
-  // --prefix harness, so the harness's dependency cannot replace the
-  // PROJECT's own copy of js-yaml for the rest of the run (WORKPLAN I10).
-  assert.match(out, new RegExp(`npm install --prefix harness --no-save --no-package-lock --ignore-scripts js-yaml@${JS_YAML_VERSION.replace(/\\./g, '\\\\.')}`));
-  assert.doesNotMatch(out, /npm install --no-save --ignore-scripts js-yaml/, 'a bare root install is the bug');
-  assert.match(JS_YAML_VERSION, /^\d+\.\d+\.\d+$/);
-});
-
-test('JS_YAML_VERSION matches the version package.json pins for the harness itself', () => {
-  const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
-  assert.equal(`^${JS_YAML_VERSION}`, pkg.dependencies['js-yaml']);
+  // js-yaml is vendored in harness/vendor/, so nothing is fetched at run time
+  // in a job that holds a write token, and nothing can replace the PROJECT's
+  // own copy of js-yaml for the rest of the run (WORKPLAN I10).
+  assert.doesNotMatch(out, /js-yaml@/);
+  assert.doesNotMatch(out, /Install harness dependencies/);
+  assert.doesNotMatch(out, /HARNESS_SETUP_STEPS/, 'the token must be removed, not left in the YAML');
+  loadYaml(out);
 });
 
 test('renderWorkflowTemplate: the kill switch runs first, gates the release check, and reaches the digest', () => {
@@ -720,12 +716,31 @@ test('renderChecklist: says which merge model was installed, in its own words', 
   assert.match(auto, /nobody asked first/);
 });
 
-test('renderChecklist: a shared install is not told to fix a dependency line it does not have', () => {
+test('renderChecklist: asks for the PR tickbox only on the PR path, and never for a write default', () => {
+  const pr = renderChecklist(baseAnswers());
+  assert.match(pr, /Allow GitHub Actions to create and approve pull requests\*\* is\s+ticked/);
+  assert.match(pr, /"can_approve_pull_request_reviews": true/);
+  // The workflow declares its own permissions; the radio governs every other
+  // workflow in the repository, and read-only is the tighter choice.
+  assert.doesNotMatch(pr, /"default_workflow_permissions": "write"/);
+  assert.doesNotMatch(pr, /Read and write/);
+
+  const auto = renderChecklist(baseAnswers({ approvalClass: 'autonomous-merge' }));
+  assert.doesNotMatch(auto, /can_approve_pull_request_reviews/);
+  assert.match(auto, /Nothing to change in Settings → Actions → General/);
+});
+
+test('renderChecklist: doctor is the last check before the rehearsal', () => {
+  const text = renderChecklist(baseAnswers());
+  assert.ok(text.indexOf('harness/scripts/doctor.mjs') < text.indexOf('agreed to spend real tokens'));
+});
+
+test('renderChecklist: no install is told to fix a harness dependency line, since there is none', () => {
   const copied = renderChecklist(baseAnswers());
-  assert.match(copied, /--prefix harness --no-save --no-package-lock/);
+  assert.equal(copied.includes('js-yaml'), false);
 
   const shared = renderChecklist(baseAnswers({ sharedHarness: { ref: 'a'.repeat(40), label: 'v0.1.0' } }));
-  assert.equal(shared.includes('--no-package-lock'), false);
+  assert.equal(shared.includes('js-yaml'), false);
   assert.match(shared, /\/path\/to\/self-optimisation\/harness\/scripts\/revert-generation\.mjs/);
 });
 

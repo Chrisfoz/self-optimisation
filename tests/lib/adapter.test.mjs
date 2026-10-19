@@ -20,16 +20,10 @@ test('loadAdapter returns null for a missing file rather than throwing', async (
   assert.equal(await loadAdapter('/definitely/does/not/exist/project-adapter.yml'), null);
 });
 
-test('loadAdapter never imports js-yaml when the file does not exist', async () => {
-  // If loadAdapter's dynamic import were unconditional, this would still
-  // pass — the real point of this test is documented in adapter.mjs's own
-  // doc comment: a project with no project-adapter.yml must never need
-  // js-yaml installed. There's no direct way to assert "a module was not
-  // imported" from outside, so this test stands as the executable version
-  // of that promise: it runs the missing-file path and expects success
-  // without js-yaml necessarily being resolvable, which node_modules being
-  // present in this repo can't disprove — the real guarantee is in the
-  // existence check preceding the dynamic import in loadAdapter() itself.
+test('loadAdapter returns null for a missing file without loading the parser', async () => {
+  // The parser is vendored now (tests/lib/vendor.test.mjs proves a copied
+  // harness runs with nothing installed); the existence check ahead of the
+  // lazy import keeps it out of callers that never read an adapter.
   assert.equal(await loadAdapter(path.join(os.tmpdir(), 'no-such-adapter.yml')), null);
 });
 

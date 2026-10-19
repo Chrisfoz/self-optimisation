@@ -259,7 +259,6 @@ test('run-generation.mjs will not overwrite an existing generation record', (t) 
 function vendoredClone(t) {
   const w = world(t);
   fs.cpSync(path.join(harnessRoot, 'harness'), path.join(w.a.dir, 'harness'), { recursive: true });
-  fs.symlinkSync(path.join(harnessRoot, 'node_modules'), path.join(w.a.dir, 'node_modules'), 'junction');
   fs.writeFileSync(path.join(w.a.dir, '.gitignore'), 'node_modules\n');
   w.a.git('add', '-A');
   w.a.git('commit', '-q', '-m', 'vendor the harness');

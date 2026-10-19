@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { load as loadYaml } from 'js-yaml';
+import { load as loadYaml } from '../../harness/vendor/js-yaml.mjs';
 import '../../harness/providers/index.mjs';
 import { getProvider, resolveProvider } from '../../harness/lib/llm-provider.mjs';
 import {

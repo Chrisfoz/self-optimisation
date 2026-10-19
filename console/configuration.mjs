@@ -341,7 +341,7 @@ export function configure(input, { tree = null, defaultBranch = null, shared = n
         ? "\n## Project dependency setup\n\n" +
           (shared
             ? "Runs before this project's tests, from `evaluation.setup_commands`:"
-            : "Runs before harness dependencies are installed:") +
+            : "Runs before this project's tests, in the generated workflow:") +
           "\n\n```sh\n" +
           setupCommands.join("\n") +
           "\n```\n"
@@ -463,24 +463,8 @@ export function requiredSecretNames(input) {
 }
 
 function workflowFor(answers, setupCommands) {
-  const workflow = renderWorkflowTemplate(template, answers);
-  if (!setupCommands.length) return workflow;
-  // Project package managers can remove a --no-save harness dependency. Run the
-  // project's dependency setup FIRST, then the existing pinned harness install.
-  // Anchored to the self-improve JOB, not merely to the first occurrence of
-  // the step name. The generated workflow has a second job — check-keys —
-  // which carries the same setup steps and comes first in the file.
-  // Injecting at the first match put the project's dependency install into
-  // the job that only ever calls lab APIs, and left the job that runs the
-  // project's tests without it.
-  const jobStart = workflow.indexOf("\n  self-improve:");
-  if (jobStart === -1) throw new Error("generated workflow has no self-improve job");
-  const marker = "      - name: Install harness dependencies";
-  const setup =
-    "      - name: Install project dependencies\n        shell: bash\n        run: |\n" +
-    setupCommands.map((c) => "          " + c).join("\n") +
-    "\n\n";
-  const at = workflow.indexOf(marker, jobStart);
-  if (at === -1) throw new Error("self-improve job has no harness install step");
-  return workflow.slice(0, at) + setup + workflow.slice(at);
+  // The template renders `setupCommands` as the self-improve job's
+  // "Install the project's own dependencies" step, and never into the
+  // check-keys job, which only calls lab APIs.
+  return renderWorkflowTemplate(template, { ...answers, setupCommands });
 }

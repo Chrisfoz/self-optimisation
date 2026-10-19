@@ -8,7 +8,6 @@ import { loadVisualEvidence } from '../../harness/lib/evaluators.mjs';
 
 const REPO_ROOT = path.join(import.meta.dirname, '../..');
 const SCRIPT = path.join(REPO_ROOT, 'harness/scripts/run-evaluators.mjs');
-const NODE_MODULES = path.join(REPO_ROOT, 'node_modules');
 const HARNESS_DIR = path.join(REPO_ROOT, 'harness');
 
 const PNG_1x1 = Buffer.from(
@@ -27,7 +26,6 @@ const PNG_1x1 = Buffer.from(
 function projectWithRenderer({ pluginBody }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'evaluator-artifacts-'));
   fs.symlinkSync(HARNESS_DIR, path.join(root, 'harness'));
-  fs.symlinkSync(NODE_MODULES, path.join(root, 'node_modules'));
 
   fs.mkdirSync(path.join(root, 'tools'), { recursive: true });
   fs.writeFileSync(path.join(root, 'tools/renderer.mjs'), pluginBody);

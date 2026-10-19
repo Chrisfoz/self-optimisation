@@ -123,3 +123,7 @@ palette of dark ink on pale blue-grey. Delete it and they'll pick up your own
 theme. It's there because Mermaid themes with literal colour values and cannot
 follow a page's light/dark switch, so those diagrams sit on a fixed pale plate
 in both themes: a drawing pinned to the board.
+
+## Illustrated, editable architecture overview
+
+The [Self-Optimisation² illustrated architecture](../../docs/diagrams/self-optimisation-harness/README.md) is a styled, editable companion to these Mermaid diagrams. It includes a [Draw.io source](../../docs/diagrams/self-optimisation-harness/self_optimisation_harness_editable.drawio) and a [vector SVG](../../docs/diagrams/self-optimisation-harness/self_optimisation_harness_diagram.svg). It distinguishes the implemented product-improvement loop from the **proposed** KPI-driven harness-learning loop.

@@ -215,7 +215,7 @@ flowchart TD
 
 **Read these diagrams as what's real, not a roadmap with checkboxes filled
 in.** Every box is real: the detector via
-`examples/workflows/watch-releases.yml`, the whole chain locally via
+`init --detector-only` (or inside the full workflow), the whole chain locally via
 `harness/scripts/rehearse.mjs`, and the loop via
 `harness/scripts/run-generation.mjs` run directly — `npm test` prints the
 current check count against fake
@@ -447,3 +447,259 @@ Both diagrams describe the reference implementation, carrotgame — the check
 counts (98+601+19), token estimate (~59k), and provider-dispatch table are
 its numbers, not `self_optimisation`'s own.
 
+---
+
+## Status in detail
+
+The diagrams above show this same information as a picture — what's built,
+what a human still does by hand, and how the two connect. The table below is
+the same status kept in sync by hand; if it ever disagrees with the diagram,
+trust whichever was edited more recently.
+
+| Component | Status |
+|---|---|
+| Provider router (`harness/lib/llm-provider.mjs` + `harness/providers/`) | ✅ Built, tested |
+| Bounded patch executor (`harness/lib/edit-format.mjs`) | ✅ Built, tested |
+| Model-release detector (`harness/lib/model-release-detector.mjs`) | ✅ Built, tested |
+| Reachability probe (`harness/lib/probe-models.mjs`) | ✅ Built, tested |
+| Adapter loader (`harness/lib/adapter.mjs`, reads `project-adapter.yml`) | ✅ Built, tested — one of the two files in the harness that use `js-yaml` (vendored in `harness/vendor/`, so never installed), and the one that loads it lazily |
+| Adapter validation (`harness/lib/validate.mjs`, `harness/scripts/validate.mjs`) | ✅ Built, tested — every editable path exists, allowed paths never overlap frozen or append-only ones, `.github/**` is frozen unless deliberately overridden, brief files exist and are flagged for unfilled `[placeholder]`s, every watched or pinned lab is registered and warned about if its key is missing. Run by `init` (advisory), `rehearse` (blocking), and as the generated workflow's own first step — a failure reaches the digest as its own no-generation reason, never as a quiet cycle |
+| Local rehearsal (`harness/lib/rehearse.mjs`, `harness/scripts/rehearse.mjs`) | ✅ Built, tested — the same chain the generated workflow runs (validate → preflight → detect or campaign → probe → a local `agent/gen-NNN` branch → the real orchestrator → guard → tests), as a thin sequencer over the same CLIs the workflow calls, so it can never drift from what the workflow does. Never pushes, opens a pull request, or merges; deterministic and network-free with no lab key configured |
+| Context compiler (`harness/lib/context-pack.mjs`, `assemble-context.mjs`, `code-map.mjs`) | ✅ Built, tested — one assembly for the loop, the probe and the bench. `context.strategy: full-dump` (default) sends every editable file; `scoped` sends a code map (files, symbols, imports) and each suggesting model names the files it then reads in full, up to a ceiling. `scoped` has not yet been measured on a large real repository (WORKPLAN M8). The probe measures the prompt from the adapter and drops a model whose reported window cannot hold it |
+| **Orchestrator** (`harness/lib/orchestrator.mjs` + `harness/scripts/run-generation.mjs`) | ✅ **Built, tested, and runnable** — suggest → implement → review → refine, end to end, against your own adapter and brief files |
+| Independent reviewer (`harness/lib/review.mjs`, `review-evidence.mjs`) | ✅ Built, tested, wired — also shown the unchanged files that depend on a change; may ask once to read other tracked files (never secret-shaped paths); `INSUFFICIENT_CONTEXT` is a verdict that never ships |
+| Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested — still awaiting a workflow step that runs it against a real PR from the orchestrator, since that's CI wiring, not harness code |
+| Automated evaluator — test-command runner (`evaluation.test_commands`) | ✅ Built, in the two places it belongs. In CI it needs no harness *code*: a project's test commands are rendered straight into the generated workflow as steps, the same way the guard runs as one, so a run fails on the commands CI actually ran. `harness/scripts/rehearse.mjs` reads the adapter's own copy to run the identical gates locally — the one deliberate reader of that field, documented in `adapter.mjs`'s `evaluationConfig()` |
+| Quality-dimension evaluator plugins (`harness/lib/evaluators.mjs`, `harness/plugins/evaluators/`) | ✅ Built, tested, wired — the measurements that are explicitly **not** gates. A plugin gets the working tree and the generation record and returns named metrics; it cannot fail a generation, however badly it behaves. One shipped example (`source-weight`), the interface documented, ecosystem-specific plugins (Checkstyle, mypy, Roslyn, the canvas checks) left as extension points |
+| Probes that render, simulate or observe — and the two sockets that carry what they saw ([`docs/Tool-Use-Design.md`](docs/Tool-Use-Design.md) phase 1) | ✅ Built, tested — a plugin may now write into one given directory and return **images** and **observations**, not just numbers. Images from the last generation are attached to the next suggestion call (with their provenance stated, so "current" cannot mean a stale render); observations are read into its prompt. `evaluation.visual_capture` runs the same interface *inside* a generation so the **reviewer** sees a render of the change under review. This is where Blender, a physics probe or a headless browser belongs — the harness ships none of them and has no opinion about your ecosystem. Phases 2–5 (a tool contract, MCP, model-authored tools) are design only |
+| Runtime evidence (`harness/lib/runtime-evidence.mjs`, `context-pack.mjs`'s `buildRuntimeEvidence()`) | ✅ Built, tested, wired (`docs/curiosity/C10`): what the tests, the deploy check and any project probe **actually observed**, read back into the next generation's prompt. Every other block in that prompt describes what the project *is*; this is the only one that describes what it *did*. Observations, never scores — and when the budget runs out it is the totals that go, not a skipped test's name |
+| Escalation follow-through — work orders, resurfacing, the minority report (`harness/lib/escalations.mjs`, `orchestrator.mjs`) | ✅ Built, tested, wired (`docs/curiosity/C8`): an escalation a human accepts becomes a queued work order that the next ambitious generation is handed and told to deliver, and the outcome is written back — the first label in this project that scores its own *reasoning* rather than its code. An entry nobody has engaged with for N generations is put to the fan-out by name and must be answered AGREE / DISAGREE / IRRELEVANT, because silence was being scored as rejection |
+| Failure & proposal memory — escalations ledger (`harness/lib/escalations.mjs`), themes review (`harness/lib/themes.mjs`, `generate-themes.mjs`, `harness/scripts/generate-themes-review.mjs`) | ✅ Built, tested, wired: the orchestrator folds every run's proposals into the ledger and reads it back into the next prompt, and every `memory.themes_review.cadence_generations` generations one model is asked what principle explains the last N — written to `docs/themes/review-NNN.json`, read back into every prompt after it |
+| Staging & promotion — merge + tag (`harness/lib/promote.mjs`), deploy verification (`harness/lib/verify-deployment.mjs`) | ✅ Built, tested — all four `verify_strategy` values: `url` (poll + compare), `registry` (npm/PyPI/NuGet/Maven Central), `artifact` (build/path/smoke-run), `none`. Chained automatically by the generated workflow (`harness/templates/workflow.yml.tmpl`). |
+| Notifier — plain-language digest with a reliable fallback (`harness/lib/notify.mjs`, `harness/scripts/send-digest.mjs`, `send-escalation-notice.mjs`) | ✅ Built, tested — sender is pluggable (`registerSender()`; SendGrid ships built in, Slack/webhook/another email API are added by registering one under its own name), calibration examples are optional project config, not hardcoded. Chained automatically by the generated workflow. |
+| `init` CLI scaffolder (`harness/cli/init.mjs`) | ✅ Built — asks the Portable-Harness-Design.md §6 questions and writes `project-adapter.yml`, the generated workflow, brief-template copies, an install README and checklist for a new project. `--quick` asks five questions and defaults the rest; `--detector-only` writes the release-notice workflow alone |
+| Project detection (`harness/lib/detect-project.mjs`) | ✅ Built, tested — proposes `init`'s editable paths, test commands and setup commands from `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, `pom.xml`, Gradle, `*.csproj` and a `Makefile`. Reads, never runs |
+| GitHub setup (`harness/lib/github-setup.mjs`, `init --configure-github`) | ✅ Built, tested against a fake `gh` — uploads exactly the secrets an installation calls (values on stdin, never argv), ticks the pull-request permission and reads it back. Not yet run against a real repository's settings |
+| Installation check (`harness/lib/doctor.mjs`, `harness/scripts/doctor.mjs`) | ✅ Built, tested — Node, adapter, workflow, env file git-ignored, keys accepted, snapshot, GitHub secrets and permission, harness version, each failure with the command that fixes it. `--offline` calls nothing outside the machine |
+| Cost accounting + budget cap (`harness/lib/spend.mjs`, `budget.max_generation_tokens`) | ✅ Built, tested — every underlying request is metered (headroom and text-only retries each count) and reserves its estimated input plus its whole output allowance *before* it is sent, so a parallel fan-out or a retry cannot overshoot the cap; a refused call ends the attempt loop as `budget-exhausted`, never a crash. Every `attempts.json` carries `spend`, with failed and refused requests counted separately. Tokens, not money |
+| Tests inside the repair loop (`harness/lib/test-runner.mjs`, `evaluation.test_in_loop`) | ✅ Built, tested, **proven on real runs** — a baseline on the untouched tree, then the project's own `test_commands` against each attempt before it is reviewed; a failure goes back to the implementer as its failing lines. The child process never sees a credential. In both real campaigns so far a suggester's own edits failed the tests and the loop repaired them ([`docs/campaigns/`](docs/campaigns/)) |
+| Before/after measurement (`harness/lib/measure.mjs`, `run-evaluators.mjs --baseline`) | ✅ Built, tested — the same evaluators, fingerprinted, on the untouched tree and the changed one; `comparison.json` names benefits and regressions by each metric's declared direction, beside cost; `REPORT.md` adds what a person did with each change |
+| Generation identity and records (`harness/lib/generation-id.mjs`, `persist-records.mjs`) | ✅ Built, tested against a real remote — the next number is one past any tag, agent branch or record; the branch is claimed with a lease; every record carries a run id, the base commit, adapter, brief and prompt hashes and per-block context sizes, and is committed to the default branch on every outcome, failures included. The agent branch carries code only |
+| Strict review verdict (`review.mjs`'s `parseVerdict()`) | ✅ Built, tested — exactly one `VERDICT:`, exactly APPROVED or REJECTED, an approval must end `END OF REVIEW` and list no required fixes; truncated, contradictory or malformed responses are rejections, and an unreadable review is asked once more before an attempt is spent |
+| Pull-request read-back (`harness/lib/pull-requests.mjs`, `harness/scripts/sync-pull-request-outcomes.mjs`) | ✅ Built, tested — merged / open / closed written into the record at the top of every cycle; a closed pull request breaks the clean streak and reaches the next prompt as CLOSED UNMERGED |
+| Rollback (`harness/lib/rollback.mjs`, `harness/scripts/revert-generation.mjs`) | ✅ Built, tested against a real remote on both merge paths — reverts the shipped merge, records `reverted`, the next run reads it as a failure |
+| The ambition dial (`context.ambition`, [`docs/Ambition-Control.md`](docs/Ambition-Control.md)) and scope-aware ranking | ✅ Built, tested — `focused` / `earned` (default) / `ambitious`, read at run time, per-run override from the Actions tab; the ranking rubric follows the scope; a lone ambitious failure no longer resets the streak |
+| Seats (`harness/lib/seats.mjs`) — cross-family ranker, seat promotion | ✅ Built, tested — the rank seat defaults to another lab's model from the snapshot; a rotating model whose own edits keep being approved and kept can earn the implement seat (`roles.promotion`, off by default); the review seat is never auto-assigned |
+| Lessons (`harness/lib/lessons.mjs` → `<generationsDir>/lessons.json`) | ✅ Built, tested, wired — derived from the records, deduplicated, anchored to the hashes of the files concerned and their imports; candidate until a second generation or a person's merge, close or revert supports it; stale (and out of the prompt) when its files change |
+| Replay bench (`harness/lib/bench.mjs`, `harness/scripts/bench.mjs`, [`docs/Replay-Bench.md`](docs/Replay-Bench.md)) | ✅ Built, tested against the mock labs — variants of how the harness works, compared on pinned commits with the same models and budget, scored by held-out oracle commands. No real cohort has been run yet |
+| Context providers (`harness/lib/context-providers.mjs`, `harness/plugins/context/`) | ✅ Built, tested — project-configured plugins add a fenced, capped section to the suggestion prompt and see only the environment variables they declare. Game-reference research ships as one |
+| Harness KPIs and practical strategy learning ([`docs/harness-kpis/`](docs/harness-kpis/)) | Design and templates, plus the replay bench above as the comparison tool. Independent outcome assessments, a verified KPI scorecard and controlled policy adaptation are not implemented. |
+| Operational report (`harness/lib/report.mjs` → `<generationsDir>/REPORT.md`) | ✅ Built, tested — the paper's §7 metrics from the records, regenerated every cycle, never hand-edited |
+| Run history page (`harness/lib/run-history.mjs` → `<generationsDir>/index.html`) | ✅ Built, tested — one self-contained page for the owner: every generation newest first, the change in plain words, its outcome and pull request, failed attempts with their reasons, tokens and cache savings, pull requests waiting for review, open escalations. Rebuilt after every run with the record and at the start of each cycle once fates are read back. Every installation gets it; no configuration |
+| Campaign mode (`harness/lib/campaign.mjs`, the workflow's `models` input) | ✅ Built, tested — a generation now, on models named by hand, recorded as `campaign: true` |
+| The committed goal (`project.goal`, [`docs/curiosity/C1`](docs/curiosity/C1-committed-goal.md)) and the themes review's `UNKNOWN` field ([`C2`](docs/curiosity/C2-themes-review-cli.md) phase A) | ✅ Built, tested — the goal sits above the brief, the reviewer rejects drift from it, the guard refuses a diff that edits it; a review may name open questions, rendered as their own section and dropped when none |
+| Kill switch, version stamp, pinned supply chain | ✅ Built, tested — `SELF_IMPROVE_PAUSED` repository variable; `harness/VERSION` in every adapter and record; actions by SHA, `js-yaml` vendored and hash-pinned, nothing installed at run time |
+| Shared-workflow installation (`harness/lib/workflow-config.mjs`, `harness/scripts/render-shared-workflow.mjs`, `renderCallerWorkflow()`) | ✅ Built, tested — instead of copying `harness/`, the target repository gets a small caller workflow that calls this repository's `.github/workflows/self-improve.yml` at a pinned commit. Note the behavioural difference: in this mode `evaluation.test_commands` and `setup_commands` are LIVE (the shared workflow runs them) rather than RECORDED |
+| `templates/` — generated workflow (`harness/templates/workflow.yml.tmpl`), agent brief, reviewer brief | ✅ Built, tested (`tests/lib/scaffold.test.mjs` parses every strategy combination's generated YAML back to confirm it's valid); guard config has no separate template — it's `constitution.*` in `project-adapter.yml` itself |
+
+`Portable-Harness-Design.md` §10 has the full build order and reasoning for
+what comes next and why.
+
+## How the three pieces fit together
+
+This repository is really three things at three different stages, meant to
+compose into one journey — read this before the per-piece docs so the status
+marks in the table above don't read as contradictions:
+
+1. **Install** (implemented; deployment configuration required): the console
+   provides ten setup steps backed by the real generator, complete bundle
+   downloads, GitHub App sign-in, repository discovery, secret-name checks,
+   setup PR creation, rehearsal dispatch and gate-based activation PRs. Keys
+   are entered directly on GitHub, never in the console. GitHub operations
+   require the App variables in [`console/DEPLOYMENT.md`](console/DEPLOYMENT.md).
+   Automated integration tests use fake GitHub responses; a live authenticated
+   acceptance run is still required. Existing installations are not overwritten.
+2. **Run** (✅ built): the generated workflow validates the adapter, checks
+   the watched labs, and once a new model appears runs the real suggest →
+   implement → review → refine → guard → test → **pull request** → notify
+   loop end to end (autonomous merge, and the deployment verification that
+   follows it, are the opt-in path). `harness/scripts/rehearse.mjs` runs the
+   same chain locally on demand, so this stage can be exercised without
+   waiting for a release — see the diagrams at the top of
+   this file. This is the only one of the three
+   stages that runs unattended today.
+3. **Learn** (🚧 partly built): `docs/curiosity/` designs a second, slower
+   pass over the same run history — harvesting open questions from every
+   proposal, promoting the corroborated ones into a themes review, and
+   occasionally spending a whole generation on a sourced document instead of
+   a diff. Four of its ten components are built (C1 the goal, C2's `UNKNOWN`
+   field, C8 escalation follow-through, C10 runtime evidence); the rest wait
+   on the A′ go/no-go (`WORKPLAN.md` 4.3a). Every component attaches onto a
+   file the loop already writes and renders nothing when its input is
+   absent, so a repository with no run history yet is unaffected — see "Cold
+   start" in [`docs/curiosity/README.md`](docs/curiosity/README.md#cold-start-the-first-runs-must-work-with-none-of-this).
+   Separately, [harness KPIs](docs/harness-kpis/README.md) proposes learning
+   operating strategy from independently assessed real-world outcomes. It
+   compares policies on held-out tasks and bounded project trials; live KPI
+   collection and policy adaptation are not built. Curiosity raises questions;
+   KPI experiments test whether a proposed way of working actually helps.
+
+**The seam between stage 1 and stage 2, now closed:** the generated workflow
+used to always auto-merge an approved change (`harness/lib/promote.mjs`),
+which is the opposite of what the console design calls for. It now renders
+one of two paths from `constitution.approval_class` — open a pull request
+(the default, and where any unrecognised value lands) or merge autonomously
+(the opt-in) — and the `schedule:` block is optional, so an installation can
+ship dispatch-only until a rehearsal has passed. See "The merge model, reconciled"
+above for the full account.
+
+## The bet this depends on
+
+This whole design rests on one external assumption, worth stating plainly
+rather than leaving implicit: **frontier labs keep shipping, and each new
+model is meaningfully better than the last.** Neither is something this
+repository controls, and if either stops being true the loop quietly stops
+proposing anything — which is the correct behaviour, not a failure. So it's
+worth checking the bet against outside data rather than asserting it.
+
+**Are they still shipping?** [AI Release Tracker](https://aireleasetracker.com/analytics)
+provides an independent release-cadence view. The redesigned console explains
+its own behaviour without embedding a third-party tracker or maintaining a
+copy of its changing figures.
+
+**Are they getting better in the way that matters here?** The most useful
+public measure is METR's **50% task-completion time horizon**: how long a
+task takes a skilled human, at the length where an AI agent completes it
+successfully half the time. It matters for this project specifically because
+it tracks *how much of a change a model can carry unattended* — which is the
+thing a governed autonomous loop is actually buying.
+
+| Model | 50% time horizon |
+|---|---|
+| Claude Opus 4.5 | 320 min |
+| GPT-5 | 214 min |
+| o3 | 121 min |
+
+Doubling time of that horizon, measured across models released since 2024:
+**~89 days**.
+
+Figures from METR's Time Horizon 1.1 set, via
+[metr.org/time-horizons](https://metr.org/time-horizons/) (page last updated
+8 May 2026; quoted here rather than embedded because METR publishes no
+embeddable chart). Carry METR's own caveats with the numbers: confidence
+intervals are wide, the trend is sensitive to which tasks are in the suite,
+and measurements above 16 hours are unreliable on the current one.
+
+The connection to this repository is direct. A rotating suggest seat is only
+worth the plumbing if a genuinely new mind arrives often enough to be worth
+asking — that's the first chart. And the curiosity design in
+[`docs/curiosity/`](docs/curiosity/) is a bet on the second: if models keep
+getting better at long tasks, the binding constraint shifts from *can it
+write the change* to *did anyone point it at the right question*.
+
+## The shape of it, in one paragraph
+
+A model release is the trigger, not the calendar. One seat rotates — whichever
+lab shipped the newest model gets to propose the change, on its own API, with
+fresh eyes. Every other seat (implement, review) stays pinned to a model
+you already trust. Proposals are targeted, exact edits — never a full-file
+rewrite — applied all-or-nothing and checked against a project's own test
+suite before anything merges. An agent can argue that a frozen rule is wrong,
+but it cannot change the rule itself; only a human can, and only after
+independent models converge on the same complaint. Every run — including the
+ones that ship nothing — writes down what it tried, and the next run reads
+that back. `learning/01-principles.md` has the full list, each one anchored
+to a real incident rather than stated as a bare rule.
+
+## Repo layout (current, not final — see `Portable-Harness-Design.md` §4)
+
+```
+self_optimisation/
+├── README.md                        # this file
+├── ARCHITECTURE.md                  # five diagrams: the project, the loop, inside the loop
+├── WORKPLAN.md                      # the sequenced plan of record — what's next
+├── CONTRIBUTING.md                  # the design rules a change here has to keep
+├── Portable-Harness-Design.md       # the historical record of the port from carrotgame
+├── Model-Release-Driven-Software-Improvement-Paper-Outline.md
+├── railway.json                     # one host's deploy config for console/; any host
+│                                     # that runs `npm start` works
+├── Dockerfile, .dockerignore         # console/ as an image — built and run in CI
+├── bin/self-optimisation.mjs        # the npx entry point: copy harness/ in, then init / upgrade / doctor
+├── .devcontainer/                   # Node 22 + the GitHub CLI, for Codespaces
+├── .github/
+│   └── workflows/
+│       ├── self-improve.yml         # NOT this repo improving itself — this is THE SHARED
+│       │                             # WORKFLOW, rendered from harness/templates/ by
+│       │                             # scripts/render-shared-workflow.mjs, and what a
+│       │                             # `--shared` install calls at a pinned commit
+│       └── release.yml              # tags v<harness/VERSION> when it changes on main —
+│                                     # the commit a shared install pins
+├── package.json                     # no dependencies; `npm test` runs harness/'s own suite
+├── docs/                            # research corpus, the design documents,
+│                                     # campaigns/ — real-model runs written up with their
+│                                     # records, and curiosity/ — a second longitudinal
+│                                     # pass, 4 of its 10 components built, the rest gated on A'
+├── console/                         # working ten-step installer, HTTP API,
+│                                     # GitHub App flow, pages and deployment guide;
+│                                     # how-to-run.html is the local setup guide,
+│                                     # partials/ holds the header and footer every
+│                                     # page includes, and favicon.svg is the site
+│                                     # icon, served from the asset table in
+│                                     # server.mjs; optional legacy Supabase
+│                                     # schema, not required
+├── tests/                           # tests for the harness's OWN code (README, "Testing this harness itself")
+│   ├── lib/                         # one file per harness/lib/ module
+│   ├── scripts/                     # the CLIs, driven as real child processes
+│   ├── console/                     # configuration, GitHub boundary and real HTTP tests
+│   └── e2e/                         # the whole chain, real git, real test runs
+├── learning/                        # principles, blueprint, failure modes,
+│                                     # starter kit, diagrams — ported from the
+│                                     # reference implementation, written to
+│                                     # need no project-specific knowledge
+├── examples/
+│   └── workflows/
+│       └── watch-releases.yml       # what `init --detector-only` renders, for reading
+└── harness/
+    ├── .env.harness.example         # copy to .env.harness.local beside it — see Step 3
+    ├── lib/                           # pure logic — no process.exit, no stdio.
+    │   │                               # `ls harness/lib/` for the current list; the
+    │   │                               # load-bearing four, in dependency order:
+    │   ├── llm-provider.mjs           # provider-blind registry, transport, retry/headroom
+    │   ├── edit-format.mjs            # SEARCH/REPLACE parser, allowlist supplied by the caller
+    │   ├── orchestrator.mjs           # runGeneration() — the four stages, composed
+    │   └── adapter.mjs                # parses YAML (lazily; scaffold.mjs writes it)
+    ├── scripts/                       # CLI wrappers — own the filesystem/env/stdio
+    │   ├── validate.mjs               # check the adapter before anything is spent
+    │   ├── rehearse.mjs               # the whole chain, locally, on a real branch
+    │   ├── run-generation.mjs         # the loop itself; the workflow's "improve" step
+    │   └── ...                        # detector, probe, guard, promote, verify, digest,
+    │                                   # evaluators, themes, report, revert, PR read-back
+    ├── plugins/
+    │   └── evaluators/                # the non-gating quality dimensions: the interface,
+    │                                   # and one shipped example (source-weight)
+    ├── templates/                     # agent-brief.md.tmpl, reviewer-brief.md.tmpl,
+    │                                   # workflow.yml.tmpl — filled in by cli/init.mjs
+    ├── cli/
+    │   └── init.mjs                   # scaffolds a new installation end to end
+    ├── vendor/
+    │   └── js-yaml.mjs                # the one library, vendored: a copy needs no install
+    └── providers/                     # one file per lab, each self-registering
+        ├── anthropic.mjs, openai.mjs, google.mjs, moonshot.mjs,
+        │   deepseek.mjs, qwen.mjs, xai.mjs, meta.mjs, zai.mjs
+        ├── _openai-compatible.mjs     # shared factory for the 6 OpenAI-shaped labs
+        ├── index.mjs                  # registers all 9; a project can import a subset instead
+        └── CONTRIBUTING-A-PROVIDER.md
+```
+
+**This tree names a handful of files, not all of them, on purpose.** An
+exhaustive list here would be a second inventory to keep in step with the
+directory itself, and it has already drifted once — `ls harness/lib/` and
+`ls harness/scripts/` are the current answer, and
+[Status in detail](#status-in-detail) says what each component does and
+whether it is built. That is the same call this repository made about test
+counts: point at the command, don't hand-copy the number
+([`learning/01-principles.md`](learning/01-principles.md) principle 23).
+
+`Portable-Harness-Design.md` §10 has the build order and its revision log;
+`ARCHITECTURE.md` has the diagrams showing how these pieces actually
+run.
