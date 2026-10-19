@@ -43,7 +43,7 @@ import { getProvider, registeredProviders } from '../lib/llm-provider.mjs';
 import { loadAdapter, contextConfig } from '../lib/adapter.mjs';
 import { nextGenerationNumber } from '../lib/generation-id.mjs';
 import { runProjectTests, scrubEnv } from '../lib/test-runner.mjs';
-import { validateSpec, mergeAdapter, scoreTrial, summarise, compare, renderReport } from '../lib/bench.mjs';
+import { validateSpec, mergeAdapter, scoreTrial, summarise, compare, renderReport, withOracleDir } from '../lib/bench.mjs';
 
 const HARNESS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RUN_GENERATION = path.join(HARNESS_DIR, 'scripts/run-generation.mjs');
@@ -131,7 +131,7 @@ async function runTrial(task, variant, trial) {
 
     const oracle = await runProjectTests({
       repoRoot: dir,
-      commands: task.oracleCommands,
+      commands: task.oracleCommands.map((c) => withOracleDir(c, specDir)),
       env: { ...quietEnv, BENCH_ORACLE_DIR: specDir },
     });
     return scoreTrial({ task, variant, trial, record, oracle: oracle.results, durationMs: Date.now() - started });

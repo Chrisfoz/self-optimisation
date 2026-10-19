@@ -90,6 +90,17 @@ export function mergeAdapter(base, patch) {
 }
 
 /**
+ * An oracle command with `$BENCH_ORACLE_DIR` / `${BENCH_ORACLE_DIR}` filled
+ * in by the bench itself. The test runner uses the platform shell, and
+ * Windows' cmd.exe expands only %VAR%, so leaving it to the shell made every
+ * oracle fail there. The variable stays in the environment too, for oracle
+ * scripts that read it.
+ */
+export function withOracleDir(command, dir) {
+  return String(command).replace(/\$\{BENCH_ORACLE_DIR\}|\$BENCH_ORACLE_DIR\b/g, () => dir);
+}
+
+/**
  * One trial's result, from the generation's own attempts.json and the
  * oracle's exit codes.
  */
