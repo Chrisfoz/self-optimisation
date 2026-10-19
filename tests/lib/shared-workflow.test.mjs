@@ -31,6 +31,17 @@ test('the committed shared workflow is exactly what the template renders', () =>
     `${SHARED_WORKFLOW_PATH} is out of date. Run: node harness/scripts/render-shared-workflow.mjs`);
 });
 
+// check_keys arrives as a BOOLEAN here (the caller passes `== 'true'`), and
+// GitHub compares `true == 'true'` as 1 vs NaN: false. Comparing it to a
+// string made the keys check unreachable and ran a whole cycle instead
+// (Grammar Game, 2026-10-19). Use the boolean as it is.
+test('check_keys is used as the boolean it is: the keys job on true, the loop on false', () => {
+  assert.equal(doc.on.workflow_call.inputs.check_keys.type, 'boolean');
+  assert.equal(doc.jobs['check-keys'].if, 'inputs.check_keys');
+  assert.equal(doc.jobs['self-improve'].if, '${{ !(inputs.check_keys) }}');
+  assert.doesNotMatch(committed, /check_keys\s*[!=]=\s*'true'/);
+});
+
 test('it is only ever called: workflow_call inputs, no schedule, no dispatch, no concurrency of its own', () => {
   assert.deepEqual(Object.keys(doc.on), ['workflow_call']);
   assert.deepEqual(Object.keys(doc.on.workflow_call.inputs), ['scope', 'models', 'check_keys', 'runner']);

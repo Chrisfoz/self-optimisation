@@ -855,6 +855,11 @@ function renderWorkflow(template, answers, shared) {
     : 'node harness/scripts/validate.mjs');
   out = sub(out, '{{HARNESS}}', harnessDir);
   out = sub(out, '{{INPUTS}}', shared ? 'inputs' : 'github.event.inputs');
+  // A dispatch input is always a string; a workflow_call boolean input is a
+  // boolean, and GitHub compares `true == 'true'` as numbers (1 vs NaN), so
+  // false. The shared workflow once compared it to 'true': ticking "check the
+  // keys" ran a whole cycle instead (Grammar Game, 2026-10-19).
+  out = sub(out, '{{CHECK_KEYS_ON}}', shared ? 'inputs.check_keys' : "github.event.inputs.check_keys == 'true'");
   out = sub(out, '{{DEFAULT_BRANCH_LABEL}}', shared ? 'the default branch' : answers.defaultBranch || 'main');
   out = sub(out, '{{EDITABLE_PATHS_PREAMBLE}}', shared ? 'mapfile -t editable_paths < "$RUNNER_TEMP/editable-paths"\n          ' : '');
   out = sub(out, '{{PREFLIGHT_COMMAND_LINES}}', preflightCommandLines);
