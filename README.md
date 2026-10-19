@@ -55,8 +55,9 @@ implementation plan; live KPI collection and policy adaptation are not enabled.
 In your own project's root, with **Node 22.11 or newer**:
 
 ```bash
-# 1. Copy the harness in. One folder; there is nothing to install.
-git clone --depth 1 https://github.com/Chrisfoz/self-optimisation.git /tmp/self-optimisation
+# 1. Copy the harness in, from a release. One folder; there is nothing to install.
+#    Pick the newest tag on the Releases page; main can be ahead of it.
+git clone --depth 1 --branch v0.3.1 https://github.com/Chrisfoz/self-optimisation.git /tmp/self-optimisation
 cp -r /tmp/self-optimisation/harness ./harness
 
 # 2. Five questions, with defaults read from your project's own files. Writes
@@ -85,11 +86,39 @@ nothing merges by itself unless you chose that in step 2.
   (`gh auth login`); without it, it prints the two settings to make by hand.
 - **Only want a monthly issue when a new model ships?**
   `node harness/cli/init.mjs --detector-only` instead of step 2.
-- **Upgrading later:** `git -C /tmp/self-optimisation pull`, then
-  `node /tmp/self-optimisation/bin/self-optimisation.mjs upgrade` — it replaces
-  `harness/`, keeps your key file, and regenerates the workflow.
+- **Upgrading later:** see [Versions and updates](#versions-and-updates) below.
 - **Every step explained**, with the reasons and the failure each one
   prevents: [`docs/INSTALL.md`](docs/INSTALL.md).
+
+## Versions and updates
+
+**Nothing here changes your project unless you choose it.** A release is a
+tag (`v0.3.1`) on one commit, published on the
+[Releases page](https://github.com/Chrisfoz/self-optimisation/releases) with
+that commit's full SHA. An installation is fixed to one release until its
+owner moves it:
+
+| Install | What your repository holds | To update |
+|---|---|---|
+| **Copied** (the Quickstart above) | its own copy of `harness/` | Clone the newer release tag, then run `node <clone>/bin/self-optimisation.mjs upgrade` in your project. It replaces `harness/`, keeps your key file and adapter, and regenerates the workflow. Review the diff and commit it. |
+| **Shared** (`init --shared <sha> --shared-label <tag>`) | a short workflow that calls this repository's shared workflow at one **commit SHA** | Change that SHA and label to a newer release's, in a pull request. Rolling back is changing them back. |
+
+Shared installs pin a SHA, never a tag or branch, because a tag can be moved
+and a SHA cannot. Your project's own `project-adapter.yml`, briefs, tests and
+approval rule stay yours either way. How releases are cut:
+[CONTRIBUTING.md, "Releasing"](CONTRIBUTING.md#releasing).
+
+**Your keys never come here.** Lab and email keys live in your own
+repository's Actions secrets and, locally, in `harness/.env.harness.local`,
+which the harness's `.gitignore` excludes and `doctor` checks. This
+repository stores no secrets, and a shared install runs in your repository's
+Actions, with your secrets, never in this one. What a run sends to a lab is
+your project's own text: the files your adapter lets the agent edit, your
+briefs, the run history, and to the reviewer the files that depend on a
+change. It never sends a secret-shaped path (`.env`, keys, certificates), a
+symlink, or a file whose content looks like a credential, and your project's
+tests and context plugins run with the lab keys removed from their
+environment.
 
 ## Download and run it locally
 
