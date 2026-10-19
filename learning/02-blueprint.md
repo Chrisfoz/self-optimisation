@@ -15,7 +15,7 @@ flowchart TD
     detect["is there anything<br/>genuinely new?"]
   end
 
-  detect -->|"no"| idle(["stop. no cost,<br/>no commit, no email"])
+  detect -->|"no"| idle(["stop. no cost, no commit —<br/>the digest still says nothing new"])
   detect -->|"yes"| pre["2 · preflight<br/>all checks already green?"]
 
   pre -->|"already red"| abort(["abort — a later failure<br/>would not be attributable"])

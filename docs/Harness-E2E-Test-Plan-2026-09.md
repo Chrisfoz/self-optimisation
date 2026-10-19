@@ -1,5 +1,10 @@
 # End-to-end test plan and results — 2026-09-14
 
+> **Historical record, as of 2026-09-14.** Counts and paths are as they were
+> then; the current suite is whatever `npm test` prints, laid out in README's
+> "Testing this harness itself". §5 is annotated with what has happened
+> since.
+
 **Purpose.** Make the harness operational end to end and prove it: project
 selection, every provider and model, a generation run on many models at
 once, and the curiosity element. This document is the plan, what was done
@@ -178,12 +183,13 @@ Nothing below can be done from a session with no keys and no GitHub App.
 Each is one command or one setting.
 
 1. **Real keys, real labs, the same scratch project.** Copy
-   `harness/.env.example` to `.env`, add the keys you hold, then from any
-   project with an adapter:
+   `harness/.env.harness.example` to `harness/.env.harness.local` (renamed
+   since this was written), add the keys you hold, then from any project
+   with an adapter:
    ```bash
-   node --env-file=.env harness/scripts/check-model-releases.mjs     # baseline every lab you hold a key for
-   node --env-file=.env harness/scripts/refresh-model-catalogue.mjs  # fills the console pick-list, incl. Qwen
-   node --env-file=.env harness/scripts/rehearse.mjs --models <one id per lab>
+   node --env-file=harness/.env.harness.local harness/scripts/check-model-releases.mjs     # baseline every lab you hold a key for
+   node --env-file=harness/.env.harness.local harness/scripts/refresh-model-catalogue.mjs  # fills the console pick-list, incl. Qwen
+   node --env-file=harness/.env.harness.local harness/scripts/rehearse.mjs --models <one id per lab>
    ```
    Expect the same stages as §3.3, with real proposals. Discard the branch
    afterwards as the script says, or keep it.
@@ -195,6 +201,9 @@ Each is one command or one setting.
    secrets. Then merge or close the pull request and dispatch once more:
    that is the **read-back of a merged or closed pull request**, the one
    step the 2026-09-11 write-up lists as still unproven.
+   *Since:* Actions runs happened on two projects, and the owner merged
+   Hospital of the Future's generation 001 (2026-09-18). The next cycle
+   reading that merge back has still not run.
 4. **The digest.** Set `notify:` in the adapter and `SENDGRID_API_KEY`; the
    generated workflow sends it after each run.
 

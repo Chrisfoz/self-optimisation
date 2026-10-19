@@ -23,14 +23,20 @@ portable pattern you'd lift into another project. Read
 
 | Layer | Where | Shows |
 |---|---|---|
-| **The project before the console implementation** | Below, on this page — new, added to answer "how do console/harness/curiosity relate" | Console + harness + curiosity as one picture, solid where built, dashed where proposed — the only diagram that spans all three |
+| **Historical project snapshot** | Below, on this page — drawn before the console was built, to answer "how do console/harness/curiosity relate" | Console + harness + curiosity as one picture, solid where built, dashed where proposed — the only diagram that spans all three |
 | **This repo's real status (the harness alone)** | Below, on this page — now **two** diagrams: one cycle end to end, then what happens inside the loop | What's actually built in the harness specifically. Everything drawn is real code with a test file; the warm-toned boxes are the ways a cycle ends without shipping, not unbuilt work |
-| **Portable pattern** | [`learning/diagrams/generic-loop.mmd`](learning/diagrams/generic-loop.mmd), `generic-guardrails.mmd`, `generic-context.mmd` — embedded and viewable in [`learning/02-blueprint.md`](learning/02-blueprint.md) and [`learning/05-guardrails-and-trust.md`](learning/05-guardrails-and-trust.md) | The abstract loop and guardrail layers, project-neutral — what you'd draw for *any* installation, including one that isn't this harness at all |
+| **Portable pattern** | [`learning/diagrams/generic-loop.mmd`](learning/diagrams/generic-loop.mmd), `generic-guardrails.mmd`, `generic-context.mmd` — embedded and viewable in [`learning/02-blueprint.md`](learning/02-blueprint.md), [`learning/04-context-recipe.md`](learning/04-context-recipe.md) and [`learning/05-guardrails-and-trust.md`](learning/05-guardrails-and-trust.md) | The abstract loop and guardrail layers, project-neutral — what you'd draw for *any* installation, including one that isn't this harness at all |
 | **Reference implementation, concretely** | [`learning/diagrams/worked-example-run.mmd`](learning/diagrams/worked-example-run.mmd), `worked-example-harness.mmd` — both embedded below since GitHub doesn't render a bare `.mmd` file as a picture | The same pattern as it actually runs in the reference implementation (real job names, real check counts, real token costs) — useful for seeing what the abstraction looks like once it's hit a real, live system |
 | **Proposed, not built** | [`learning/diagrams/proposed-curiosity-run.mmd`](learning/diagrams/proposed-curiosity-run.mmd), `proposed-curiosity-memory.mmd`, `proposed-curiosity-authorisation.mmd`, indexed at [`docs/curiosity/README.md`](docs/curiosity/README.md) | The curiosity design's own three diagrams — a second longitudinal pass, four of its ten components built and the rest proposed. Do not read the dashed nodes as documentation of the harness. |
+| **Self-Optimisation², illustrated** | [`docs/diagrams/self-optimisation-harness/`](docs/diagrams/self-optimisation-harness/README.md) — an SVG and its editable `.drawio` source | The recursive idea as one illustration: the harness improving a project, and the harness's own strategy improving from the outcomes. An overview, not a map of the code — the two diagrams below are that |
 | **Proposed KPI learning** | [Two-loop design below](#proposed-kpi-learning-loop), with [sidecar source](learning/diagrams/proposed-kpi-learning-loop.mmd) and [measurement specification](docs/harness-kpis/README.md) | Existing product-run records feed proposed outcome assessments, controlled operating-strategy experiments and reviewed policy adoption. Measurement automation is not built. |
 
 ## Historical project snapshot, in one picture
+
+*Drawn before the console was built (it is now a working installer:
+[`console/IMPLEMENTATION.md`](console/IMPLEMENTATION.md)); only the
+curiosity count has been kept current since. For today's harness, read the
+two diagrams after it.*
 
 Console, harness, and curiosity live at three different maturity levels, and
 no other diagram in this repository shows them on the same page. Solid boxes
@@ -108,16 +114,18 @@ flowchart TD
   trigger -->|"models named by hand"| campaign["✅ Campaign mode<br/>campaign.mjs — stamped campaign: true<br/>so release-driven history stays separable"]
 
   detector --> readback
-  campaign --> readback["✅ Read back earlier pull requests<br/>pull-requests.mjs — merged / closed / open,<br/>then report.mjs regenerates REPORT.md.<br/>Runs on EVERY cycle, including a quiet one:<br/>a person's merge or close is the one verdict<br/>in this loop that is not the harness<br/>grading itself."]
+  campaign --> readback["✅ Read back earlier pull requests<br/>pull-requests.mjs — merged / closed / open,<br/>then report.mjs regenerates REPORT.md<br/>and lessons.mjs refreshes the lessons ledger.<br/>Runs on EVERY cycle, including a quiet one:<br/>a person's merge or close is the one verdict<br/>in this loop that is not the harness<br/>grading itself."]
 
   readback --> anything{"anything to run on?"}
   anything -->|"nothing new"| stopQuiet(["stop. no cost, no commit —<br/>the digest still reports the quiet cycle"])
   anything --> probe["✅ Reachability probe<br/>probe-models.mjs — the real request shape,<br/>drop whatever cannot answer it"]
 
   probe -->|"nothing reachable"| stopUnreachable(["stop. the digest says a lab shipped<br/>something nothing could reach"])
+  probe -->|"a pinned seat unreachable"| stopPinned(["stop. the digest names the implement,<br/>review or notify model that could not answer"])
   probe --> preflight["✅ Preflight — the project's own tests<br/>the baseline must be green before<br/>anything is spent"]
+  preflight -->|"red"| stopPreflight(["stop. nothing spent on a project<br/>whose own tests already fail"])
 
-  preflight --> loop["✅ THE LOOP · one Node process<br/>run-generation.mjs — see the next diagram"]
+  preflight --> loop["✅ THE LOOP · one Node process<br/>run-generation.mjs — see the next diagram.<br/>Then the non-gating evaluators, and a<br/>themes review at its cadence"]
 
   loop -->|"nothing shipped"| held
   loop -->|"a change on disk"| guard["✅ Guard<br/>check-guarded-paths.mjs — frozen paths,<br/>append-only paths, frozen JSON fields,<br/>churn ceiling, and the committed goal"]
@@ -135,7 +143,9 @@ flowchart TD
   verify --> evidence
   held --> evidence["✅ Runtime evidence<br/>record-runtime-evidence.mjs — what this run<br/>actually SAW, not what it decided"]
 
-  evidence --> digest(["✅ Digest — notify.mjs<br/>plain language with a terse fallback.<br/>Runs on EVERY outcome above, including<br/>all four ways to reach no generation."])
+  evidence --> persist["✅ Persist the record<br/>persist-records.mjs — attempts.json and<br/>lessons.json to the default branch, on<br/>every outcome, failures included"]
+  persist --> digest(["✅ Digest — notify.mjs<br/>plain language with a terse fallback.<br/>Runs on EVERY outcome above, including<br/>all six ways to reach no generation."])
+  digest -.->|"an escalation reached consensus"| notice["✅ Escalation notice<br/>send-escalation-notice.mjs — a separate<br/>email asking a person to decide"]
 
   merge -.->|"shipped, and should not have"| revert["✅ revert-generation.mjs<br/>reverts the merge, records it,<br/>the next run reads it as a failure"]
   pr -.-> revert
@@ -147,11 +157,13 @@ flowchart TD
   style stopInvalid fill:#F3E3D4,stroke:#9FB0BE
   style stopQuiet fill:#F3E3D4,stroke:#9FB0BE
   style stopUnreachable fill:#F3E3D4,stroke:#9FB0BE
+  style stopPinned fill:#F3E3D4,stroke:#9FB0BE
+  style stopPreflight fill:#F3E3D4,stroke:#9FB0BE
   style held fill:#F3E3D4,stroke:#9FB0BE
 ```
 
 **One cycle, above.** Every box is real code with its own test file. The
-five rounded, warm-toned boxes are the ways a cycle ends without shipping
+seven rounded, warm-toned boxes are the ways a cycle ends without shipping
 anything — and each of them still sends a digest saying *which* kind of
 nothing happened, because "the loop checked and there was nothing to do"
 and "the loop never ran" are the same silence from an inbox
@@ -209,6 +221,8 @@ flowchart TD
   shipped --> records[("✅ the record every future run reads —<br/>committed to the default branch on EVERY<br/>outcome, under a claimed gen-NNN and a run id")]
   abandoned --> records
   records -.->|"read back next generation"| ctx
+  records -.->|"refreshLessons, and a person's merge or close:<br/>candidate → verified, or stale when files change"| lessons
+  records -.->|"themes review every N generations"| ledger
 
   style ctx fill:#DCE7F0,stroke:#4A5C6A
 ```
@@ -284,7 +298,7 @@ the installer asks for it. Until then there is no cron in the repository to
 fire, which makes "the schedule stays off until a rehearsal passes" a fact
 about the file rather than a promise about the process.
 
-`Portable-Harness-Design.md`'s Status table has the same information as
+`Portable-Harness-Design.md`'s §7 kernel mapping has the same information as
 prose, kept in sync by hand — if the two ever disagree, trust whichever was
 edited more recently and fix the other.
 
@@ -468,7 +482,7 @@ trust whichever was edited more recently.
 | Context compiler (`harness/lib/context-pack.mjs`, `assemble-context.mjs`, `code-map.mjs`) | ✅ Built, tested — one assembly for the loop, the probe and the bench. `context.strategy: full-dump` (default) sends every editable file; `scoped` sends a code map (files, symbols, imports) and each suggesting model names the files it then reads in full, up to a ceiling. `scoped` has not yet been measured on a large real repository (WORKPLAN M8). The probe measures the prompt from the adapter and drops a model whose reported window cannot hold it |
 | **Orchestrator** (`harness/lib/orchestrator.mjs` + `harness/scripts/run-generation.mjs`) | ✅ **Built, tested, and runnable** — suggest → implement → review → refine, end to end, against your own adapter and brief files |
 | Independent reviewer (`harness/lib/review.mjs`, `review-evidence.mjs`) | ✅ Built, tested, wired — also shown the unchanged files that depend on a change; may ask once to read other tracked files (never secret-shaped paths); `INSUFFICIENT_CONTEXT` is a verdict that never ships |
-| Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested — still awaiting a workflow step that runs it against a real PR from the orchestrator, since that's CI wiring, not harness code |
+| Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested, wired — `harness/scripts/check-guarded-paths.mjs` runs as its own step in the generated workflow against every agent branch, and has on real Actions runs |
 | Automated evaluator — test-command runner (`evaluation.test_commands`) | ✅ Built, in the two places it belongs. In CI it needs no harness *code*: a project's test commands are rendered straight into the generated workflow as steps, the same way the guard runs as one, so a run fails on the commands CI actually ran. `harness/scripts/rehearse.mjs` reads the adapter's own copy to run the identical gates locally — the one deliberate reader of that field, documented in `adapter.mjs`'s `evaluationConfig()` |
 | Quality-dimension evaluator plugins (`harness/lib/evaluators.mjs`, `harness/plugins/evaluators/`) | ✅ Built, tested, wired — the measurements that are explicitly **not** gates. A plugin gets the working tree and the generation record and returns named metrics; it cannot fail a generation, however badly it behaves. One shipped example (`source-weight`), the interface documented, ecosystem-specific plugins (Checkstyle, mypy, Roslyn, the canvas checks) left as extension points |
 | Probes that render, simulate or observe — and the two sockets that carry what they saw ([`docs/Tool-Use-Design.md`](docs/Tool-Use-Design.md) phase 1) | ✅ Built, tested — a plugin may now write into one given directory and return **images** and **observations**, not just numbers. Images from the last generation are attached to the next suggestion call (with their provenance stated, so "current" cannot mean a stale render); observations are read into its prompt. `evaluation.visual_capture` runs the same interface *inside* a generation so the **reviewer** sees a render of the change under review. This is where Blender, a physics probe or a headless browser belongs — the harness ships none of them and has no opinion about your ecosystem. Phases 2–5 (a tool contract, MCP, model-authored tools) are design only |
@@ -615,8 +629,8 @@ to a real incident rather than stated as a bare rule.
 
 ```
 self_optimisation/
-├── README.md                        # this file
-├── ARCHITECTURE.md                  # five diagrams: the project, the loop, inside the loop
+├── README.md                        # what it is, the five-command install, where to go next
+├── ARCHITECTURE.md                  # this file: the diagrams, the status table, this layout
 ├── WORKPLAN.md                      # the sequenced plan of record — what's next
 ├── CONTRIBUTING.md                  # the design rules a change here has to keep
 ├── Portable-Harness-Design.md       # the historical record of the port from carrotgame
@@ -628,6 +642,7 @@ self_optimisation/
 ├── .devcontainer/                   # Node 22 + the GitHub CLI, for Codespaces
 ├── .github/
 │   └── workflows/
+│       ├── ci.yml                   # this repository's own suite, on every PR and push to main
 │       ├── self-improve.yml         # NOT this repo improving itself — this is THE SHARED
 │       │                             # WORKFLOW, rendered from harness/templates/ by
 │       │                             # scripts/render-shared-workflow.mjs, and what a
@@ -637,8 +652,10 @@ self_optimisation/
 ├── package.json                     # no dependencies; `npm test` runs harness/'s own suite
 ├── docs/                            # research corpus, the design documents,
 │                                     # campaigns/ — real-model runs written up with their
-│                                     # records, and curiosity/ — a second longitudinal
-│                                     # pass, 4 of its 10 components built, the rest gated on A'
+│                                     # records, curiosity/ — a second longitudinal
+│                                     # pass, 4 of its 10 components built, the rest gated on A',
+│                                     # harness-kpis/ (proposed strategy learning), diagrams/
+│                                     # (Self-Optimisation² illustration) and history/
 ├── console/                         # working ten-step installer, HTTP API,
 │                                     # GitHub App flow, pages and deployment guide;
 │                                     # how-to-run.html is the local setup guide,
@@ -651,7 +668,9 @@ self_optimisation/
 │   ├── lib/                         # one file per harness/lib/ module
 │   ├── scripts/                     # the CLIs, driven as real child processes
 │   ├── console/                     # configuration, GitHub boundary and real HTTP tests
-│   └── e2e/                         # the whole chain, real git, real test runs
+│   ├── plugins/                     # the plugins shipped in harness/plugins/
+│   ├── e2e/                         # the whole chain, real git, real test runs, loopback labs
+│   └── helpers/                     # shared fixtures — mock labs, scratch projects, a step runner
 ├── learning/                        # principles, blueprint, failure modes,
 │                                     # starter kit, diagrams — ported from the
 │                                     # reference implementation, written to
@@ -675,8 +694,10 @@ self_optimisation/
     │   └── ...                        # detector, probe, guard, promote, verify, digest,
     │                                   # evaluators, themes, report, revert, PR read-back
     ├── plugins/
-    │   └── evaluators/                # the non-gating quality dimensions: the interface,
-    │                                   # and one shipped example (source-weight)
+    │   ├── evaluators/                # the non-gating quality dimensions: the interface,
+    │   │                               # and one shipped example (source-weight)
+    │   └── context/                   # context providers — prompt sections a project opts
+    │                                   # into (game-references ships here)
     ├── templates/                     # agent-brief.md.tmpl, reviewer-brief.md.tmpl,
     │                                   # workflow.yml.tmpl — filled in by cli/init.mjs
     ├── cli/

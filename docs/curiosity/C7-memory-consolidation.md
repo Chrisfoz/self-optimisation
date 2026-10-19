@@ -31,8 +31,9 @@ counting already exists.
 
 This is also the mechanism
 [principle 21](../../learning/01-principles.md#21-constraints-never-expire-hints-should)
-has been missing. *"Constraints never expire, hints should"* is currently an
-intention — nothing in the harness decays anything. This makes decay
+has been missing. *"Constraints never expire, hints should"* is still mostly
+an intention: lessons already decay (stale when their anchored files change,
+`harness/lib/lessons.mjs`), but themes and open questions do not yet. This makes decay
 automatic and evidence-driven rather than a human periodically deciding a
 hint has gone stale.
 

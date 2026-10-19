@@ -42,7 +42,10 @@ flowchart TD
 
   guard -->|"clean"| tests{"full suites<br/>ON the agent branch"}
   guard -->|"touched a frozen path"| held(["left unmerged,<br/>for a human to look at"])
-  tests -->|"all green"| merge["merge, tag, log"]
+  tests -->|"all green"| who{"who merges?<br/>set once, at install"}
+  who -->|"human approval · DEFAULT"| pr["open a pull request —<br/>the owner's call"]
+  who -->|"autonomous merge · OPT-IN"| merge["merge, tag, log"]
+  pr --> rec
   tests -->|"any check red"| held
   merge --> live["verify the LIVE product<br/>actually carries the change"]
 

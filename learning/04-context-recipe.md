@@ -22,8 +22,10 @@ irrelevant to the one decision being made.
 magnitude denser per token. It is also the part almost everyone forgets.
 
 ```mermaid
+%% Simplified on purpose: the harness also sends the committed goal, lessons and
+%% runtime evidence (ARCHITECTURE.md, "Inside the loop").
 flowchart TB
-  src["the editable source, in full<br/>every file the agent may change"] --> pk
+  src["the editable source, in full —<br/>or a code map the model picks files from"] --> pk
   map["a repository map<br/>path · size · purpose · may I edit it?"] --> pk
   idx["a test index<br/>assertion NAMES only, not bodies"] --> pk
   hist["history · what shipped<br/>AND what was tried and died"] --> pk
@@ -32,7 +34,7 @@ flowchart TB
 
   pk["one prompt<br/>send what changes the decision,<br/>not what describes the project"] ==> ask
 
-  omit(["deliberately NOT sent:<br/>everything else.<br/>raw source dilutes attention"]) -.-> pk
+  omit(["deliberately NOT sent:<br/>everything else. on a large project,<br/>not even all the source: it dilutes attention"]) -.-> pk
 
   ask["SUGGEST · the rotating seat<br/>returns prose, writes no code"] ==>|"a proposal"| impl["IMPLEMENT · a pinned model"]
 

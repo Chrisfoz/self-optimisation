@@ -13,6 +13,7 @@ flowchart TB
   trev --> unknown["C2 · UNKNOWN<br/>the frontier of the abstraction —<br/>what the principle exposes<br/>and does not answer"]
 
   subgraph t2["TIER 2 · THEMATIC — accumulates, and is meant to decay"]
+    lessons[("lessons.json — decays: stale<br/>when its files change")]
     themes[("themes/review-NNN.json")]
     esc[("escalations/ledger.json")]
     ques[("C3 · curiosity/ledger.json")]
@@ -41,13 +42,14 @@ flowchart TB
     prin[("C7 · the handful of things that keep<br/>turning out to be true.<br/>promotion criterion = the consensus logic,<br/>with the axis rotated from models to time")]
   end
 
+  lessons --> out
   prin -.-> out
   themes -.-> out
   esc -.-> out
   ques -.-> out
   out(["the context pack —<br/>every future generation"])
 
-  note["this is the mechanism principle 21 has been missing:<br/>'constraints never expire, hints should' is currently<br/>an intention, because nothing in the harness decays anything"]
+  note["this is the mechanism principle 21 has been missing:<br/>'constraints never expire, hints should' is currently<br/>an intention for themes and questions. lessons already decay<br/>(stale when their anchored files change); nothing else does yet"]
   note ~~~ t3
 
   legendA["solid = built today<br/>C n = the spec in docs/curiosity/"]
