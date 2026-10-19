@@ -1,7 +1,7 @@
 {
   "name": "self-optimisation-harness",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Portable harness for model-release-driven software improvement.",
   "license": "MIT",
   "repository": {
