@@ -24,6 +24,9 @@ import {
 
 export default {
   name: 'game-references',
+  // Every variable provide() reads. The shared workflow wires these; a
+  // project still lists the ones it uses in its adapter entry's `env`.
+  env: ['GAME_REFERENCE_LIVE_SEARCH', 'GAME_REFERENCE_QUERY', 'GAME_REFERENCE_WEB_SEARCH', 'GAME_REFERENCE_WEB_QUERY', 'BRAVE_SEARCH_API_KEY'],
   async provide({ repoRoot, config = {}, env = {}, log = () => {} }) {
     const notes = loadGameReferences({ repoRoot, enabled: true, ...(config.notes_path ? { relativePath: config.notes_path } : {}) });
     const github = await discoverGameReferences({ enabled: env.GAME_REFERENCE_LIVE_SEARCH === 'true', query: config.github_query || env.GAME_REFERENCE_QUERY || '' });

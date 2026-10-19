@@ -862,9 +862,10 @@ function renderWorkflow(template, answers, shared) {
   out = sub(out, '{{RUNNER}}', shared ? '${{ inputs.runner }}' : answers.runner || 'ubuntu-latest');
   out = sub(out, '{{PROVIDER_ENV_LINES}}', providerEnvLines);
   // The variables context.providers declared, for the improve step only. A
-  // shared workflow cannot know them when it is rendered, so it passes none
-  // (a provider there runs without its environment and says so).
-  out = out.replace(/^\{\{CONTEXT_PROVIDER_ENV_LINES\}\}\n/m, () => (shared ? '' : contextProviderEnvLines(answers.contextProviderEnv)));
+  // shared workflow cannot see any project's adapter when it is rendered, so
+  // it wires what the providers shipped with the harness declare
+  // (shippedContextProviderEnv()); a project's own provider gets none there.
+  out = out.replace(/^\{\{CONTEXT_PROVIDER_ENV_LINES\}\}\n/m, () => contextProviderEnvLines(answers.contextProviderEnv));
   out = sub(out, '{{PROVIDERS_CSV}}', shared ? '"$PROVIDERS_CSV"' : answers.providers.map((p) => p.name).join(','));
   out = sub(out, '{{SNAPSHOT_PATH}}', shared ? `"${configured('SNAPSHOT_PATH')}"` : answers.snapshotPath || '.agent/model-snapshot.json');
   out = sub(out, '{{TEST_COMMAND_LINES}}', testCommandLines);
@@ -916,11 +917,13 @@ export function renderWorkflowTemplate(template, answers) {
  * a project never set resolves to an empty string.
  *
  * @param {string} template
- * @param {{providers: Array<{name: string, envKey: string}>}} opts  Every registered lab.
+ * @param {{providers: Array<{name: string, envKey: string}>, contextProviderEnv?: string[]}} opts
+ *   Every registered lab, and what the shipped context providers declare.
  */
-export function renderSharedWorkflow(template, { providers }) {
+export function renderSharedWorkflow(template, { providers, contextProviderEnv = [] }) {
   return renderWorkflow(template, {
     providers,
+    contextProviderEnv,
     roleProviders: [],
     notify: { provider: 'sendgrid', envKey: 'SENDGRID_API_KEY' },
   }, true);

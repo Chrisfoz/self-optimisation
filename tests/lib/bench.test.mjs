@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateSpec, mergeAdapter, scoreTrial, wilson, summarise, compare, renderReport } from '../../harness/lib/bench.mjs';
+import { validateSpec, mergeAdapter, scoreTrial, wilson, summarise, compare, renderReport, withOracleDir } from '../../harness/lib/bench.mjs';
 
 const task = { id: 't1', repo: '.', baseCommit: 'abcdef1', suggestModels: [{ id: 'm' }], oracleCommands: ['true'] };
 const spec = (over = {}) => ({ tasks: [task], variants: [{ id: 'base' }, { id: 'cand', adapter: { context: { strategy: 'scoped' } } }], ...over });
@@ -88,4 +88,14 @@ test('renderReport names every variant and every trial', () => {
   assert.match(md, /\| base \| 1 \|/);
   assert.match(md, /\*\*cand: adopt-provisionally\*\*/);
   assert.equal((md.match(/^\| t \|/gm) || []).length, 2);
+});
+
+test('withOracleDir fills in both spellings itself, so no shell has to expand them', () => {
+  const dir = 'C:\\specs\\bench';
+  assert.equal(withOracleDir('node "$BENCH_ORACLE_DIR/oracle.mjs"', dir), `node "${dir}/oracle.mjs"`);
+  assert.equal(withOracleDir('node --test ${BENCH_ORACLE_DIR}/a.mjs $BENCH_ORACLE_DIR/b.mjs', '/s'), 'node --test /s/a.mjs /s/b.mjs');
+  // Only the bench's own variable; a longer name that starts the same is left alone.
+  assert.equal(withOracleDir('echo $BENCH_ORACLE_DIRS $HOME', '/s'), 'echo $BENCH_ORACLE_DIRS $HOME');
+  // A $ in the directory is inserted literally, not read as a replacement pattern.
+  assert.equal(withOracleDir('x $BENCH_ORACLE_DIR', '/a$&b'), 'x /a$&b');
 });

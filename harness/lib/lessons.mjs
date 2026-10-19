@@ -219,10 +219,21 @@ export function buildLessonsBrief(ledger, { hashOf = null, maxChars = DEFAULT_LE
 // On disk
 // ---------------------------------------------------------------------------
 
+/**
+ * A file's anchor hash, line-ending-insensitive. hashOf() reads the working
+ * tree and hashAt() reads a git blob; on a Windows checkout with
+ * core.autocrlf the first is CRLF and the second LF, and comparing raw bytes
+ * marked every lesson stale there, so none ever reached a prompt.
+ */
+export function anchorHash(bytes) {
+  const text = Buffer.from(bytes).toString('latin1').replace(/\r\n/g, '\n');
+  return crypto.createHash('sha256').update(text, 'latin1').digest('hex').slice(0, 16);
+}
+
 /** Hash and import lookups against the working tree, for updateLessons()/buildLessonsBrief(). */
 export function diskLookups(repoRoot) {
   const hashOf = (file) => {
-    try { return crypto.createHash('sha256').update(fs.readFileSync(path.join(repoRoot, file))).digest('hex').slice(0, 16); } catch { return null; }
+    try { return anchorHash(fs.readFileSync(path.join(repoRoot, file))); } catch { return null; }
   };
   // resolveImport() asks a Set whether a candidate path exists; this one asks the disk.
   class OnDisk extends Set {
@@ -237,7 +248,7 @@ export function diskLookups(repoRoot) {
   const hashAt = (file, commit) => {
     try {
       const bytes = execFileSync('git', ['show', `${commit}:${file}`], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 });
-      return crypto.createHash('sha256').update(bytes).digest('hex').slice(0, 16);
+      return anchorHash(bytes);
     } catch { return null; }
   };
   return { hashOf, hashAt, depsOf };

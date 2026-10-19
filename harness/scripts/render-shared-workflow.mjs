@@ -26,11 +26,12 @@ import { fileURLToPath } from 'node:url';
 import '../providers/index.mjs';
 import { registeredProviders, getProvider } from '../lib/llm-provider.mjs';
 import { renderSharedWorkflow, SHARED_WORKFLOW_PATH } from '../lib/scaffold.mjs';
+import { shippedContextProviderEnv } from '../lib/context-providers.mjs';
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const template = fs.readFileSync(path.join(repoRoot, 'harness/templates/workflow.yml.tmpl'), 'utf8');
 const providers = registeredProviders().map((name) => ({ name, envKey: getProvider(name).envKey }));
-const rendered = renderSharedWorkflow(template, { providers });
+const rendered = renderSharedWorkflow(template, { providers, contextProviderEnv: await shippedContextProviderEnv() });
 const target = path.join(repoRoot, SHARED_WORKFLOW_PATH);
 
 if (process.argv.includes('--check')) {

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { updateLessons, buildLessonsBrief, observationsFrom, lessonKey, supersede, refreshLessons, LESSONS_FILE } from '../../harness/lib/lessons.mjs';
+import { updateLessons, buildLessonsBrief, observationsFrom, lessonKey, supersede, refreshLessons, anchorHash, LESSONS_FILE } from '../../harness/lib/lessons.mjs';
 
 const failed = (generation, detail, files = ['src/a.js'], outcome = 'rejected-by-review') => ({
   generation, outcome: 'abandoned', provenance: { baseCommit: 'c0' },
@@ -101,4 +101,11 @@ test('refreshLessons: failed attempts are anchored to the commit they were tried
   assert.equal(failure.status, 'candidate', 'current on main, where a.js is still v1');
   assert.equal(success.status, 'stale', 'the change is not on main yet');
   assert.ok(fs.existsSync(path.join(root, 'docs/generations', LESSONS_FILE)));
+});
+
+test('an anchor hash ignores line endings, so a Windows checkout does not mark every lesson stale', () => {
+  const lf = Buffer.from('const a = 1;\nconst b = 2;\n');
+  const crlf = Buffer.from('const a = 1;\r\nconst b = 2;\r\n');
+  assert.equal(anchorHash(crlf), anchorHash(lf));
+  assert.notEqual(anchorHash(Buffer.from('const a = 3;\n')), anchorHash(lf));
 });
