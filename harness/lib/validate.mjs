@@ -29,6 +29,7 @@ import path from 'path';
 import { constitutionAllowlist, guardConfig, briefPaths, rolesConfig, watchedProviders, goalConfig } from './adapter.mjs';
 import { globToRegExp, isGlob, expandGlob } from './glob.mjs';
 import { resolveProvider, getProvider, registeredProviders } from './llm-provider.mjs';
+import { resolveProviderModule } from './context-providers.mjs';
 
 /**
  * A bracketed placeholder left over from a template — `[TRIGGER CONDITION]`,
@@ -106,9 +107,9 @@ export function validateAdapter(adapter, { repoRoot = process.cwd(), env = proce
   for (const [i, p] of (Array.isArray(adapter.context?.providers) ? adapter.context.providers : []).entries()) {
     const at = `context.providers[${i}]`;
     if (!p || typeof p.module !== 'string' || !p.module) { warnings.push(`${at} has no module — it is ignored.`); continue; }
-    const absolute = path.resolve(repoRoot, p.module);
-    if (!absolute.startsWith(path.resolve(repoRoot) + path.sep)) errors.push(`${at}.module "${p.module}" is outside the project.`);
-    else if (!fs.existsSync(absolute)) warnings.push(`${at}.module "${p.module}" does not exist — the section will be skipped every run.`);
+    let absolute = null;
+    try { absolute = resolveProviderModule({ repoRoot, module: p.module }); } catch { errors.push(`${at}.module "${p.module}" is outside the project.`); }
+    if (absolute && !fs.existsSync(absolute)) warnings.push(`${at}.module "${p.module}" does not exist — the section will be skipped every run.`);
     for (const name of Array.isArray(p.env) ? p.env : []) {
       if (labKeys.has(name)) errors.push(`${at}.env names ${name}, a lab key. A context provider may not see the loop's credentials.`);
       else if (!/^[A-Z_][A-Z0-9_]*$/.test(String(name))) warnings.push(`${at}.env: "${name}" is not an environment variable name — it is ignored.`);

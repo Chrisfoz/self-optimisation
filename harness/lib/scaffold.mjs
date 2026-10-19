@@ -14,6 +14,7 @@
 
 import { dump as dumpYaml } from '../vendor/js-yaml.mjs';
 import { normalizeApprovalClass, normalizeAmbition } from './adapter.mjs';
+import { isSecretName } from './test-runner.mjs';
 
 /**
  * The js-yaml release vendored at harness/vendor/js-yaml.mjs. Nothing is
@@ -899,7 +900,7 @@ function renderWorkflow(template, answers, shared) {
 export function contextProviderEnvLines(names = []) {
   const valid = [...new Set((names ?? []).filter((n) => typeof n === 'string' && /^[A-Z_][A-Z0-9_]*$/.test(n)))];
   return valid
-    .map((n) => `          ${n}: ${'$'}{{ ${/(KEY|TOKEN|SECRET|PASSWORD)/.test(n) ? 'secrets' : 'vars'}.${n} }}\n`)
+    .map((n) => `          ${n}: ${'$'}{{ ${isSecretName(n) ? 'secrets' : 'vars'}.${n} }}\n`)
     .join('');
 }
 

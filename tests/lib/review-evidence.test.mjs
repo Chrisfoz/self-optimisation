@@ -51,3 +51,38 @@ test('read serves tracked source in full and names every refusal', (t) => {
   assert.match(got.text, /#### src\/a\.js\n```\nA\n```/);
   assert.doesNotMatch(got.text, /SECRET/);
 });
+
+// Built at run time so the test file itself carries no key-shaped string.
+const FAKE_KEY = ['sk', 'ant', 'api03', 'x'.repeat(40)].join('-');
+
+test('a credential committed under an innocent name is never served, asked for or as a dependent', (t) => {
+  const root = repo(t, {
+    'src/price.js': 'export function total(items) { return items.length; }\n',
+    'config/app.js': `import { total } from '../src/price.js';\nexport const apiKey = '${FAKE_KEY}';\nexport const t = total([]);\n`,
+    'src/cart.js': "import { total } from './price.js';\nexport const c = total([]);\n",
+  });
+  const ev = createReviewEvidence({ repoRoot: root, files: ['src/price.js', 'config/app.js', 'src/cart.js'] });
+  const deps = ev.dependents(['src/price.js'], [{ search: 'export function total(items)', replace: 'export function total(items, x)' }]);
+  assert.match(deps, /src\/cart\.js/);
+  assert.doesNotMatch(deps, /config\/app\.js|sk-ant/);
+  const got = ev.read(['config/app.js']);
+  assert.equal(got.text, null);
+  assert.match(got.refused[0], /credential-shaped/);
+});
+
+test('a tracked symlink is never followed, inside or outside the repository', (t) => {
+  const root = repo(t, { 'src/a.js': 'A\n' });
+  const outside = repo(t, { 'leak.md': 'OUTSIDE-THE-REPO\n' });
+  try {
+    fs.symlinkSync(path.join(outside, 'leak.md'), path.join(root, 'docs.md'));
+    fs.symlinkSync(path.join(root, 'src/a.js'), path.join(root, 'alias.js'));
+  } catch (err) {
+    t.skip(`cannot create symlinks here (${err.code})`);
+    return;
+  }
+  const ev = createReviewEvidence({ repoRoot: root, files: ['src/a.js', 'docs.md', 'alias.js'] });
+  const got = ev.read(['docs.md', 'alias.js', 'src/a.js']);
+  assert.deepEqual(got.served, ['src/a.js']);
+  assert.equal(got.refused.length, 2);
+  assert.doesNotMatch(got.text, /OUTSIDE-THE-REPO/);
+});

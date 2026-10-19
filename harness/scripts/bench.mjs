@@ -19,7 +19,7 @@
  *       "baseCommit": "4f2a9c1",               // pins source AND memory
  *       "suggestModels": [{"id": "gemini-3.8-flash", "provider": "google"}],
  *       "setupCommands": ["npm ci"],           // optional
- *       "oracleCommands": ["node --test $BENCH_ORACLE_DIR/hidden.test.mjs"]
+ *       "oracleCommands": ["node --test \"$BENCH_ORACLE_DIR/hidden.test.mjs\""]   // quoted: the path may hold a space
  *     }],
  *     "variants": [
  *       {"id": "full-dump", "adapter": {"context": {"strategy": "full-dump"}}},

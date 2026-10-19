@@ -255,4 +255,9 @@ test('context.providers: a module outside the project or one asking for a lab ke
   assert.match(bad.errors.join('\n'), /outside the project/);
   assert.match(bad.errors.join('\n'), /OPENAI_API_KEY, a lab key/);
   assert.match(bad.warnings.join('\n'), /missing\.mjs" does not exist/);
+  // A shipped provider the project holds no copy of is loaded from the
+  // running harness (a shared install), so it is not reported missing.
+  const shipped = validateAdapter({ ...adapter, context: { providers: [{ module: 'harness/plugins/context/game-references/index.mjs' }, { module: 'harness/plugins/context/no-such/index.mjs' }] } }, { repoRoot, env });
+  assert.doesNotMatch(shipped.warnings.join('\n'), /game-references/);
+  assert.match(shipped.warnings.join('\n'), /no-such\/index\.mjs" does not exist/);
 });

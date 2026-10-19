@@ -48,7 +48,8 @@ jobs:
             echo "::error::v$version is already released at $(git rev-list -n 1 "v$version"). Bump harness/VERSION."
             exit 1
           fi
-          latest="$(git tag -l 'v*' --sort=-v:refname | head -n 1)"
+          # Only release-shaped tags: a stray `vnext` must not outrank every version.
+          latest="$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
           if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "${latest#v}" "$version" | sort -V | tail -n 1)" != "$version" ]; then
             echo "::error::$version is not newer than the latest release, $latest"
             exit 1

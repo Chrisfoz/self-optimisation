@@ -35,6 +35,19 @@ test('a provider sees only the variables it declared, and its output is fenced a
   assert.doesNotMatch(text, /sk-secret|OTHER/);
 });
 
+// validate.mjs refuses this adapter, but a hand-run generation skips validation.
+test('a lab key is withheld from a provider even when its adapter entry names it', async (t) => {
+  await import('../../harness/providers/index.mjs');
+  const root = project(t, { 'p.mjs': "export default { name: 'notes', provide: ({ env }) => `seen:${Object.keys(env).sort().join(',')}` };" });
+  const text = await runContextProviders({
+    repoRoot: root,
+    configured: [{ module: 'p.mjs', config: {}, env: ['WANTED', 'ANTHROPIC_API_KEY'], maxChars: 1000 }],
+    env: { WANTED: '1', ANTHROPIC_API_KEY: 'sk-secret' },
+  });
+  assert.match(text, /seen:WANTED\b/);
+  assert.doesNotMatch(text, /ANTHROPIC|sk-secret/);
+});
+
 test('providers fail safe: a throw, a hang, nothing returned or a missing export cost only their own section', async (t) => {
   const root = project(t, {
     'throws.mjs': "export default { name: 'throws', provide: () => { throw new Error('boom'); } };",

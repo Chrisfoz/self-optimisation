@@ -29,6 +29,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { fenceUntrusted } from './context-pack.mjs';
+import { getProvider, registeredProviders } from './llm-provider.mjs';
 
 /** The directory holding the running harness/ — the project root for a copied install, a checkout under RUNNER_TEMP for a shared one. */
 const HARNESS_PARENT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -50,19 +51,28 @@ export function contextProvidersConfig(adapter) {
     }));
 }
 
-/** A provider module must live inside the project: a path that leaves it is refused. */
-export async function loadContextProvider({ repoRoot, module: modulePath, importModule = (url) => import(url), harnessParent = HARNESS_PARENT }) {
+/**
+ * Where a provider module named in the adapter actually lives. Throws for a
+ * path outside the project. A shared installation runs the harness from
+ * outside the project, so a provider that ships with it is not in the
+ * project tree: only that one falls back to the running harness's own copy,
+ * and only inside its plugins/context directory. validate.mjs asks the same
+ * question, so its "does not exist" warning matches what a run will load.
+ */
+export function resolveProviderModule({ repoRoot, module: modulePath, harnessParent = HARNESS_PARENT }) {
   const root = path.resolve(repoRoot);
-  let absolute = path.resolve(root, modulePath);
+  const absolute = path.resolve(root, modulePath);
   if (absolute !== root && !absolute.startsWith(root + path.sep)) throw new Error(`context provider ${modulePath} is outside the project`);
-  // A shared installation runs the harness from outside the project, so a
-  // provider that ships with it is not in the project tree. Only that one
-  // falls back to the running harness's own copy, and only inside its
-  // plugins/context directory.
   if (!fs.existsSync(absolute) && modulePath.replace(/\\/g, '/').startsWith(SHIPPED_PREFIX)) {
     const shipped = path.resolve(harnessParent, modulePath);
-    if (shipped.startsWith(path.join(harnessParent, ...SHIPPED_PREFIX.split('/')) + path.sep)) absolute = shipped;
+    if (shipped.startsWith(path.join(harnessParent, ...SHIPPED_PREFIX.split('/')) + path.sep) && fs.existsSync(shipped)) return shipped;
   }
+  return absolute;
+}
+
+/** Load a provider module; see resolveProviderModule() for where it may come from. */
+export async function loadContextProvider({ repoRoot, module: modulePath, importModule = (url) => import(url), harnessParent = HARNESS_PARENT }) {
+  const absolute = resolveProviderModule({ repoRoot, module: modulePath, harnessParent });
   const mod = await importModule(pathToFileURL(absolute).href);
   const plugin = mod.default ?? mod;
   if (typeof plugin?.provide !== 'function') throw new Error(`context provider ${modulePath} exports no provide() function`);
@@ -99,11 +109,16 @@ function withTimeout(promise, ms) {
  * or null when none produced anything — which drops the section.
  */
 export async function runContextProviders({ repoRoot, configured, env = process.env, log = () => {}, importModule, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }) {
+  // validate.mjs refuses an adapter that names a lab key, and in CI nothing
+  // runs past a failed validation. A hand-run generation skips that step, so
+  // the keys are dropped here too: a provider never sees the loop's
+  // credentials, whoever ran it.
+  const labKeys = new Set(registeredProviders().map((n) => getProvider(n)?.envKey).filter(Boolean));
   const sections = [];
   for (const entry of configured) {
     try {
       const plugin = await loadContextProvider({ repoRoot, module: entry.module, importModule });
-      const scopedEnv = Object.fromEntries(entry.env.filter((n) => env[n] !== undefined).map((n) => [n, env[n]]));
+      const scopedEnv = Object.fromEntries(entry.env.filter((n) => !labKeys.has(n) && env[n] !== undefined).map((n) => [n, env[n]]));
       const text = await withTimeout(Promise.resolve(plugin.provide({ repoRoot, config: entry.config, env: scopedEnv, log })), timeoutMs);
       if (typeof text !== 'string' || !text.trim()) { log(`   context provider ${plugin.name}: nothing to add`); continue; }
       const capped = text.length > entry.maxChars ? `${text.slice(0, entry.maxChars)}\n[cut at ${entry.maxChars} characters]` : text;
