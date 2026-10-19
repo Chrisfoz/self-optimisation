@@ -4,7 +4,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import '../../harness/providers/index.mjs';
-import { validateAdapter } from '../../harness/lib/validate.mjs';
+import { execFileSync } from 'node:child_process';
+import { validateAdapter, snapshotIgnoredBy } from '../../harness/lib/validate.mjs';
+import { gitRunner } from '../../harness/lib/git-default-branch.mjs';
 
 function tempRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'validate-test-'));
@@ -82,6 +84,24 @@ test('no setup warning for a suite that needs no install, or for a shared instal
   adapter.harness = { shared: { repository: 'o/r', ref: 'a'.repeat(40) } };
   const { warnings } = validateAdapter(adapter, { repoRoot, env: { ANTHROPIC_API_KEY: 'x' } });
   assert.equal(warnings.filter((w) => /setup_commands/.test(w)).length, 0, 'shared');
+});
+
+// Grammar Game, 2026-10-19: .gitignore held ".agent/", so the snapshot never
+// persisted and every run re-recorded a baseline — no release was ever seen.
+test('a git-ignored model snapshot is an error, asked of real git', (t) => {
+  const { repoRoot, adapter } = validSetup();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  execFileSync('git', ['init', '-q'], { cwd: repoRoot });
+  const git = gitRunner(repoRoot);
+  assert.equal(snapshotIgnoredBy(git, adapter), false);
+  fs.writeFileSync(path.join(repoRoot, '.gitignore'), '.agent/\n');
+  assert.equal(snapshotIgnoredBy(git, adapter), true);
+  assert.equal(snapshotIgnoredBy(git, { ...adapter, providers: { ...adapter.providers, snapshot_path: 'state/models.json' } }), false);
+
+  const env = { ANTHROPIC_API_KEY: 'x' };
+  const { errors } = validateAdapter(adapter, { repoRoot, env, snapshotIgnored: snapshotIgnoredBy(git, adapter) });
+  assert.match(errors.join('\n'), /\.agent\/model-snapshot\.json is git-ignored.*no model release would ever be detected/);
+  assert.deepEqual(validateAdapter(adapter, { repoRoot, env }).errors, [], 'not asked, not reported');
 });
 
 test('rejects a non-object adapter without touching the filesystem', () => {

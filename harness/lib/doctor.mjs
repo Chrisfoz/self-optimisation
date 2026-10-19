@@ -104,7 +104,7 @@ export async function runChecks(deps) {
   // --- The model snapshot -----------------------------------------------------
   const snapshot = adapterSnapshotPath(deps.adapter) || '.agent/model-snapshot.json';
   if (deps.git(['check-ignore', '-q', snapshot]).status === 0) {
-    add('Snapshot', 'fail', `${snapshot} is git-ignored — every run would see every model as new`, `Remove the rule that ignores ${snapshot} from .gitignore`);
+    add('Snapshot', 'fail', `${snapshot} is git-ignored — it never persists, so every run records a fresh baseline and no release is ever detected`, `Remove the rule that ignores ${snapshot} from .gitignore`);
   } else if (deps.git(['ls-files', '--error-unmatch', snapshot]).status === 0) {
     add('Snapshot', 'ok', `${snapshot}, committed`);
   } else {

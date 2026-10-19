@@ -393,7 +393,11 @@ export function noGenerationReason(env) {
   // complete".
   if (env.CHECK_RESULT && !['success', 'skipped'].includes(env.CHECK_RESULT)) return NO_GENERATION_REASONS.CHECK_FAILED;
   if (env.PINNED_BLOCKED === 'true') return NO_GENERATION_REASONS.PINNED_UNREACHABLE;
-  if (env.PREFLIGHT_RESULT && env.PREFLIGHT_RESULT !== 'success') return NO_GENERATION_REASONS.PREFLIGHT_FAILED;
+  // Preflight runs only when there is a model to spend on, so on a quiet
+  // cycle GitHub reports it `skipped`. Only a preflight that RAN and did not
+  // pass is a preflight failure; treating `skipped` as one sent every quiet
+  // cycle a "preflight did not pass" email (found on Grammar Game, 2026-10-19).
+  if (env.PREFLIGHT_RESULT && !['success', 'skipped'].includes(env.PREFLIGHT_RESULT)) return NO_GENERATION_REASONS.PREFLIGHT_FAILED;
   if (env.RELEASE_DETECTED === 'true') return NO_GENERATION_REASONS.ALL_UNREACHABLE;
   return NO_GENERATION_REASONS.QUIET;
 }
