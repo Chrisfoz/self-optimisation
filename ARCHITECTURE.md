@@ -284,7 +284,7 @@ the installer asks for it. Until then there is no cron in the repository to
 fire, which makes "the schedule stays off until a rehearsal passes" a fact
 about the file rather than a promise about the process.
 
-`Portable-Harness-Design.md`'s Status table has the same information as
+`Portable-Harness-Design.md`'s §7 kernel mapping has the same information as
 prose, kept in sync by hand — if the two ever disagree, trust whichever was
 edited more recently and fix the other.
 
@@ -468,7 +468,7 @@ trust whichever was edited more recently.
 | Context compiler (`harness/lib/context-pack.mjs`, `assemble-context.mjs`, `code-map.mjs`) | ✅ Built, tested — one assembly for the loop, the probe and the bench. `context.strategy: full-dump` (default) sends every editable file; `scoped` sends a code map (files, symbols, imports) and each suggesting model names the files it then reads in full, up to a ceiling. `scoped` has not yet been measured on a large real repository (WORKPLAN M8). The probe measures the prompt from the adapter and drops a model whose reported window cannot hold it |
 | **Orchestrator** (`harness/lib/orchestrator.mjs` + `harness/scripts/run-generation.mjs`) | ✅ **Built, tested, and runnable** — suggest → implement → review → refine, end to end, against your own adapter and brief files |
 | Independent reviewer (`harness/lib/review.mjs`, `review-evidence.mjs`) | ✅ Built, tested, wired — also shown the unchanged files that depend on a change; may ask once to read other tracked files (never secret-shaped paths); `INSUFFICIENT_CONTEXT` is a verdict that never ships |
-| Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested — still awaiting a workflow step that runs it against a real PR from the orchestrator, since that's CI wiring, not harness code |
+| Guard (`harness/lib/guard.mjs`, reads `constitution.*` from the adapter) | ✅ Built, tested, wired — `harness/scripts/check-guarded-paths.mjs` runs as its own step in the generated workflow against every agent branch, and has on real Actions runs |
 | Automated evaluator — test-command runner (`evaluation.test_commands`) | ✅ Built, in the two places it belongs. In CI it needs no harness *code*: a project's test commands are rendered straight into the generated workflow as steps, the same way the guard runs as one, so a run fails on the commands CI actually ran. `harness/scripts/rehearse.mjs` reads the adapter's own copy to run the identical gates locally — the one deliberate reader of that field, documented in `adapter.mjs`'s `evaluationConfig()` |
 | Quality-dimension evaluator plugins (`harness/lib/evaluators.mjs`, `harness/plugins/evaluators/`) | ✅ Built, tested, wired — the measurements that are explicitly **not** gates. A plugin gets the working tree and the generation record and returns named metrics; it cannot fail a generation, however badly it behaves. One shipped example (`source-weight`), the interface documented, ecosystem-specific plugins (Checkstyle, mypy, Roslyn, the canvas checks) left as extension points |
 | Probes that render, simulate or observe — and the two sockets that carry what they saw ([`docs/Tool-Use-Design.md`](docs/Tool-Use-Design.md) phase 1) | ✅ Built, tested — a plugin may now write into one given directory and return **images** and **observations**, not just numbers. Images from the last generation are attached to the next suggestion call (with their provenance stated, so "current" cannot mean a stale render); observations are read into its prompt. `evaluation.visual_capture` runs the same interface *inside* a generation so the **reviewer** sees a render of the change under review. This is where Blender, a physics probe or a headless browser belongs — the harness ships none of them and has no opinion about your ecosystem. Phases 2–5 (a tool contract, MCP, model-authored tools) are design only |
@@ -615,8 +615,8 @@ to a real incident rather than stated as a bare rule.
 
 ```
 self_optimisation/
-├── README.md                        # this file
-├── ARCHITECTURE.md                  # five diagrams: the project, the loop, inside the loop
+├── README.md                        # what it is, the five-command install, where to go next
+├── ARCHITECTURE.md                  # this file: the diagrams, the status table, this layout
 ├── WORKPLAN.md                      # the sequenced plan of record — what's next
 ├── CONTRIBUTING.md                  # the design rules a change here has to keep
 ├── Portable-Harness-Design.md       # the historical record of the port from carrotgame
@@ -628,6 +628,7 @@ self_optimisation/
 ├── .devcontainer/                   # Node 22 + the GitHub CLI, for Codespaces
 ├── .github/
 │   └── workflows/
+│       ├── ci.yml                   # this repository's own suite, on every PR and push to main
 │       ├── self-improve.yml         # NOT this repo improving itself — this is THE SHARED
 │       │                             # WORKFLOW, rendered from harness/templates/ by
 │       │                             # scripts/render-shared-workflow.mjs, and what a
@@ -637,8 +638,10 @@ self_optimisation/
 ├── package.json                     # no dependencies; `npm test` runs harness/'s own suite
 ├── docs/                            # research corpus, the design documents,
 │                                     # campaigns/ — real-model runs written up with their
-│                                     # records, and curiosity/ — a second longitudinal
-│                                     # pass, 4 of its 10 components built, the rest gated on A'
+│                                     # records, curiosity/ — a second longitudinal
+│                                     # pass, 4 of its 10 components built, the rest gated on A',
+│                                     # harness-kpis/ (proposed strategy learning), diagrams/
+│                                     # (Self-Optimisation² illustration) and history/
 ├── console/                         # working ten-step installer, HTTP API,
 │                                     # GitHub App flow, pages and deployment guide;
 │                                     # how-to-run.html is the local setup guide,
@@ -651,7 +654,9 @@ self_optimisation/
 │   ├── lib/                         # one file per harness/lib/ module
 │   ├── scripts/                     # the CLIs, driven as real child processes
 │   ├── console/                     # configuration, GitHub boundary and real HTTP tests
-│   └── e2e/                         # the whole chain, real git, real test runs
+│   ├── plugins/                     # the plugins shipped in harness/plugins/
+│   ├── e2e/                         # the whole chain, real git, real test runs, loopback labs
+│   └── helpers/                     # shared fixtures — mock labs, scratch projects, a step runner
 ├── learning/                        # principles, blueprint, failure modes,
 │                                     # starter kit, diagrams — ported from the
 │                                     # reference implementation, written to
@@ -675,8 +680,10 @@ self_optimisation/
     │   └── ...                        # detector, probe, guard, promote, verify, digest,
     │                                   # evaluators, themes, report, revert, PR read-back
     ├── plugins/
-    │   └── evaluators/                # the non-gating quality dimensions: the interface,
-    │                                   # and one shipped example (source-weight)
+    │   ├── evaluators/                # the non-gating quality dimensions: the interface,
+    │   │                               # and one shipped example (source-weight)
+    │   └── context/                   # context providers — prompt sections a project opts
+    │                                   # into (game-references ships here)
     ├── templates/                     # agent-brief.md.tmpl, reviewer-brief.md.tmpl,
     │                                   # workflow.yml.tmpl — filled in by cli/init.mjs
     ├── cli/

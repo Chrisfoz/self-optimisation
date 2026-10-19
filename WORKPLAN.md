@@ -56,8 +56,15 @@ validation exist.
 
 *2026-10-17:* **Tier 9 is built; M8 is next.** Run the replay bench on a
 project large enough to need `scoped`, before any default changes. That run
-is also the first real data for KPI4.
+is also the first real data for KPI4. It needs real lab keys and a real
+repository, so it is the owner's to start.
 
+*2026-10-19:* Tier 8's install work and Tier 9 are released together as
+v0.3.0 (CONTRIBUTING.md, "Releasing"). The notes below are kept for the
+record; the items they name as open (I10, 2.2, the local js-yaml install)
+have since been built.
+
+*Superseded 2026-10-19 — kept for the record:*
 **→ A person's verdict, then 2.1a.** The generated workflow has now run real
 generations on GitHub Actions (Tier 6, 2026-09-11,
 [`docs/campaigns/`](docs/campaigns/)). What has not happened is a human
@@ -161,13 +168,12 @@ format is validated only against the fixtures it was written against
   and exits 0 having changed only the model snapshot, which is what makes
   it safe to run in CI as a test rather than only by hand.
   *Done when:* the e2e test drives the chain through this command rather
-  than by calling each library in sequence. **Partly done** — `rehearse.mjs`
-  exists, is tested at the CLI level for every deterministic path (missing
-  or invalid adapter, dirty tree, no keys, a bad campaign id, a failing
-  preflight), and reuses `run-generation.mjs` itself rather than
-  reimplementing it; `tests/e2e/full-loop.test.mjs` still drives the chain
-  by calling each library directly rather than through this command, which
-  is the one piece of the original *done when* not yet true.
+  than by calling each library in sequence. **Done:** `rehearse.mjs` is
+  tested at the CLI level for every deterministic path (missing or invalid
+  adapter, dirty tree, no keys, a bad campaign id, a failing preflight), and
+  `tests/e2e/mock-labs.test.mjs` drives the whole chain through it against
+  the loopback labs. `tests/e2e/full-loop.test.mjs` still calls each library
+  directly, deliberately: it is the unit-level end-to-end check beside it.
 - [ ] **P0.1 — A real generation through `harness/`.** *Mostly done
   2026-09-11 — see Tier 6.* Four real generations ran through
   `rehearse.mjs` on two projects, every record with `spend.estimatedCalls`
@@ -942,13 +948,16 @@ Most of what broke was the install path and the cost of runs, not the loop.
   APIs and nothing else. `validate.mjs` warns when a test command needs
   dependencies and nothing installs them, and names the fix. Both halves
   verified by breaking them and watching the tests fail.
-- [ ] **I11 — A key check in the harness, with balance where a lab allows
+- [x] **I11 — A key check in the harness, with balance where a lab allows
   it.** NetworkinAI's own `scripts/verify-harness-keys.mjs` does the catalogue
   check. DeepSeek (`GET /user/balance`) and Moonshot
   (`GET /v1/users/me/balance`) also return a balance with an ordinary key.
   Anthropic and OpenAI report spend only, with an admin key. *Done when:*
   `harness/scripts/` has the check, the generated workflow offers it as a
   manual job, and it reports balance for the labs that expose one.
+  **Done:** `harness/scripts/check-keys.mjs` (`harness/lib/key-check.mjs`);
+  the generated workflow's `check-keys` job runs only when the `check_keys`
+  input is set; DeepSeek and Moonshot balances are reported; tested.
 - [ ] **I12 — The budget estimate learns each lab's tokenizer.** Characters
   ÷ 4 undercounted Anthropic's count of HTML by about 1.5×. *Done when:* the
   reservation uses each provider's ratio of real to estimated input from past
@@ -960,7 +969,7 @@ Most of what broke was the install path and the cost of runs, not the loop.
 
 ## Tier 8 — make the install easy (2026-09-26)
 
-From [`suggestion.md`](suggestion.md) (#36), a review of the end-user install
+From [`docs/history/suggestion-deployment-ease-2026-09.md`](docs/history/suggestion-deployment-ease-2026-09.md) (#36), a review of the end-user install
 path: about seven manual steps and an 807-line README stood between a new
 project and its first run. Numbered as in that file (D1 = suggestion 1), and
 listed in the order they are being built — each one makes the next smaller.
@@ -1200,7 +1209,7 @@ building it:
       "Known gap" section, `README.md`'s "one known seam", and
       `Portable-Harness-Design.md`'s "one open seam" all described the merge
       model as unreconciled and no longer do. Keep folding new ones in.
-- [ ] `Portable-Harness-Design.md`'s Status table and `ARCHITECTURE.md`'s prose
+- [ ] `Portable-Harness-Design.md`'s §7 kernel mapping and `ARCHITECTURE.md`'s prose
       hold the same information and are kept in sync by hand. If they ever
       disagree, trust whichever was edited more recently and fix the other.
 - [ ] Every commit is written as though the repository is already public.

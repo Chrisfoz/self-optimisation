@@ -1,5 +1,10 @@
 # Suggestions: making the harness easier to deploy
 
+> **Historical, kept for the record.** Implemented as Tier 8 (D1–D10),
+> merged in #44 and released in v0.2.0; only D3 (the public repository)
+> and the owner half of D10 remain. Paths below are as they were on
+> 2026-09-24 (`harness/.env.example` is now `harness/.env.harness.example`).
+
 A review of the end-user install path (2026-09-24): `README.md` "Getting
 started", `harness/cli/init.mjs`, `harness/lib/scaffold.mjs`,
 `harness/.env.example`, `harness/templates/workflow.yml.tmpl` and
@@ -7,7 +12,7 @@ started", `harness/cli/init.mjs`, `harness/lib/scaffold.mjs`,
 has been implemented.
 
 **Status:** tracked item by item as Tier 8 (D1–D10) in
-[`WORKPLAN.md`](WORKPLAN.md), which is where the ticks are.
+[`WORKPLAN.md`](../../WORKPLAN.md), which is where the ticks are.
 
 ## Current friction
 

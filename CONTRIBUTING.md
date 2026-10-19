@@ -87,8 +87,14 @@ because of a specific failure — usually one that already happened.
 | `harness/providers/` | One file per lab | Self-registering. See [`CONTRIBUTING-A-PROVIDER.md`](harness/providers/CONTRIBUTING-A-PROVIDER.md). |
 | `harness/templates/` | Files `init.mjs` fills in | Never read at runtime by the loop itself. |
 | `harness/cli/` | The scaffolder | Prompting and file writing only; rendering lives in `lib/scaffold.mjs`. |
+| `harness/plugins/` | Shipped plugins | `evaluators/` (measured, never gating) and `context/` (prompt sections). Each loads only when a project's adapter names it. |
+| `harness/vendor/` | Vendored third-party code | `js-yaml` only, byte for byte as published and hash-pinned by `tests/lib/vendor.test.mjs`. Never edited by hand. |
+| `bin/` | The npx entry point | Copies `harness/` in, then `init` / `upgrade` / `doctor`. |
 | `tests/lib/` | Per-module tests | One file per `harness/lib/` module. |
-| `tests/e2e/` | Whole-chain tests | Real git, real child processes; only model calls faked. |
+| `tests/scripts/` | CLI tests | `harness/scripts/` and `harness/cli/` run as child processes. |
+| `tests/console/`, `tests/plugins/` | Console and plugin tests | One file per surface. |
+| `tests/e2e/` | Whole-chain tests | Real git, real child processes; only the models' answers faked. |
+| `tests/helpers/` | Test fixtures | Shared by the suites above; never a test file itself. |
 | `learning/` | Portable lessons | Written to be lifted into another project — must not depend on this repo's specifics. |
 | `docs/` | Research corpus **and** this project's own designs | Keep the two distinct: third-party PDFs are gitignored; `docs/curiosity/` and `docs/Curiosity-Engine-Design.md` are ours. |
 | `console/` | Browser installer, HTTP API, GitHub App client and design records | Current implementation: `console/IMPLEMENTATION.md`; deployment requirements: `console/DEPLOYMENT.md`. |
@@ -104,15 +110,22 @@ before it sets a precedent.
 npm test
 ```
 
-Node's built-in runner — no framework to install. Two surfaces, deliberately
-separate:
+Node's built-in runner — no framework to install. Five directories, plus
+shared helpers; README's "Testing this harness itself" has the table:
 
 - **`tests/lib/`** proves each module in isolation, with model calls faked at
   the narrowest boundary the test needs.
+- **`tests/scripts/`** runs each CLI as a child process, the way a workflow
+  calls it.
+- **`tests/console/`** and **`tests/plugins/`** cover the browser installer
+  and the shipped plugins.
 - **`tests/e2e/`** proves the pieces *chain* — real git remote, real child
-  process for the test gate, faking only the model calls. It exists to catch
-  the failure per-module tests structurally cannot: two components each
-  correct, disagreeing at the seam.
+  processes, the loopback labs in `tests/helpers/mock-labs.mjs`, faking only
+  the models' answers. It exists to catch the failure per-module tests
+  structurally cannot: two components each correct, disagreeing at the seam.
+- **`tests/helpers/`** holds fixtures, never tests. `gha-shell.mjs` runs a
+  workflow step's `run:` block under GitHub's own bash flags; use it for any
+  workflow logic, rather than grepping the YAML.
 
 **Every behaviour change needs a test.** Not because of a coverage target, but
 because of this project's own first principle: *a gate that cannot fail is not
@@ -125,8 +138,11 @@ repositories for exactly this reason: the assumed output shape of
 `git diff --name-status` is the kind of thing that's right until it isn't.
 
 On Windows, use the explicit glob (`node --test "tests/**/*.test.mjs"`, which
-is what `npm test` runs) rather than a bare directory — see README's
-OS-specific notes for the Node/Windows combination that fails confusingly.
+is what `npm test` runs) rather than a bare directory — see
+[`docs/INSTALL.md`](docs/INSTALL.md#os-specific-notes)'s OS-specific notes
+for the Node/Windows combination that fails confusingly. CI runs on Ubuntu
+only, so run the suite on Windows yourself before a change that touches
+paths, line endings or shell commands.
 
 ---
 
@@ -220,6 +236,14 @@ it copied. Either moves only when its owner upgrades, so a bad commit here
 reaches nobody until it is released and someone chooses it. Bump the minor
 version while the major is 0, and the patch for a fix that changes nothing an
 installation configures.
+
+**When a release run fails.** It runs only when `harness/VERSION` changes,
+so a follow-up that fixes only `package.json` does not trigger it; bump the
+patch version instead. If the tag was created but the release was not (a
+timeout), create the release by hand from that tag with
+`gh release create v<VERSION> --verify-tag`, and copy the notes from a
+previous release. Re-running a successful run fails harmlessly with
+"already released".
 
 ---
 

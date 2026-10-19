@@ -291,15 +291,15 @@ record of where an installation got to.
 
 | Paper component (§3) | carrotgame implementation | Harness module (proposed) |
 |---|---|---|
-| 3.1 Project Constitution | `.claude/agents/self-improvement.md` (brief) + `EDITABLE_FILES` in `edit-format.mjs` + `check-guarded-paths.mjs` config | ✅ **Real, and now enforced end to end** — `harness/lib/adapter.mjs` parses `project-adapter.yml` (one of the two files in the harness with an npm dependency, `js-yaml`, loaded lazily here so a project without an adapter file never needs it installed — `scaffold.mjs` is the other, and imports it at load, so `init.mjs` does need it present). `constitution.allowed_paths`/`create_only_paths` are compiled into `edit-format.mjs`'s allowlist by `run-generation.mjs` and enforced against every edit, then again by `check-guarded-paths.mjs` in CI. The brief half shipped too: `harness/templates/agent-brief.md.tmpl` and `reviewer-brief.md.tmpl`, copied into place by `init`. `project.goal` (the committed goal) sits above the brief, the reviewer judges against it, and the guard refuses a diff that edits it. `harness/lib/validate.mjs` checks the whole thing structurally before a run starts. |
-| 3.2 Context Compiler | `scripts/lib/context-pack.mjs` | `harness/lib/context-pack.mjs` |
-| 3.3 Model-Release Detector | `scripts/check-model-releases.mjs` + `.agent/model-snapshot.json` | `harness/scripts/check-model-releases.mjs` |
-| 3.4 Provider/Model Router | `scripts/lib/llm-provider.mjs` | `harness/lib/llm-provider.mjs` + `harness/providers/*` |
+| 3.1 Project Constitution | `.claude/agents/self-improvement.md` (brief) + `EDITABLE_FILES` in `edit-format.mjs` + `check-guarded-paths.mjs` config | ✅ **Real, and now enforced end to end** — `harness/lib/adapter.mjs` parses `project-adapter.yml` with the vendored `harness/vendor/js-yaml.mjs`, loaded lazily (`scaffold.mjs` is the only other importer); nothing is installed from npm. `constitution.allowed_paths`/`create_only_paths` are compiled into `edit-format.mjs`'s allowlist by `run-generation.mjs` and enforced against every edit, then again by `check-guarded-paths.mjs` in CI. The brief half shipped too: `harness/templates/agent-brief.md.tmpl` and `reviewer-brief.md.tmpl`, copied into place by `init`. `project.goal` (the committed goal) sits above the brief, the reviewer judges against it, and the guard refuses a diff that edits it. `harness/lib/validate.mjs` checks the whole thing structurally before a run starts. |
+| 3.2 Context Compiler | `scripts/lib/context-pack.mjs` | ✅ `harness/lib/context-pack.mjs`, `assemble-context.mjs` and `code-map.mjs` (`context.strategy`: `full-dump` or `scoped`) |
+| 3.3 Model-Release Detector | `scripts/check-model-releases.mjs` + `.agent/model-snapshot.json` | ✅ `harness/lib/model-release-detector.mjs` + `harness/scripts/check-model-releases.mjs` |
+| 3.4 Provider/Model Router | `scripts/lib/llm-provider.mjs` | ✅ `harness/lib/llm-provider.mjs` + `harness/providers/*` (nine labs) |
 | 3.5 Parallel Proposal Stage | Stage 1 fan-out inside `invoke-self-improvement-agent.mjs` (ranks with authors withheld) | ✅ `harness/lib/orchestrator.mjs`'s `gatherProposals()` + `rankProposals()` |
 | 3.6 Bounded Patch Executor | `scripts/lib/edit-format.mjs` | ✅ `harness/lib/edit-format.mjs` |
 | 3.7 Independent Reviewer | `scripts/invoke-code-review.mjs`, fresh context, fails closed | ✅ `harness/lib/review.mjs` |
-| 3.8 Automated Evaluator | test suites (project-supplied) + `check-guarded-paths.mjs` + `readiness-scorecard.mjs` (measured, not gating) | test-command runner (adapter-driven) + optional scorecard plugin |
-| 3.9 Failure and Proposal Memory | `docs/generations/gen-NNN/attempts.json` + `docs/escalations/ledger.json` + `buildGenerationIndex()` | `harness/lib/escalations.mjs` + a `record/` writer |
+| 3.8 Automated Evaluator | test suites (project-supplied) + `check-guarded-paths.mjs` + `readiness-scorecard.mjs` (measured, not gating) | ✅ test-command runner (adapter-driven, in CI and inside the repair loop) + evaluator plugins, measured and never gating |
+| 3.9 Failure and Proposal Memory | `docs/generations/gen-NNN/attempts.json` + `docs/escalations/ledger.json` + `buildGenerationIndex()` | ✅ `harness/lib/escalations.mjs` + `persist-records.mjs` (records to the default branch) + `lessons.mjs` + the themes review |
 | 3.10 Staging and Promotion Layer | merge job + git tag per generation + `verify-production.mjs` | ✅ `harness/lib/promote.mjs` (merge + tag) + `harness/lib/verify-deployment.mjs` (all four `verify_strategy` values: `url`, `registry`, `artifact`, `none`) |
 
 Real gaps this exposes, worth stating rather than hiding: the paper's §2.6
@@ -814,7 +814,7 @@ integration tests use injected responses. See `console/IMPLEMENTATION.md` and
 
 ## Install-path revision — 26 September 2026
 
-Tier 8 of `WORKPLAN.md`, from the review in `suggestion.md`. The install is
+Tier 8 of `WORKPLAN.md`, from the review in [`docs/history/suggestion-deployment-ease-2026-09.md`](docs/history/suggestion-deployment-ease-2026-09.md). The install is
 now five commands (README, "Quickstart"), and the reasoning moved to
 `docs/INSTALL.md`. What changed underneath:
 
@@ -881,3 +881,27 @@ Also added:
 
 Deferred, each with the evidence that would justify building it, in
 [WORKPLAN.md](WORKPLAN.md) Tier 9.
+
+## Repository and hardening revision — 19 October 2026
+
+- **Out of this repository:** the carrotgame worked example
+  (`examples/carrotgame/`, which had fallen behind both carrotgame's adapter
+  and this schema), the prompt library (#45) and the decompilation lab (#41,
+  closed). The last two live in a separate private repository; this one is
+  about the harness.
+- **Releases:** a bump of `harness/VERSION` on main is a release.
+  `.github/workflows/release.yml` tags `v<VERSION>` at that commit and its
+  notes give the full SHA a shared install pins (CONTRIBUTING.md,
+  "Releasing"). v0.2.0 carried the install work; v0.3.0 carries this
+  revision and Tier 9.
+- **Windows (#47):** lesson anchors hash with line endings normalised, and
+  the bench fills in `$BENCH_ORACLE_DIR` itself; both had failed only on a
+  Windows checkout.
+- **Shared installs and context providers (#47):** a provider shipped in
+  `harness/plugins/context/` declares the variables it reads, the shared
+  workflow wires them, and it loads from the running harness when the
+  project holds no copy. A project's own provider still gets no variables
+  there (WORKPLAN M9).
+- **Reviewer evidence (#48):** never a symlink, a path resolving outside the
+  repository, or a file with credential-shaped content; one secret-name rule
+  shared by the test runner and the workflow renderer.

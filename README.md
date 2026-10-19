@@ -34,11 +34,11 @@ same day **the generated workflow ran three generations on GitHub Actions**
 against a real repository — real secrets, a claimed generation number, a
 pull request each, records on the default branch, and a pull request's state
 read back into its record — and found four more, also fixed.
-**What is still not true:** no person has reviewed any of those changes yet,
-the read-back of a *merged or closed* pull request has not happened in a real
-run, and the Actions runs are in a private repository rather than a public
-example. See [`WORKPLAN.md`](WORKPLAN.md) Tier 6. See
-[`ARCHITECTURE.md`](ARCHITECTURE.md) for the five diagrams, and
+**What is still not true:** a person has merged one of these changes (Hospital
+of the Future, generation 001, 2026-09-18), but the next cycle reading a
+*merged or closed* pull request back has not happened in a real run, and the
+Actions runs are in private repositories rather than a public example. See [`WORKPLAN.md`](WORKPLAN.md) Tier 6. See
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for the diagrams, and
 [its status table](ARCHITECTURE.md#status-in-detail) for the per-component view.
 
 ## Harness KPIs and practical learning
@@ -140,6 +140,15 @@ with `/healthz` as the health check.
 
 ## Testing this harness itself
 
+| Directory | What it proves |
+|---|---|
+| `tests/lib/` | Each `harness/lib/` and `harness/providers/` module in isolation |
+| `tests/scripts/` | The `harness/scripts/` and `harness/cli/` commands, run as child processes the way a workflow runs them |
+| `tests/console/` | The browser installer's API, configuration, GitHub client and shared-install path |
+| `tests/plugins/` | Plugins shipped in `harness/plugins/` (the game-references context provider) |
+| `tests/e2e/` | Whole chains: `full-loop`, `mock-labs` and `bench`, described below |
+| `tests/helpers/` | Shared fixtures, not tests: the loopback labs, scratch projects, and a runner that executes a workflow step's `run:` block the way GitHub does |
+
 `tests/lib/` covers each `harness/lib/` and `harness/providers/` module in
 isolation — resolver correctness across real model ids, the edit-format's
 all-or-nothing guarantee, every provider's catalogue parser against a
@@ -175,6 +184,11 @@ another resurfaced and retired, a work order carried, and a themes review
 whose open question lands in the next prompt. The override is honoured only
 for a loopback address, because the request carries the key.
 
+`tests/e2e/bench.test.mjs` runs the [replay bench](docs/Replay-Bench.md)
+the same way: three variants of one task through the real
+`run-generation.mjs` against the loopback labs, scored by an oracle no model
+saw, with the scoped variant shown to have run two-pass.
+
 ```bash
 npm test
 ```
@@ -183,6 +197,16 @@ Zero dependencies here too: `node:test` and `node:assert` are Node
 built-ins, so there's no test framework to install. The count is whatever
 `npm test` prints — it is not repeated here, because a hand-typed number
 drifted three ways before this sentence replaced it.
+
+**Where it runs.** CI (`.github/workflows/ci.yml`) runs the whole suite on
+Ubuntu, on Node 22.11.0 (the declared minimum) and 24, with
+`REQUIRE_SHELL_TESTS=true`, so a missing `bash` or `jq` fails the run
+instead of skipping the workflow-step tests. Windows is verified locally,
+not in CI: run `npm test` there before a change that touches paths, line
+endings or shell commands (two Windows-only failures were found that way,
+#47). Shell-step tests use Git for Windows' bash and skip, with the reason
+printed, when `bash` or `jq` is missing. macOS is not tested
+([`WORKPLAN.md`](WORKPLAN.md) 2.3).
 
 **Why this exists, and why it's worth keeping current:** every check here
 was, at first, a throwaway script written to confirm one piece of
@@ -224,6 +248,9 @@ never intended.
 | The working browser installer, its deployment requirements and limitations | [`console/DEPLOYMENT.md`](console/DEPLOYMENT.md), [`console/IMPLEMENTATION.md`](console/IMPLEMENTATION.md) |
 | An outside review of the concept and the code, a SWOT, and the workplan additions it proposes to run this as a product | [`docs/Review-SWOT-2026-09.md`](docs/Review-SWOT-2026-09.md) |
 | Whether the models should get tools — MCP, a renderer, a physics engine — which of the three kinds is worth building, and the per-seat rules that keep a gate a gate | [`docs/Tool-Use-Design.md`](docs/Tool-Use-Design.md) |
+| What to build next and in what order, every item with a *done when* line | [`WORKPLAN.md`](WORKPLAN.md) |
+| How far each generation may reach — focused, earned or ambitious — and how the scope is chosen | [`docs/Ambition-Control.md`](docs/Ambition-Control.md) |
+| Giving a game project's models reference-game research, safely, as a context provider | [`docs/Game-Reference-Research.md`](docs/Game-Reference-Research.md) |
 | A second review, two days later, and a proposed six-phase plan for a tenfold improvement against the portable-harness objective — reach, yield, magnitude, trust, each with a number to move | [`docs/Review-10x-2026-09.md`](docs/Review-10x-2026-09.md) |
 | What happened when the model calls were real — four generations on two projects, the records as written, and the seven harness defects they found | [`docs/campaigns/`](docs/campaigns/) |
 | How to compare two ways of running the harness — context strategy, memory, retrieval — on the same tasks before changing a default | [`docs/Replay-Bench.md`](docs/Replay-Bench.md) |
