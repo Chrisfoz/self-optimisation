@@ -330,6 +330,13 @@ test('renderWorkflowTemplate: a copied install installs the project dependencies
   );
 });
 
+test('a copied workflow compares check_keys as the string a dispatch input always is', () => {
+  const doc = loadYaml(renderWorkflowTemplate(template, baseAnswers()));
+  assert.equal(doc.jobs['check-keys'].if, "github.event.inputs.check_keys == 'true'");
+  // On a schedule there are no inputs: null == 'true' is false, so the loop runs.
+  assert.equal(doc.jobs['self-improve'].if, "${{ !(github.event.inputs.check_keys == 'true') }}");
+});
+
 test('renderWorkflowTemplate: no setup commands renders no step at all, and leaves no token behind', () => {
   const out = renderWorkflowTemplate(template, baseAnswers());
   assert.doesNotMatch(out, /PROJECT_SETUP_STEPS/, 'the token must be removed, not left in the YAML');
