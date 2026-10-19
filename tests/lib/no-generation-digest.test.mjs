@@ -166,6 +166,16 @@ test('noGenerationReason: a campaign run skips the release check, and that is no
   assert.equal(noGenerationReason({ CHECK_RESULT: 'failure' }), NO_GENERATION_REASONS.CHECK_FAILED);
 });
 
+// GitHub reports a step whose `if:` was false as `skipped`, not empty. A quiet
+// cycle never runs preflight, so these are the values a real quiet cycle sends.
+test('noGenerationReason: a quiet cycle, as GitHub reports it, is quiet — a skipped preflight is not a failed one', () => {
+  const quiet = { PAUSED: 'false', VALIDATE_RESULT: 'success', CHECK_RESULT: 'success', PINNED_BLOCKED: '', PREFLIGHT_RESULT: 'skipped', RELEASE_DETECTED: 'false' };
+  assert.equal(noGenerationReason(quiet), NO_GENERATION_REASONS.QUIET);
+  assert.equal(noGenerationReason({ ...quiet, PREFLIGHT_RESULT: 'failure', RELEASE_DETECTED: 'true' }), NO_GENERATION_REASONS.PREFLIGHT_FAILED);
+  assert.equal(noGenerationReason({ ...quiet, PREFLIGHT_RESULT: 'cancelled', RELEASE_DETECTED: 'true' }), NO_GENERATION_REASONS.PREFLIGHT_FAILED);
+  assert.equal(noGenerationReason({ ...quiet, PREFLIGHT_RESULT: 'skipped', RELEASE_DETECTED: 'true' }), NO_GENERATION_REASONS.ALL_UNREACHABLE);
+});
+
 test('noGenerationReason: an unreachable pinned seat is its own reason, ahead of preflight', () => {
   assert.equal(noGenerationReason({ CHECK_RESULT: 'skipped', PINNED_BLOCKED: 'true', PREFLIGHT_RESULT: '' }), NO_GENERATION_REASONS.PINNED_UNREACHABLE);
   assert.equal(noGenerationReason({ PAUSED: 'true', PINNED_BLOCKED: 'true' }), NO_GENERATION_REASONS.PAUSED);

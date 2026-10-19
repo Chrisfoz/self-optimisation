@@ -18,7 +18,7 @@
 import path from 'path';
 import '../providers/index.mjs';
 import { loadAdapter } from '../lib/adapter.mjs';
-import { validateAdapter } from '../lib/validate.mjs';
+import { validateAdapter, snapshotIgnoredBy } from '../lib/validate.mjs';
 import { gitRunner, remoteDefaultBranch } from '../lib/git-default-branch.mjs';
 
 function parseArgs(argv) {
@@ -50,7 +50,7 @@ if (!adapter) {
 
 console.log(`Validating ${adapterPath}\n`);
 
-const { errors, warnings } = validateAdapter(adapter, { repoRoot, remoteDefaultBranch: remoteDefaultBranch(gitRunner(repoRoot)) });
+const { errors, warnings } = validateAdapter(adapter, { repoRoot, remoteDefaultBranch: remoteDefaultBranch(gitRunner(repoRoot)), snapshotIgnored: snapshotIgnoredBy(gitRunner(repoRoot), adapter) });
 
 if (warnings.length) {
   console.log(`${warnings.length} warning(s):`);

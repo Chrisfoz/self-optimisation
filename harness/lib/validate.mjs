@@ -26,7 +26,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { constitutionAllowlist, guardConfig, briefPaths, rolesConfig, watchedProviders, goalConfig } from './adapter.mjs';
+import { constitutionAllowlist, guardConfig, briefPaths, rolesConfig, watchedProviders, goalConfig, snapshotPath } from './adapter.mjs';
 import { globToRegExp, isGlob, expandGlob } from './glob.mjs';
 import { resolveProvider, getProvider, registeredProviders } from './llm-provider.mjs';
 import { resolveProviderModule } from './context-providers.mjs';
@@ -38,6 +38,15 @@ import { resolveProviderModule } from './context-providers.mjs';
  * brief template uses markdown links, so this has no known false positive
  * against them; a project that adds one to its own filled-in brief would.
  */
+/**
+ * Whether git ignores this adapter's model snapshot, asked through a
+ * gitRunner() (git-default-branch.mjs): `git check-ignore` prints the path
+ * and exits 0 when it is ignored, and the runner returns null otherwise.
+ */
+export function snapshotIgnoredBy(git, adapter) {
+  return Boolean(git('check-ignore', snapshotPath(adapter) || '.agent/model-snapshot.json'));
+}
+
 const PLACEHOLDER = /\[[A-Za-z][^\]\n]{0,80}\](?!\()/g;
 
 /**
@@ -54,9 +63,11 @@ const PLACEHOLDER = /\[[A-Za-z][^\]\n]{0,80}\](?!\()/g;
  * @param {string|null} [opts.remoteDefaultBranch]  The repository's default
  *   branch as its remote reports it (git-default-branch.mjs), or null when
  *   unknown. Passed in rather than read here so this stays free of git.
+ * @param {boolean} [opts.snapshotIgnored]  Whether git ignores the model
+ *   snapshot path (snapshotIgnoredBy() asks it). Passed in for the same reason.
  * @returns {{errors: string[], warnings: string[]}}
  */
-export function validateAdapter(adapter, { repoRoot = process.cwd(), env = process.env, remoteDefaultBranch = null } = {}) {
+export function validateAdapter(adapter, { repoRoot = process.cwd(), env = process.env, remoteDefaultBranch = null, snapshotIgnored = false } = {}) {
   const errors = [];
   const warnings = [];
 
@@ -76,6 +87,14 @@ export function validateAdapter(adapter, { repoRoot = process.cwd(), env = proce
     if (effort != null && !['low', 'medium', 'high', 'xhigh', 'max'].includes(effort)) {
       errors.push(`roles.${seat}.effort is \"${effort}\" — use low, medium, high, xhigh or max, or remove it.`);
     }
+  }
+
+  // The workflow commits the snapshot after every release check. If git
+  // ignores it, that commit fails and, worse, the snapshot never persists:
+  // every run records a fresh baseline and no release is ever detected,
+  // while each cycle reads as a quiet one (Grammar Game, 2026-10-19).
+  if (snapshotIgnored) {
+    errors.push(`${snapshotPath(adapter) || '.agent/model-snapshot.json'} is git-ignored, so it can never be committed: every run would record a fresh baseline and no model release would ever be detected. Remove the .gitignore rule that matches it (often ".agent/").`);
   }
 
   const configuredBranch = adapter.project?.default_branch;
