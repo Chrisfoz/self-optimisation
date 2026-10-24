@@ -583,15 +583,27 @@ REASON: <one or two sentences on why it beats the others>`;
       model: rankModel,
       system,
       user: `# Repository map\n${manifest}\n${section('Frozen test invariants', testIndex)}\n# The proposals\n\n${blocks}\n\nWhich single proposal should be implemented?`,
-      maxTokens: 2000,
+      // The answer is two lines, but the ranker is picked from another
+      // family and is often a reasoning model that thinks before it writes.
+      // At 2000 (4000 after the headroom retry) deepseek-v4-pro spent the
+      // whole budget thinking and returned no text, which crashed two
+      // campaign generations that already held two paid-for proposals.
+      maxTokens: 16000,
     });
   } catch (err) {
-    // Ranking fails safe, and a ranking the budget refused is no different
-    // from one that came back unparseable. Any other error keeps its old
-    // behaviour and propagates.
-    if (err?.kind !== 'budget') throw err;
-    log(`   💸 Ranking refused by the budget cap; falling back to the first model.\n`);
-    return { index: 0, reason: 'ranking refused by the budget cap — fell back to the first model' };
+    // Ranking fails safe: a ranking the budget refused, or one that ran out
+    // of room before writing any text, is no different from one that came
+    // back unparseable. Any other error keeps its old behaviour and
+    // propagates.
+    if (err?.kind === 'budget') {
+      log(`   💸 Ranking refused by the budget cap; falling back to the first model.\n`);
+      return { index: 0, reason: 'ranking refused by the budget cap — fell back to the first model' };
+    }
+    if (err?.truncatedWithoutText) {
+      log(`   ⚠️  Ranking ran out of room before writing a choice; falling back to the first model.\n`);
+      return { index: 0, reason: 'ranking truncated before any text — fell back to the first model' };
+    }
+    throw err;
   }
 
   const choice = Number(result.text.match(/^CHOICE:\s*(\d+)/im)?.[1]);

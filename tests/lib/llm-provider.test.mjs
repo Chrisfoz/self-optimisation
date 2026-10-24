@@ -100,3 +100,14 @@ test('openai retry hook declines when the failure is unrelated', () => {
   const adjusted = oai.retryWithAdjustedBody({ statusCode: 500, raw: 'internal error', body: {} });
   assert.equal(adjusted, null);
 });
+
+test('moonshot sends reasoning_effort "low", and no other OpenAI-compatible lab inherits it', async () => {
+  const { getProvider } = await import('../../harness/lib/llm-provider.mjs');
+  const args = { model: 'kimi-k3.1-pro', system: 's', user: 'u', maxTokens: 9, images: [] };
+  const body = getProvider('moonshot').body(args);
+  assert.equal(body.reasoning_effort, 'low', 'Kimi defaults to "max", which can reason past the per-request timeout');
+  assert.equal('thinking' in body, false, 'the thinking field is Z.ai-specific');
+  for (const lab of ['deepseek', 'xai', 'qwen']) {
+    assert.equal('reasoning_effort' in getProvider(lab).body(args), false, `${lab} should be untouched`);
+  }
+});
