@@ -4,6 +4,12 @@ import '../../harness/providers/index.mjs';
 import { getProvider, registeredProviders } from '../../harness/lib/llm-provider.mjs';
 import { isChatModel, rankCandidates, checkReleases } from '../../harness/lib/model-release-detector.mjs';
 
+test('isChatModel: excludes test and placeholder endpoints labs leave in their listings', () => {
+  for (const id of ['pre-mock_ptu_auth_v2_base', 'pre-mock_ptu_auth_v2_cross_site_denied', 'qwen-fake-model', 'dummy-chat', 'model-stub']) assert.equal(isChatModel(id), false, id);
+  assert.equal(isChatModel('qwen3.5-max'), true);
+  assert.equal(isChatModel('kimi-k3-adaptive'), true);
+});
+
 test('isChatModel: excludes known non-chat families by name', () => {
   assert.equal(isChatModel('claude-opus-5'), true);
   assert.equal(isChatModel('text-embedding-3-large'), false);

@@ -730,7 +730,7 @@ test('runGeneration: the running cap stops the refine loop with a budget-exhaust
   assert.equal(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), 'original content', 'tree restored');
 });
 
-test('runGeneration: a fan-out reserves per model as it starts — the model the cap cannot hold is refused, the rest run', async (t) => {
+test('runGeneration: the fan-out is trimmed before it starts to the suggesters the pool can afford; the rest are skipped, not refused mid-flight', async (t) => {
   const repoRoot = tempRepo();
   t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
   fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
@@ -753,8 +753,9 @@ test('runGeneration: a fan-out reserves per model as it starts — the model the
   }), { call });
   assert.deepEqual(asked, ['suggest-a', 'suggest-b']);
   assert.equal(result.outcome, 'approved');
-  assert.match(result.fanOut.failed.join(' '), /suggest-c: .*max_generation_tokens/);
-  assert.equal(result.spend.refusedRequests, 1);
+  const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
+  assert.deepEqual(record.fanOut.skippedForBudget, ['suggest-c (anthropic)']);
+  assert.equal(result.spend.refusedRequests, 0);
 });
 
 test('runGeneration: with no budget configured, nothing is refused and spend is still recorded', async (t) => {
@@ -1217,4 +1218,69 @@ test('runGeneration: the reviewer is shown dependents, may ask for a file once, 
   const record = JSON.parse(fs.readFileSync(path.join(repoRoot, result.attemptRecordPath), 'utf8'));
   assert.equal(record.attempts[0].outcome, 'review-insufficient-context');
   assert.deepEqual(record.attempts[0].reviewEvidence, { dependents: true, requested: ['app.js'], refused: [] });
+});
+
+// --- The 0.3.3 budget incidents, replayed -----------------------------------
+
+const MOCK_REPLY = '这是一个模拟的文本生成结果。'.repeat(40);
+
+test('runGeneration: placeholder replies from test endpoints are not proposals — the run ends no-proposal and never reaches the implementer (networkinAI gen-015)', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  const called = [];
+  const call = async ({ model }) => {
+    called.push(model);
+    if (model.startsWith('pre-mock')) return { text: MOCK_REPLY, truncated: false, provider: 'qwen', model, sentImages: 0, usage: { prompt_tokens: 1000, completion_tokens: 1000 } };
+    throw new Error('unexpected call: ' + model);
+  };
+  const result = await runGeneration(baseConfig(repoRoot, {
+    suggestModels: ['pre-mock_a', 'pre-mock_b'].map((id) => ({ id, provider: 'qwen' })),
+    budget: { maxGenerationTokens: 2000000, discoveryShare: 0.4 },
+  }), { call });
+  assert.equal(result.outcome, 'no-proposal');
+  assert.deepEqual(called.sort(), ['pre-mock_a', 'pre-mock_b']);
+  assert.match(result.summary, /not a proposal/);
+});
+
+test('runGeneration: a suggester that reports far more than estimated overruns discovery, and the implementer still runs (the build pool is protected)', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  const call = async ({ model }) => {
+    // 1.24M reported against a 2M cap and an 800k discovery pool.
+    if (model === 'suggest-model') return { text: VALID_SUGGESTION, truncated: false, provider: 'anthropic', model, sentImages: 0, usage: { input_tokens: 1240542, output_tokens: 1000 } };
+    if (model === 'implement-model') return { text: VALID_IMPLEMENTATION, truncated: false, model, usage: { input_tokens: 300000, output_tokens: 5000 } };
+    if (model === 'review-model') return { text: 'VERDICT: APPROVED\n\nREASON: fine.\n\nEND OF REVIEW', model, usage: { input_tokens: 200000, output_tokens: 500 } };
+    throw new Error('unexpected call: ' + model);
+  };
+  const result = await runGeneration(baseConfig(repoRoot, {
+    budget: { maxGenerationTokens: 2000000, discoveryShare: 0.4 },
+  }), { call });
+  assert.equal(result.outcome, 'approved');
+  assert.equal(result.spend.bySite.implement.calls, 1);
+  assert.equal(result.spend.discoverySpent, 1241542);
+  assert.equal(result.spend.discoveryCap, 800000);
+});
+
+test('runGeneration: a suggestion prompt the discovery pool cannot hold even once is refused before any call', async (t) => {
+  const repoRoot = tempRepo();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), 'original content');
+  let calls = 0;
+  const result = await runGeneration(baseConfig(repoRoot, {
+    context: { manifest: 'MANIFEST', testIndex: null, sources: 'x'.repeat(3_000_000) },
+    budget: { maxGenerationTokens: 2000000, discoveryShare: 0.4 },
+  }), { call: async () => { calls += 1; return { text: '' }; } });
+  assert.equal(result.outcome, 'over-budget');
+  assert.equal(calls, 0);
+  assert.match(result.summary, /discovery pool/);
+});
+
+test('looksLikeProposal: one field or edit blocks is enough; canned text is not', async () => {
+  const { looksLikeProposal } = await import('../../harness/lib/orchestrator.mjs');
+  assert.equal(looksLikeProposal('CHANGE: do a thing'), true);
+  assert.equal(looksLikeProposal(VALID_SUGGESTION), true);
+  assert.equal(looksLikeProposal(MOCK_REPLY), false);
+  assert.equal(looksLikeProposal('x', { edits: [{}], creates: [] }), true);
 });

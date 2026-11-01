@@ -168,8 +168,10 @@ context:
   scope_required: 2
   ambition: earned
 
+# Nine suggesters each reserve a 32k output allowance up front, and the
+# fan-out may use budget.discovery_share (40%) of this.
 budget:
-  max_generation_tokens: 200000
+  max_generation_tokens: 1000000
 
 evaluation:
   test_commands:

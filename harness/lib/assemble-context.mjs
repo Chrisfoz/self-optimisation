@@ -50,7 +50,15 @@ export function assembleContext({ repoRoot, adapter }) {
   const generationsDir = ctxConfig.generationsDir || 'docs/generations';
   const latestThemes = loadLatestThemesReview({ repoRoot, themesDir: memory.themesDir || 'docs/themes' });
   const sourcesFor = (files) => fenceUntrusted('SOURCE', buildSourceBundle(files, { repoRoot })) ?? '';
-  const scoped = ctxConfig.strategy === 'scoped' ? { maxSourceChars: ctxConfig.scopedMaxSourceChars } : null;
+  // 'auto': measure the full bundle once and fall back to the map when it is
+  // large. The bundle is built anyway for full-dump, so this costs nothing
+  // extra on a small project.
+  const fullSources = ctxConfig.strategy === 'scoped' ? null : sourcesFor(editableFiles);
+  const useScoped = ctxConfig.strategy === 'scoped'
+    || (ctxConfig.strategy === 'auto' && (fullSources?.length ?? 0) > (ctxConfig.autoThresholdChars ?? Infinity));
+  const scoped = useScoped
+    ? { maxSourceChars: ctxConfig.scopedMaxSourceChars, ...(ctxConfig.strategy === 'auto' ? { auto: true, fullSourceChars: fullSources.length } : {}) }
+    : null;
   // Built for every strategy: the reviewer's dependents and a lesson's
   // neighbours come from the same graph. Only 'scoped' puts it in the prompt.
   const graph = buildImportGraph(editableFiles, { repoRoot });
@@ -59,7 +67,7 @@ export function assembleContext({ repoRoot, adapter }) {
     // Fenced (context-pack.mjs's fenceUntrusted()): the source and the
     // architecture notes are the two blocks a stranger with commit access to
     // the project could have written into.
-    sources: scoped ? null : sourcesFor(editableFiles),
+    sources: scoped ? null : fullSources,
     // File names, sizes, symbols and imports — what a scoped suggester reads
     // to choose its files. Fenced: symbol names come from the repository.
     codeMap: scoped ? fenceUntrusted('CODE MAP', renderCodeMap(graph, { maxChars: ctxConfig.mapMaxChars ?? DEFAULT_MAP_MAX_CHARS })) : null,

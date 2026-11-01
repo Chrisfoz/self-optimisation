@@ -231,7 +231,8 @@ test('briefPaths, rolesConfig and contextConfig return null/empty defaults on a 
     architectureNotesPath: null, architectureNotesMarker: null,
     testFiles: [], purposes: {}, platformNotes: null, historyLimit: null, indexRows: null, scopeRequired: null,
     ambition: 'earned',
-    strategy: 'full-dump',
+    strategy: 'auto',
+    autoThresholdChars: 400000,
     scopedMaxSourceChars: 200000,
     mapMaxChars: null,
   });
@@ -409,11 +410,19 @@ test('accessors return null/empty defaults on an adapter missing that section', 
 
 test('budgetConfig: reads a positive cap, and treats absent, zero or junk as no cap', async () => {
   const { budgetConfig } = await import('../../harness/lib/adapter.mjs');
-  assert.deepEqual(budgetConfig({ budget: { max_generation_tokens: 500000 } }), { maxGenerationTokens: 500000 });
-  assert.deepEqual(budgetConfig({ budget: { max_generation_tokens: 0 } }), { maxGenerationTokens: null });
-  assert.deepEqual(budgetConfig({ budget: { max_generation_tokens: 'lots' } }), { maxGenerationTokens: null });
-  assert.deepEqual(budgetConfig({}), { maxGenerationTokens: null });
-  assert.deepEqual(budgetConfig(null), { maxGenerationTokens: null });
+  assert.deepEqual(budgetConfig({ budget: { max_generation_tokens: 500000 } }), { maxGenerationTokens: 500000, discoveryShare: 0.4 });
+  assert.deepEqual(budgetConfig({ budget: { max_generation_tokens: 0 } }), { maxGenerationTokens: null, discoveryShare: 0.4 });
+  assert.deepEqual(budgetConfig({ budget: { max_generation_tokens: 'lots' } }), { maxGenerationTokens: null, discoveryShare: 0.4 });
+  assert.deepEqual(budgetConfig({}), { maxGenerationTokens: null, discoveryShare: 0.4 });
+  assert.deepEqual(budgetConfig(null), { maxGenerationTokens: null, discoveryShare: 0.4 });
+});
+
+test('budgetConfig: discovery_share defaults to 0.4, takes a fraction, and 0 or 1 turns the split off', async () => {
+  const { budgetConfig } = await import('../../harness/lib/adapter.mjs');
+  assert.equal(budgetConfig({ budget: { max_generation_tokens: 1, discovery_share: 0.25 } }).discoveryShare, 0.25);
+  assert.equal(budgetConfig({ budget: { max_generation_tokens: 1, discovery_share: 0 } }).discoveryShare, null);
+  assert.equal(budgetConfig({ budget: { max_generation_tokens: 1, discovery_share: 1 } }).discoveryShare, null);
+  assert.equal(budgetConfig({ budget: { max_generation_tokens: 1, discovery_share: 7 } }).discoveryShare, 0.4);
 });
 
 test('evaluationConfig: reads test_commands, drops non-string entries, defaults to empty', async () => {
