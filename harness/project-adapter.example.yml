@@ -263,16 +263,21 @@ context:
   index_rows: 60         # generations listed one per row; older ones are counted by outcome
 
   # --- LIVE: how the suggestion stage sees the source.
+  #   auto        full-dump while the editable source is under
+  #               scoped.auto_threshold_chars (400,000 — about 100k tokens),
+  #               scoped above it. (DEFAULT since 0.3.3)
   #   full-dump   every editable file, in full, to every suggesting model.
-  #               Right for small projects; the cost grows with the source. (DEFAULT)
+  #               Right for small projects; the cost is the source size
+  #               times the number of suggesters.
   #   scoped      a code map (files, sizes, symbols, imports) instead; each
   #               suggesting model names the files it wants, and a second call
   #               shows it those, up to scoped.max_source_chars. Two calls per
   #               model, a fraction of the input on a large project. Compare
   #               the two on your own project with harness/scripts/bench.mjs
   #               (docs/Replay-Bench.md) before switching a default.
-  strategy: full-dump
+  strategy: auto
   # scoped:
+  #   auto_threshold_chars: 400000  # auto switches to scoped above this
   #   max_source_chars: 200000   # per suggesting model, on its second call
   #   map_max_chars: 60000       # the map itself; files past it are counted, not listed
   scope_required: 2      # clean first-attempt merges in a row before "ambitious" unlocks
@@ -304,11 +309,12 @@ context:
 # --- LIVE: harness/scripts/run-generation.mjs reads this (via
 # harness/lib/adapter.mjs's budgetConfig()) --------------------------------
 # The most tokens one generation may spend, input plus output, across every
-# model call it makes. Checked twice: projected before the fan-out (the
-# suggestion prompt's size times the number of newly released models — if
-# that alone exceeds the cap the run is refused, recorded as `over-budget`,
-# and nothing is called) and actually, between refine attempts (the loop
-# stops with a `budget-exhausted` attempt and the generation is abandoned).
+# model call it makes. Checked before the fan-out (one suggestion's prompt
+# plus output allowance against the discovery pool — none fits and the run
+# is refused, recorded as `over-budget`, and nothing is called; some fit and
+# the fan-out is trimmed to them), before every request (each is admitted
+# against its pool), and between refine attempts (the loop stops with a
+# `budget-exhausted` attempt and the generation is abandoned).
 # Every attempts.json carries a `spend` block with the real totals per model
 # and per stage, from the usage the provider reported.
 #
@@ -316,8 +322,18 @@ context:
 # is worse than none. This bounds ONE run. It does not bound a month in
 # which nine labs each ship something — set a spending limit at each
 # provider as well. Delete the section, or set it to 0, for no cap.
+#
+# Two pools (since 0.3.3). Suggestions and ranking may use at most
+# discovery_share of the cap; implement, review and refine get the rest plus
+# whatever discovery left unused. A discovery overrun — a lab reporting more
+# than was estimated — is never charged to the build pool, so proposals can
+# no longer spend the budget the implementer needs. Before the fan-out, the
+# harness asks only as many suggesters as the discovery pool can afford and
+# records the rest as `skippedForBudget`. Cached input counts at a tenth.
+# Set discovery_share to 0 for the old single pool.
 budget:
   max_generation_tokens: 2000000
+  discovery_share: 0.4
 
 # --- LIVE: harness/scripts/verify-deployment.mjs and promote.mjs read this
 # section (via harness/lib/adapter.mjs's deploymentConfig()). Neither is

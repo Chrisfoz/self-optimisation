@@ -65,5 +65,5 @@ test('init --quick asks five questions and writes an adapter with every other de
   assert.equal(adapter.constitution.approval_class, 'human-approval-required');
   // The defaults the full questionnaire offers, taken without asking.
   assert.deepEqual(adapter.constitution.frozen_paths, ['.github/**', '.claude/agents/**']);
-  assert.equal(adapter.context.strategy, 'full-dump');
+  assert.equal(adapter.context.strategy, 'auto');
 });

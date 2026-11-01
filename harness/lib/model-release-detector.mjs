@@ -59,6 +59,12 @@ export const DEFAULT_NON_CHAT_SUBSTRINGS = [
 export const DEFAULT_NON_CHAT_SEGMENTS = [
   'tts', 'ada', 'edit', 'guard', 'aqa', 'veo', 'image', 'images',
   'audio', 'search', 'vision', 'ocr', 'rerank',
+  // Test and placeholder endpoints some labs leave in their public listing.
+  // Qwen's `pre-mock_ptu_auth_v2_*` answered every prompt with one canned
+  // sentence and reported ~4x the prompt as input tokens; selected as five
+  // "new releases", they spent a generation's whole budget on nothing
+  // (networkinAI generation 015, Hospital of the Future generation 022).
+  'mock', 'mocked', 'fake', 'dummy', 'stub', 'placeholder',
 ];
 
 /** Does this model id look like a chat-capable model, by name? */

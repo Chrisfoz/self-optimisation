@@ -95,3 +95,17 @@ test('probePinnedSeats: returns only the seats that failed, with the reason', as
   assert.equal(blocked[0].provider, 'anthropic', 'resolved from the id when not named');
   assert.match(blocked[0].reason, /credit balance/);
 });
+
+test('checkProbeReply: accepts OK however it is dressed, and drops a model that answers something else', async () => {
+  const { checkProbeReply } = await import('../../harness/lib/probe-models.mjs');
+  for (const t of ['OK', 'ok.', 'Okay!', '**OK**', 'Sure — OK']) assert.equal(checkProbeReply({ text: t }), null, t);
+  assert.match(checkProbeReply({ text: '这是一个模拟的文本生成结果。' }), /test endpoint/);
+  assert.equal(checkProbeReply(undefined), null);
+});
+
+test('probeCandidates: a reachable model whose probe reply is canned text is dropped', async () => {
+  const prober = async ({ model }) => ({ text: model.startsWith('pre-mock') ? '这是一个模拟的文本生成结果。' : 'OK' });
+  const { survivors, dropped } = await probeCandidates([{ id: 'pre-mock_a', provider: 'qwen' }, { id: 'qwen3.5-max', provider: 'qwen' }], prober);
+  assert.deepEqual(survivors.map((s) => s.id), ['qwen3.5-max']);
+  assert.match(dropped[0].reason, /answered the probe/);
+});
