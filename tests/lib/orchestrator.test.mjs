@@ -185,6 +185,24 @@ test('rankProposals: falls back to the first proposal on an unparseable ranking'
   assert.match(result.reason, /fell back/);
 });
 
+test('rankProposals: falls back to the first proposal when the ranker runs out of room before writing', async () => {
+  const call = async () => {
+    const err = new Error('returned no text content (stop_reason: length)');
+    err.truncatedWithoutText = true;
+    throw err;
+  };
+  const proposals = [{ id: 'a', text: 'x' }, { id: 'b', text: 'y' }];
+  const result = await rankProposals({ projectDescription: 'x', proposals }, { call });
+  assert.equal(result.index, 0);
+  assert.match(result.reason, /truncated.*fell back/);
+});
+
+test('rankProposals: any other error still propagates', async () => {
+  const call = async () => { throw new Error('boom'); };
+  const proposals = [{ id: 'a', text: 'x' }, { id: 'b', text: 'y' }];
+  await assert.rejects(rankProposals({ projectDescription: 'x', proposals }, { call }), /boom/);
+});
+
 // --- record writers -----------------------------------------------------------
 
 test('writeAttemptRecord: writes valid JSON with selfImplemented computed correctly', (t) => {
