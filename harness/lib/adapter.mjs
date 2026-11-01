@@ -376,7 +376,11 @@ export function contextConfig(adapter) {
     // 'scoped' sends a code map instead; each suggesting model chooses which
     // files to read in full, up to scoped.max_source_chars (code-map.mjs,
     // orchestrator.mjs's suggest()).
-    strategy: adapter?.context?.strategy === 'scoped' ? 'scoped' : 'full-dump',
+    // 'auto' (the default since 0.3.3) is full-dump while the editable source
+    // is under scoped.auto_threshold_chars, and scoped above it — the cost of
+    // full-dump is the source size times the number of suggesters.
+    strategy: ['scoped', 'full-dump'].includes(adapter?.context?.strategy) ? adapter.context.strategy : 'auto',
+    autoThresholdChars: Number.isFinite(adapter?.context?.scoped?.auto_threshold_chars) ? adapter.context.scoped.auto_threshold_chars : DEFAULT_AUTO_THRESHOLD_CHARS,
     scopedMaxSourceChars: Number.isFinite(adapter?.context?.scoped?.max_source_chars) ? adapter.context.scoped.max_source_chars : 200000,
     mapMaxChars: Number.isFinite(adapter?.context?.scoped?.map_max_chars) ? adapter.context.scoped.map_max_chars : null,
   };
@@ -552,9 +556,21 @@ export function evaluationConfig(adapter) {
  * purpose — see harness/lib/spend.mjs for why — and a cap here bounds one
  * run, not a month: set a spending limit at each provider as well.
  */
+export const DEFAULT_DISCOVERY_SHARE = 0.4;
+
+/** ~100k tokens of source: above this, context.strategy 'auto' sends a code map instead. */
+export const DEFAULT_AUTO_THRESHOLD_CHARS = 400000;
+
 export function budgetConfig(adapter) {
   const raw = adapter?.budget?.max_generation_tokens;
+  // The share of the cap the suggestion fan-out and ranking may use; the
+  // rest is held for implement and review (spend.mjs's createSpendLedger()).
+  // 0 or 1 turns the split off — one pool, as before 0.3.3.
+  const share = adapter?.budget?.discovery_share;
   return {
     maxGenerationTokens: Number.isFinite(raw) && raw > 0 ? raw : null,
+    discoveryShare: share === 0 || share === 1 ? null
+      : Number.isFinite(share) && share > 0 && share < 1 ? share
+      : DEFAULT_DISCOVERY_SHARE,
   };
 }

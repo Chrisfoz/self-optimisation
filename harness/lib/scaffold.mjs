@@ -314,7 +314,7 @@ export function buildAdapterObject(a) {
     context: {
       generations_dir: a.generationsDir || 'docs/generations',
       runtime_evidence_dir: a.runtimeEvidenceDir || 'docs/runtime',
-      strategy: a.contextStrategy || 'full-dump',
+      strategy: a.contextStrategy || 'auto',
       test_files: a.testFiles || [],
       purposes: a.purposes || {},
       history_limit: Number.isFinite(a.historyLimit) ? a.historyLimit : 3,
@@ -334,6 +334,9 @@ export function buildAdapterObject(a) {
     // with three proposers; a project with a large source bundle raises it.
     budget: {
       max_generation_tokens: Number.isFinite(a.maxGenerationTokens) ? a.maxGenerationTokens : 2000000,
+      // Suggestions and ranking may use this share; the rest is held for
+      // implement and review, so proposals can never starve the implementer.
+      discovery_share: 0.4,
     },
     // RECORDED, and deliberately never read back — see the closing section
     // of harness/project-adapter.example.yml for the reasoning. Both of

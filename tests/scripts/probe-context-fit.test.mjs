@@ -18,7 +18,7 @@ test('probe-models measures the prompt from the adapter and drops a model whose 
   fs.symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(root, 'node_modules'));
   fs.writeFileSync(path.join(root, 'big.js'), 'x'.repeat(400_000));
   fs.writeFileSync(path.join(root, 'brief.md'), 'Improve it.');
-  fs.writeFileSync(path.join(root, 'project-adapter.yml'), 'constitution:\n  allowed_paths: [big.js]\nroles:\n  agent_brief_path: brief.md\n');
+  fs.writeFileSync(path.join(root, 'project-adapter.yml'), 'constitution:\n  allowed_paths: [big.js]\nroles:\n  agent_brief_path: brief.md\ncontext:\n  strategy: full-dump\n');
   const release = path.join(root, 'release-check.json');
   fs.writeFileSync(release, JSON.stringify({ selectedModels: [{ id: 'gemini-small', provider: 'google', contextWindow: 32_000 }] }));
 

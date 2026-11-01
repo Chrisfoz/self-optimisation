@@ -61,7 +61,7 @@ import {
 } from './escalations.mjs';
 import { summarizeApiIssues } from './api-errors.mjs';
 import { harnessVersion } from './version.mjs';
-import { createSpendLedger, withSpend, projectedFanOut } from './spend.mjs';
+import { createSpendLedger, withSpend, affordableFanOut } from './spend.mjs';
 import { estimateContextSize } from './context-pack.mjs';
 import crypto from 'node:crypto';
 import { summarizeTestRun, renderTestFailure, renderTestPass, failureExcerpt } from './test-runner.mjs';
@@ -460,6 +460,23 @@ export async function suggest(promptConfig, model, { call = callModelWithHeadroo
 }
 
 /**
+ * Does a suggestion look like an answer to the prompt at all? Lenient on
+ * purpose — one recognisable field, or edit blocks, is enough — because a
+ * terse real answer is still worth ranking. What it catches is a reply that
+ * ignored the prompt entirely: Qwen's `pre-mock_*` test endpoints, listed in
+ * its public catalogue, answer every request with the same canned Chinese
+ * sentence, and that text reached the implementer as the winning proposal
+ * (networkinAI generation 015, Hospital of the Future generation 022).
+ *
+ * @param {string} text
+ * @param {object|null} directEdits  extractDirectEdits(text)
+ */
+export function looksLikeProposal(text, directEdits = null) {
+  if (directEdits && (directEdits.edits?.length || directEdits.creates?.length)) return true;
+  return /^\s*(SUMMARY|PILLAR|PROBLEM|CHANGE|WHY THIS ONE|VERIFICATION)\s*:/m.test(text ?? '');
+}
+
+/**
  * Ask every candidate model, in parallel. `allSettled`, not `all`: one lab
  * returning a 500 must not cost the whole generation when other proposals
  * arrived intact.
@@ -475,7 +492,11 @@ export async function gatherProposals(promptConfig, models, deps = {}) {
 
   settled.forEach((outcome, i) => {
     const asked = models[i];
-    if (outcome.status === 'fulfilled') {
+    if (outcome.status === 'fulfilled' && !looksLikeProposal(outcome.value.text, extractDirectEdits(outcome.value.text))) {
+      const reason = `answered without any field of the requested structure (${oneLine(outcome.value.text ?? '', 80)}) — not a proposal`;
+      failures.push({ ...asked, reason: oneLine(reason, 200), kind: 'malformed', statusCode: null });
+      log(`   ⚠️  ${asked.id} produced nothing usable — ${reason}`);
+    } else if (outcome.status === 'fulfilled') {
       const text = outcome.value.text;
       const directEdits = extractDirectEdits(text);
       const escalation = parseEscalation(text);
@@ -1239,9 +1260,12 @@ export async function runGeneration(config, deps = {}) {
   // suggestions and headroom retries are bounded too — not only the gaps
   // between attempts.
   const maxGenerationTokens = Number.isFinite(budget?.maxGenerationTokens) && budget.maxGenerationTokens > 0 ? budget.maxGenerationTokens : null;
-  const spend = createSpendLedger({ maxTokens: maxGenerationTokens });
+  const spend = createSpendLedger({ maxTokens: maxGenerationTokens, discoveryShare: budget?.discoveryShare ?? null });
   const callFor = (site) => withSpend(rawCall, spend, site);
-  const budgetExhausted = () => maxGenerationTokens !== null && spend.total() > maxGenerationTokens;
+  // A discovery overrun (a provider reporting more than was estimated) is
+  // not charged to the build stage — see createSpendLedger()'s pools.
+  const discoveryOverrun = () => (spend.discoveryCap() === null ? 0 : Math.max(0, spend.discoverySpent() - spend.discoveryCap()));
+  const budgetExhausted = () => maxGenerationTokens !== null && spend.total() - discoveryOverrun() > maxGenerationTokens;
 
   if (!agentBrief || !agentBrief.trim()) throw new Error('runGeneration requires a non-empty agentBrief.');
   if (!reviewerBrief || !reviewerBrief.trim()) throw new Error('runGeneration requires a non-empty reviewerBrief.');
@@ -1251,7 +1275,7 @@ export async function runGeneration(config, deps = {}) {
   if (!scope) throw new Error('runGeneration requires a scope decision — see recommendScope() in context-pack.mjs.');
 
   const genLabel = `Generation #${genNumber}`;
-  const asking = suggestModels.map((m) => ({ ...m, provider: m.provider || resolveProvider(m.id) }));
+  let asking = suggestModels.map((m) => ({ ...m, provider: m.provider || resolveProvider(m.id) }));
 
   log(`🚀 Generation ${genNumber}`);
   log(`   suggest:   ${asking.map((m) => `${m.id} (${m.provider})`).join(', ')}`);
@@ -1317,16 +1341,28 @@ export async function runGeneration(config, deps = {}) {
   let testsGate = false;
 
   // Projected, before anything is spent: the suggestion prompt is the same
-  // for every model, so its size times the fan-out is the floor of what
-  // this run will cost. A run that cannot fit under the cap is refused
-  // here, recorded, and reported — not discovered after N labs were paid.
+  // for every model, so it says how many suggesters the discovery pool can
+  // afford. Fewer than were asked, and the fan-out is trimmed to that many
+  // (the rest are recorded as skipped) rather than letting the first few
+  // drain the pool and the implementer go without. None, and the run is
+  // refused here, recorded, and reported — not discovered after N labs were
+  // paid.
+  let skippedForBudget = [];
   if (maxGenerationTokens !== null) {
-    // A scoped run's second call carries up to maxSourceChars of source on
-    // top of the prompt measured here, which holds the map instead.
-    const promptChars = suggestSystem.length + suggestUser.length + (promptConfig.scoped?.maxSourceChars ?? 0);
-    const projected = projectedFanOut({ promptChars, models: asking.length, maxTokens: maxGenerationTokens });
-    if (projected.over) {
-      const detail = `projected ${projected.estimatedTokens.toLocaleString()} input tokens across ${asking.length} model(s) exceeds budget.max_generation_tokens (${maxGenerationTokens.toLocaleString()}); nothing was called`;
+    const pool = spend.discoveryCap() ?? maxGenerationTokens;
+    const base = suggestSystem.length + suggestUser.length;
+    // A scoped run makes two calls per model: the selection (prompt with the
+    // map, a short answer) and the proposal (prompt plus up to
+    // maxSourceChars of the files it chose).
+    // maxSourceChars is a ceiling; a project smaller than it cannot fill it.
+    const sourceCeiling = promptConfig.scoped
+      ? Math.min(promptConfig.scoped.maxSourceChars ?? 0, editableFiles.reduce((sum, f) => sum + (promptConfig.scoped.sizeOf?.(f) ?? 0), 0))
+      : 0;
+    const promptChars = promptConfig.scoped ? base * 2 + sourceCeiling : base;
+    const outputTokens = suggestMaxTokens + (promptConfig.scoped ? Math.min(suggestMaxTokens, 8000) : 0);
+    const { affordable, perModel } = affordableFanOut({ promptChars, outputTokens, models: asking.length, pool });
+    if (affordable === 0) {
+      const detail = `one suggestion is projected at ~${perModel.toLocaleString()} tokens (prompt + output allowance), more than the ${spend.discoveryCap() !== null ? `discovery pool (${pool.toLocaleString()} = budget.discovery_share of ` : '('}budget.max_generation_tokens ${maxGenerationTokens.toLocaleString()}); nothing was called. Use context.strategy: scoped (or auto), or raise the cap`;
       log(`💸 Over budget before the fan-out — ${detail}`);
       const recordPath = record({
         repoRoot, generationsDir, genNumber, campaign, seatPromotion, run, tests: testsRecord,
@@ -1350,6 +1386,11 @@ export async function runGeneration(config, deps = {}) {
         askedModels: asking,
         spend: spend.summary(),
       };
+    }
+    if (affordable < asking.length) {
+      skippedForBudget = asking.slice(affordable);
+      asking = asking.slice(0, affordable);
+      log(`💸 The discovery pool (${pool.toLocaleString()} tokens) affords ${affordable} suggester(s) at ~${perModel.toLocaleString()} each; not asking ${skippedForBudget.map((m) => m.id).join(', ')}\n`);
     }
   }
 
@@ -1382,7 +1423,7 @@ export async function runGeneration(config, deps = {}) {
       suggestResult: null,
       proposal: null,
       attempts: failures.map((f, i) => ({ attempt: i + 1, by: `${f.id} (${f.provider})`, outcome: 'suggestion-failed', detail: f.reason })),
-      fanOut: { asked: asking.map((m) => `${m.id} (${m.provider})`), proposed: [], failed: failures.map((f) => `${f.id}: ${f.reason}`) },
+      fanOut: { asked: asking.map((m) => `${m.id} (${m.provider})`), ...(skippedForBudget.length ? { skippedForBudget: skippedForBudget.map((m) => `${m.id} (${m.provider})`) } : {}), proposed: [], failed: failures.map((f) => `${f.id}: ${f.reason}`) },
       implementedBy: null,
       implementModel,
       scope,
@@ -1444,6 +1485,7 @@ export async function runGeneration(config, deps = {}) {
 
     const fanOut = {
       asked: asking.map((m) => `${m.id} (${m.provider})`),
+      ...(skippedForBudget.length ? { skippedForBudget: skippedForBudget.map((m) => `${m.id} (${m.provider})`) } : {}),
       proposed: proposals.map((p) => p.id),
       offeredEdits: proposals.filter((p) => p.directEdits).map((p) => p.id),
       failed: failures.map((f) => `${f.id}: ${f.reason}`),

@@ -31,6 +31,24 @@ import { resolveProvider } from './llm-provider.mjs';
 export const PROBE_SYSTEM = 'Reply with exactly one word.';
 export const PROBE_USER = 'Reply with the single word OK.';
 
+/**
+ * Did the probe get an answer to the question it asked? Reachable is not
+ * enough: a test endpoint that returns the same canned text for every prompt
+ * is reachable, and was selected as a suggester until this check existed
+ * (Qwen's `pre-mock_*` models — see model-release-detector.mjs). Lenient
+ * about case, punctuation and a little surrounding text.
+ *
+ * @param {unknown} result  callModel()'s result, or anything a test prober returns.
+ * @returns {string|null} a drop reason, or null when the reply is fine (or
+ *   the prober returned no text to judge — a test double).
+ */
+export function checkProbeReply(result) {
+  const text = typeof result === 'string' ? result : result?.text;
+  if (typeof text !== 'string') return null;
+  if (/\bok(ay)?\b/i.test(text)) return null;
+  return `answered the probe ("reply with the single word OK") with something else: "${text.replace(/\s+/g, ' ').trim().slice(0, 60)}" — not following instructions, or a test endpoint`;
+}
+
 // Headroom left for the model's actual response (analysis prose, optionally
 // edit blocks) on top of the prompt itself. Deliberately a fixed number of
 // tokens rather than a fraction of the window: a small context window needs
@@ -112,7 +130,13 @@ export async function probeCandidates(candidates, prober, log = () => {}, { esti
     }
 
     try {
-      await prober({ model: id, provider });
+      const reply = await prober({ model: id, provider });
+      const replyReason = checkProbeReply(reply);
+      if (replyReason) {
+        dropped.push({ id, provider, reason: replyReason });
+        log(`❌ ${id} (${provider}): ${replyReason}`);
+        continue;
+      }
       survivors.push({ id, provider });
       log(`✓ ${id} (${provider}): reachable`);
     } catch (err) {

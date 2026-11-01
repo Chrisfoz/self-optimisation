@@ -92,10 +92,48 @@ export function estimateTokens(text) {
  */
 export const IMAGE_TOKEN_ESTIMATE = 1600;
 
-/** The input side of one request, estimated before it is sent. */
+/**
+ * Characters per token used when RESERVING room for a request. Lower than
+ * the 4 that estimateTokens() uses for sizing, on purpose: code, JSON and
+ * non-English text tokenize denser than prose, and a reservation that is
+ * too small is the one that lets a run overspend. Sizing reports stay on 4
+ * so their numbers remain comparable with older records.
+ */
+export const ADMISSION_CHARS_PER_TOKEN = 3;
+
+/** The input side of one request, estimated before it is sent — conservatively (see ADMISSION_CHARS_PER_TOKEN). */
 export function estimateRequestTokens({ system = '', user = '', images = [] } = {}) {
-  return estimateTokens(system) + estimateTokens(user) + (images?.length ?? 0) * IMAGE_TOKEN_ESTIMATE;
+  const chars = (system ?? '').length + (user ?? '').length;
+  return Math.round(chars / ADMISSION_CHARS_PER_TOKEN) + (images?.length ?? 0) * IMAGE_TOKEN_ESTIMATE;
 }
+
+/**
+ * How cached input counts toward the cap, relative to ordinary input. Not
+ * prices — the ratios labs publish for prompt caching, which have held
+ * across every model generation so far: a cache read is billed at about a
+ * tenth of an uncached token, a write at about 1.25x. Counting a cache read
+ * at full weight made a run that re-read a large cached prefix look ten
+ * times dearer than it was (Hospital of the Future generation 022:
+ * 2,361,856 of 2,362,015 input tokens were cache reads).
+ */
+export const CACHE_READ_WEIGHT = 0.1;
+export const CACHE_WRITE_WEIGHT = 1.25;
+
+/**
+ * Sites that belong to the discovery pool — finding out WHAT to build — as
+ * opposed to building, reviewing and reporting it. See createSpendLedger()'s
+ * discoveryShare.
+ */
+export const DISCOVERY_SITES = ['suggest', 'rank'];
+
+/**
+ * A provider-reported input count this many times the request's own
+ * conservative estimate is not believable for a text prompt; the entry is
+ * flagged `implausibleUsage` so a reader (and the next run's model
+ * selection) can tell a pricing anomaly from a real cost. Seen live: Qwen's
+ * `pre-mock_*` test endpoints reported ~4x the characters sent as tokens.
+ */
+export const IMPLAUSIBLE_USAGE_RATIO = 2.5;
 
 /**
  * Thrown when a request would not fit under the generation's cap. Tagged
@@ -135,15 +173,37 @@ export class BudgetExceededError extends Error {
  * were recorded as 200. And the cap was checked only between attempts, so
  * nothing bounded a single stage.
  *
- * @param {{maxTokens?: number|null}} [opts]  The cap. Null or absent: every
- *   request is admitted and simply recorded.
+ * Two pools, when `discoveryShare` is set. Discovery (DISCOVERY_SITES: the
+ * suggestion fan-out and the ranking) may use at most that share of the
+ * cap. Everything else — implement, review, refine, digest — may use the
+ * rest, PLUS whatever discovery left unused, and is never charged for a
+ * discovery overrun: discovery's spend is counted against the build pool
+ * only up to discovery's own share. Before this, one pool meant five
+ * suggesters could spend the whole cap and the implementer — the only stage
+ * that produces anything — was refused (networkinAI generation 015: 6.2M
+ * tokens of proposals, no code). An overrun can still happen, because a
+ * provider can report more than was estimated; it is bounded by that
+ * estimate error, discovery admits nothing more once it is over, and the
+ * build stage keeps its full share either way.
+ *
+ * @param {{maxTokens?: number|null, discoveryShare?: number|null}} [opts]
+ *   The cap, and the share of it discovery may use (0 < share < 1). Null or
+ *   absent cap: every request is admitted and simply recorded. Null share:
+ *   one pool, as before.
  */
-export function createSpendLedger({ maxTokens = null } = {}) {
+export function createSpendLedger({ maxTokens = null, discoveryShare = null } = {}) {
   const calls = [];
   const refused = [];
   const cap = Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : null;
+  const discoveryCap = cap !== null && Number.isFinite(discoveryShare) && discoveryShare > 0 && discoveryShare < 1
+    ? Math.round(cap * discoveryShare)
+    : null;
+  const isDiscovery = (site) => DISCOVERY_SITES.includes(site);
   let reserved = 0;
+  let reservedDiscovery = 0;
   let nextTicket = 1;
+  const cost = (c) => c.costTokens ?? (c.inputTokens + c.outputTokens);
+  const spentWhere = (pred) => calls.reduce((sum, c) => (pred(c.site) ? sum + cost(c) : sum), 0);
 
   const recordEntry = ({ site, model, provider = null, usage = null, system = '', user = '', text = '', estimatedInput = null, failed = false, statusCode = null }) => {
     const real = normalizeUsage(usage);
@@ -161,6 +221,17 @@ export function createSpendLedger({ maxTokens = null } = {}) {
       const cache = cacheUsage(usage);
       if (cache.cacheReadTokens) entry.cacheReadTokens = cache.cacheReadTokens;
       if (cache.cacheWriteTokens) entry.cacheWriteTokens = cache.cacheWriteTokens;
+      // What counts toward the cap: cached input at its billed weight.
+      // Present only when caching moved the number, so a record from a run
+      // with no caching is unchanged.
+      if (cache.cacheReadTokens || cache.cacheWriteTokens) {
+        const uncached = Math.max(0, entry.inputTokens - cache.cacheReadTokens - cache.cacheWriteTokens);
+        entry.costTokens = Math.round(uncached + cache.cacheReadTokens * CACHE_READ_WEIGHT + cache.cacheWriteTokens * CACHE_WRITE_WEIGHT + entry.outputTokens);
+      }
+      if (Number.isFinite(estimatedInput) && estimatedInput >= 1000 && entry.inputTokens > estimatedInput * IMPLAUSIBLE_USAGE_RATIO) {
+        entry.implausibleUsage = true;
+        entry.estimatedInputTokens = estimatedInput;
+      }
     }
     if (failed) entry.failed = true;
     if (statusCode !== null && statusCode !== 200) entry.statusCode = statusCode;
@@ -177,6 +248,16 @@ export function createSpendLedger({ maxTokens = null } = {}) {
       return reserved;
     },
 
+    /** The discovery pool's size, or null when there is one pool. */
+    discoveryCap() {
+      return discoveryCap;
+    },
+
+    /** What discovery (suggest, rank) has spent so far, at cap weight. */
+    discoverySpent() {
+      return spentWhere(isDiscovery);
+    },
+
     /**
      * Reserve room for one request, or refuse it.
      * @param {{site: string, model: string, provider?: string|null, inputTokens: number, outputTokens: number}} req
@@ -184,18 +265,35 @@ export function createSpendLedger({ maxTokens = null } = {}) {
      */
     admit({ site, model, provider = null, inputTokens = 0, outputTokens = 0 }) {
       const need = Math.max(0, Math.round(inputTokens)) + Math.max(0, Math.round(outputTokens));
-      const spent = ledger.total();
-      if (cap !== null && spent + reserved + need > cap) {
-        refused.push({ site, model, provider, need, spent, reserved });
+      const refuse = (spent, held, limit, pool) => {
+        refused.push({ site, model, provider, need, spent, reserved: held, pool });
         throw new BudgetExceededError(
-          `budget.max_generation_tokens (${cap.toLocaleString()}) would be exceeded by a ${site} call to ${model}: ` +
-          `${spent.toLocaleString()} spent + ${reserved.toLocaleString()} in flight + ${need.toLocaleString()} reserved for this request ` +
+          `budget.max_generation_tokens (${cap.toLocaleString()}) would be exceeded by a ${site} call to ${model}` +
+          `${pool ? ` (${pool} pool: ${limit.toLocaleString()})` : ''}: ` +
+          `${spent.toLocaleString()} spent + ${held.toLocaleString()} in flight + ${need.toLocaleString()} reserved for this request ` +
           `(estimated input + its full output allowance)`,
-          { provider, site, need, spent, reserved, cap }
+          { provider, site, need, spent, reserved: held, cap, pool }
         );
+      };
+      const discovery = isDiscovery(site);
+      if (cap !== null && discoveryCap === null) {
+        const spent = ledger.total();
+        if (spent + reserved + need > cap) refuse(spent, reserved, cap, null);
+      } else if (cap !== null && discovery) {
+        const spent = spentWhere(isDiscovery);
+        if (spent + reservedDiscovery + need > discoveryCap) refuse(spent, reservedDiscovery, discoveryCap, 'discovery');
+      } else if (cap !== null) {
+        // The build pool: the cap, less what discovery used — but never less
+        // than discovery's own share, however far over it ran.
+        const discoveryCharged = Math.min(spentWhere(isDiscovery) + reservedDiscovery, discoveryCap);
+        const limit = cap - discoveryCharged;
+        const spent = spentWhere((s) => !isDiscovery(s));
+        const held = reserved - reservedDiscovery;
+        if (spent + held + need > limit) refuse(spent, held, limit, 'build');
       }
       reserved += need;
-      return { id: nextTicket++, site, model, provider, inputTokens: Math.round(inputTokens), need, open: true };
+      if (discovery) reservedDiscovery += need;
+      return { id: nextTicket++, site, model, provider, inputTokens: Math.round(inputTokens), need, discovery, open: true };
     },
 
     /**
@@ -208,6 +306,7 @@ export function createSpendLedger({ maxTokens = null } = {}) {
       if (!ticket || !ticket.open) return null;
       ticket.open = false;
       reserved -= ticket.need;
+      if (ticket.discovery) reservedDiscovery -= ticket.need;
       return recordEntry({
         site: ticket.site,
         model: model ?? ticket.model,
@@ -225,6 +324,7 @@ export function createSpendLedger({ maxTokens = null } = {}) {
       if (!ticket || !ticket.open) return;
       ticket.open = false;
       reserved -= ticket.need;
+      if (ticket.discovery) reservedDiscovery -= ticket.need;
     },
 
     /** A site-bound view of admit/settle/release, handed to callModel as `meter`. */
@@ -250,9 +350,9 @@ export function createSpendLedger({ maxTokens = null } = {}) {
       return recordEntry({ site, model, provider, usage, system, user, text });
     },
 
-    /** Tokens spent so far, input plus output. */
+    /** Tokens spent so far, input plus output, with cached input at its billed weight (CACHE_READ_WEIGHT). */
     total() {
-      return calls.reduce((sum, c) => sum + c.inputTokens + c.outputTokens, 0);
+      return calls.reduce((sum, c) => sum + cost(c), 0);
     },
 
     /** The shape written into attempts.json. */
@@ -288,6 +388,13 @@ export function createSpendLedger({ maxTokens = null } = {}) {
         // on these; they are why a run stopped early, not what it cost.
         refusedRequests: refused.length,
         maxGenerationTokens: cap,
+        // Present only when they differ from the raw totals above, or a pool
+        // or anomaly exists — so an ordinary record's shape is unchanged.
+        ...(calls.some((c) => c.costTokens !== undefined) ? { costTokens: ledger.total() } : {}),
+        ...(discoveryCap !== null ? { discoveryCap, discoverySpent: spentWhere(isDiscovery) } : {}),
+        ...(calls.some((c) => c.implausibleUsage) ? {
+          implausibleUsage: calls.filter((c) => c.implausibleUsage).map((c) => ({ site: c.site, model: c.model, provider: c.provider, reportedInputTokens: c.inputTokens, estimatedInputTokens: c.estimatedInputTokens })),
+        } : {}),
         // Present only when a lab reported cache activity. Included in
         // inputTokens above; this is how much of it was cheap (reads) or
         // carried a premium (writes).
@@ -353,4 +460,22 @@ export function withSpend(call, ledger, site) {
 export function projectedFanOut({ promptChars, models, maxTokens }) {
   const estimatedTokens = Math.round(promptChars / 4) * models;
   return { over: Number.isFinite(maxTokens) && maxTokens > 0 && estimatedTokens > maxTokens, estimatedTokens };
+}
+
+/**
+ * How many suggesting models a pool can afford, before any is called. Each
+ * is costed at its prompt (estimated conservatively, as admission does) plus
+ * its whole output allowance — and twice over for a scoped run, whose
+ * selection call re-sends the brief. Returns how many fit (0 when not even
+ * one does) and the per-model cost used, so a caller can trim the fan-out
+ * instead of letting the first few calls drain the pool and the rest be
+ * refused mid-flight.
+ *
+ * @param {{promptChars: number, outputTokens: number, models: number, pool: number|null, calls?: number}} opts
+ * @returns {{affordable: number, perModel: number}}
+ */
+export function affordableFanOut({ promptChars, outputTokens = 0, models, pool, calls = 1 }) {
+  const perModel = Math.round(promptChars / ADMISSION_CHARS_PER_TOKEN) * calls + outputTokens;
+  if (!Number.isFinite(pool) || pool <= 0) return { affordable: models, perModel };
+  return { affordable: Math.max(0, Math.min(models, Math.floor(pool / Math.max(1, perModel)))), perModel };
 }

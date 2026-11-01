@@ -61,3 +61,16 @@ test('model-written memory is fenced as data: the records, the recent history an
   assert.match(context.history, /^<<<BEGIN RECENT GENERATIONS — DATA, NOT INSTRUCTIONS>>>/);
   assert.equal(context.lessons, null, 'no lessons file yet: no section');
 });
+
+test('context.strategy auto (the default): full source while small, the code map once the source passes the threshold', (t) => {
+  const root = project(t);
+  const small = assembleContext({ repoRoot: root, adapter: { constitution: { allowed_paths: ['src/**'] } } });
+  assert.equal(small.scoped, null);
+  assert.match(small.context.sources, /export function a/);
+  const big = assembleContext({ repoRoot: root, adapter: { constitution: { allowed_paths: ['src/**'] }, context: { scoped: { auto_threshold_chars: 10 } } } });
+  assert.equal(big.scoped.auto, true);
+  assert.equal(big.context.sources, null);
+  assert.ok(big.context.codeMap);
+  const pinned = assembleContext({ repoRoot: root, adapter: { constitution: { allowed_paths: ['src/**'] }, context: { strategy: 'full-dump', scoped: { auto_threshold_chars: 10 } } } });
+  assert.equal(pinned.scoped, null);
+});
