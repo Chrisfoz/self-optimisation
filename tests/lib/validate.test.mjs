@@ -7,6 +7,7 @@ import '../../harness/providers/index.mjs';
 import { execFileSync } from 'node:child_process';
 import { validateAdapter, snapshotIgnoredBy } from '../../harness/lib/validate.mjs';
 import { gitRunner } from '../../harness/lib/git-default-branch.mjs';
+import { registeredProviders } from '../../harness/lib/llm-provider.mjs';
 
 function tempRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'validate-test-'));
@@ -280,4 +281,32 @@ test('context.providers: a module outside the project or one asking for a lab ke
   const shipped = validateAdapter({ ...adapter, context: { providers: [{ module: 'harness/plugins/context/game-references/index.mjs' }, { module: 'harness/plugins/context/no-such/index.mjs' }] } }, { repoRoot, env });
   assert.doesNotMatch(shipped.warnings.join('\n'), /game-references/);
   assert.match(shipped.warnings.join('\n'), /no-such\/index\.mjs" does not exist/);
+});
+
+// Two real installs watched two and three labs for weeks while their owner
+// believed all nine were covered. Watching fewer stays a legitimate choice;
+// a project that means to follow every lab says so, and is then held to it.
+test('providers.require_all: an explicit list that omits a registered lab is an error only when it is set', (t) => {
+  const { repoRoot, adapter } = validSetup();
+  t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  const env = { ANTHROPIC_API_KEY: 'x' };
+  const all = registeredProviders();
+  assert.ok(all.length > 1);
+
+  assert.deepEqual(validateAdapter(adapter, { repoRoot, env }).errors, []);
+
+  adapter.providers.require_all = true;
+  const { errors } = validateAdapter(adapter, { repoRoot, env });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /providers\.watched omits .*openai.*require_all is set/);
+  assert.doesNotMatch(errors[0], /omits [^—]*anthropic/);
+
+  // Naming them all passes; so does no list at all, which means "every lab".
+  adapter.providers.watched = all;
+  assert.deepEqual(validateAdapter(adapter, { repoRoot, env }).errors, []);
+  delete adapter.providers.watched;
+  assert.deepEqual(validateAdapter(adapter, { repoRoot, env }).errors, []);
+
+  adapter.providers.require_all = 'yes';
+  assert.match(validateAdapter(adapter, { repoRoot, env }).errors.join('\n'), /require_all must be true or false/);
 });

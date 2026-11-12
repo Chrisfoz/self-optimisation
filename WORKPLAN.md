@@ -962,10 +962,28 @@ Most of what broke was the install path and the cost of runs, not the loop.
   ÷ 4 undercounted Anthropic's count of HTML by about 1.5×. *Done when:* the
   reservation uses each provider's ratio of real to estimated input from past
   records, with a test.
-- [ ] **I13 — The unexplained digest fallback.** Generation 004's
+- [x] **I13 — The unexplained digest fallback.** Generation 004's
   plain-language digest failed once on GitHub ("No BODY: section found") and
   did not reproduce locally. *Done when:* the raw response of a failed
   compose is kept in the run log, and the cause is known.
+  **Done 2026-11-12 (0.4.0), cause inferred rather than observed:** the
+  parser needed `BODY:` alone on its line, with no decoration. A bold label,
+  a heading, a body that starts on the label's line or a fenced answer all
+  threw that exact error; all are now accepted. A compose that still fails
+  logs the first 1500 characters of what the model returned.
+- [x] **I14 — Copied installs drift, and `upgrade` could not see it.**
+  *Found 2026-11-12:* of four copied installs, three differed from their
+  release: two held fixes back-ported by hand before 0.3.4, one had missed
+  them, and Hospital of the Future carried a patch (every lab watched,
+  enforced in `validate`) that was never sent upstream. `upgrade` replaces
+  the folder, so each would have been lost or kept by accident.
+  **Done (0.4.0):** `bin/self-optimisation.mjs` records each copy in
+  `harness/INSTALLED.json` (`harness/lib/manifest.mjs`); `upgrade` refuses
+  when an edit the new release lacks would be lost, and `doctor` lists the
+  edits. The patch itself is upstream as `providers.require_all`, opt-in:
+  an absent `watched` list now means every registered lab in the workflow
+  too (it meant none in `workflow-config.mjs` and in `init --from-adapter`),
+  and `doctor` states how many labs are watched.
 
 ## Tier 8 — make the install easy (2026-09-26)
 

@@ -94,3 +94,27 @@ test('init --from-adapter regenerates the workflow and README, leaves the adapte
   assert.equal(fs.readFileSync(path.join(dir, '.claude/agents/improve.md'), 'utf8'), 'MY REAL BRIEF');
   assert.match(fs.readFileSync(path.join(dir, 'project-adapter.yml'), 'utf8'), /approval_class: autonomous-merge/);
 });
+
+// An adapter with no `providers.watched` watches every registered lab (that
+// is how the detector has always read it). The regenerated workflow used to
+// hold no lab's secret for it, and writing the adapter back would have
+// frozen today's list in place of "all".
+test('answersFromAdapter: no watched list is every registered lab, and stays absent when written back', async () => {
+  const { registeredProviders } = await import('../../harness/lib/llm-provider.mjs');
+  const adapter = loadYaml(renderAdapterYaml(answers()));
+  delete adapter.providers.watched;
+  adapter.providers.require_all = true;
+
+  const regenerated = answersFromAdapter(adapter, { ...deps, registeredProviders });
+  assert.deepEqual(regenerated.providers.map((p) => p.name), registeredProviders());
+  const workflow = renderWorkflowTemplate(template, regenerated);
+  for (const name of registeredProviders()) assert.ok(workflow.includes(getProvider(name).envKey), `${name}'s key is missing from the workflow`);
+
+  const written = buildAdapterObject(regenerated);
+  assert.equal('watched' in written.providers, false);
+  assert.equal(written.providers.require_all, true);
+
+  // The object form of an entry names its lab, not itself.
+  adapter.providers.watched = [{ lab: 'openai', env_var: 'OPENAI_API_KEY' }, 'anthropic'];
+  assert.deepEqual(answersFromAdapter(adapter, deps).providers.map((p) => p.name), ['openai', 'anthropic']);
+});

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
 import '../../harness/providers/index.mjs';
-import { getProvider, resolveProvider } from '../../harness/lib/llm-provider.mjs';
+import { getProvider, resolveProvider, registeredProviders } from '../../harness/lib/llm-provider.mjs';
 import { runChecks, report } from '../../harness/lib/doctor.mjs';
 
 const REPO_ROOT = path.join(import.meta.dirname, '../..');
@@ -40,6 +40,7 @@ function deps(overrides = {}) {
     checkUpgrade: async () => ({ local: '0.1.0', upstream: '0.1.0', behind: false }),
     providerEnvKey: (name) => getProvider(name).envKey,
     modelProvider: (model) => { try { return resolveProvider(model); } catch { return null; } },
+    registeredProviders,
     ...overrides,
   };
 }
@@ -48,7 +49,7 @@ const byName = (checks) => Object.fromEntries(checks.map((c) => [c.name, c]));
 test('a healthy installation is all ok, and reports Ready', async () => {
   const checks = await runChecks(deps());
   assert.deepEqual(checks.filter((c) => c.status !== 'ok').map((c) => `${c.name}: ${c.detail}`), []);
-  assert.deepEqual(checks.map((c) => c.name), ['Node', 'Adapter', 'Workflow', 'Env file', 'Keys', 'Snapshot', 'Secrets', 'PR permission', 'Harness']);
+  assert.deepEqual(checks.map((c) => c.name), ['Node', 'Adapter', 'Labs', 'Workflow', 'Env file', 'Keys', 'Snapshot', 'Secrets', 'PR permission', 'Harness']);
   assert.equal(report(checks).code, 0);
   assert.match(report(checks).lines.at(-1), /Ready/);
 });
@@ -148,4 +149,36 @@ test('doctor.mjs --offline on a fresh copied install names what is left to do', 
   assert.match(result.stdout, /✅ Env file\s+harness\/\.env\.harness\.local, git-ignored/);
   assert.match(result.stdout, /❌ Keys\s+blank or missing/);
   assert.match(result.stdout, /thing\(s\) to fix/);
+});
+
+test('Labs says how many are watched, names the ones never polled, and never fails over it', async () => {
+  const some = byName(await runChecks(deps())).Labs;
+  assert.equal(some.status, 'ok');
+  assert.match(some.detail, new RegExp(`watching 1 of ${registeredProviders().length}; never polled: .*anthropic`));
+
+  // No list is every lab: the workflow then needs every lab's key, so give it them.
+  const env = Object.fromEntries(registeredProviders().map((p) => [getProvider(p).envKey, 'k']));
+  const secrets = JSON.stringify(Object.keys(env).map((name) => ({ name })));
+  const all = byName(await runChecks(deps({
+    adapter: { ...ADAPTER, providers: {} },
+    env,
+    gh: (args) => (args[0] === 'secret' ? { status: 0, stdout: secrets } : { status: 0, stdout: JSON.stringify({ can_approve_pull_request_reviews: true }) }),
+  })));
+  assert.match(all.Labs.detail, new RegExp(`watching all ${registeredProviders().length} \\(no list`));
+  assert.equal(all.Keys.status, 'ok', all.Keys.detail);
+  assert.match(all.Secrets.detail, new RegExp(`all ${registeredProviders().length} set`));
+});
+
+test('local edits inside harness/ are a warning that names the files; an untouched install is ok', async () => {
+  const clean = byName(await runChecks(deps({ localEdits: () => ({ version: '0.4.0', modified: [], added: [], missing: [] }) })))['Harness files'];
+  assert.equal(clean.status, 'ok');
+  assert.match(clean.detail, /as installed \(0\.4\.0\)/);
+
+  const edited = byName(await runChecks(deps({ localEdits: () => ({ version: '0.4.0', modified: ['lib/validate.mjs'], added: ['lib/mine.mjs'], missing: [] }) })))['Harness files'];
+  assert.equal(edited.status, 'warn');
+  assert.match(edited.detail, /2 differ.*harness\/lib\/validate\.mjs, harness\/lib\/mine\.mjs/);
+  assert.match(edited.fix, /upgrade stops/);
+
+  // No install record: nothing to say, and nothing said.
+  assert.equal(byName(await runChecks(deps({ localEdits: () => null })))['Harness files'], undefined);
 });

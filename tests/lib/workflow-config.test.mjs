@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { workflowConfig, githubEnvLines } from '../../harness/lib/workflow-config.mjs';
+import { registeredProviders } from '../../harness/lib/llm-provider.mjs';
 
 function adapter(overrides = {}) {
   return {
@@ -32,7 +33,9 @@ test('workflowConfig: fills the documented defaults when fields are absent', () 
   assert.equal(config.defaultBranch, 'main');
   assert.equal(config.snapshotPath, '.agent/model-snapshot.json');
   assert.equal(config.generationsDir, 'docs/generations');
-  assert.equal(config.providersCsv, '');
+  // No watched list means every registered lab, as the detector reads it.
+  assert.equal(config.providersCsv, registeredProviders().join(','));
+  assert.ok(registeredProviders().length > 1);
   assert.deepEqual(config.setupCommands, []);
   assert.deepEqual(config.editablePaths, []);
 });

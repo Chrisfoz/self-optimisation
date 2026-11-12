@@ -55,14 +55,13 @@ implementation plan; live KPI collection and policy adaptation are not enabled.
 In your own project's root, with **Node 22.11 or newer**:
 
 ```bash
-# 1. Copy the harness in, from a release. One folder; there is nothing to install.
-#    Pick the newest tag on the Releases page; main can be ahead of it.
-git clone --depth 1 --branch v0.3.1 https://github.com/Chrisfoz/self-optimisation.git /tmp/self-optimisation
-cp -r /tmp/self-optimisation/harness ./harness
+# 1. Fetch a release. Pick the newest tag on the Releases page; main can be ahead of it.
+git clone --depth 1 --branch v0.4.0 https://github.com/Chrisfoz/self-optimisation.git /tmp/self-optimisation
 
-# 2. Five questions, with defaults read from your project's own files. Writes
+# 2. Copy harness/ in (one folder; there is nothing to install) and answer five
+#    questions, with defaults read from your project's own files. Writes
 #    project-adapter.yml, the workflow, two brief files to fill in, and a checklist.
-node harness/cli/init.mjs --quick
+node /tmp/self-optimisation/bin/self-optimisation.mjs init --quick
 
 # 3. Paste your lab keys into harness/.env.harness.local, then prove they work.
 node --env-file=harness/.env.harness.local harness/scripts/check-keys.mjs
@@ -78,8 +77,10 @@ node --env-file=harness/.env.harness.local harness/scripts/rehearse.mjs
 Then commit and push. Each generation opens a pull request for you to merge;
 nothing merges by itself unless you chose that in step 2.
 
-- **Windows PowerShell:** use `$env:TEMP\self-optimisation` for the clone and
-  `Copy-Item -Recurse` for `cp -r`.
+- **Windows PowerShell:** use `$env:TEMP\self-optimisation` for the clone.
+- **Copying the folder by hand** (`cp -r`, then `node harness/cli/init.mjs
+  --quick`) still works. It leaves no install record, so a later upgrade
+  cannot warn you about local edits it is about to replace.
 - **Keys:** which labs, where to sign up, and what each costs are in
   [Step 2 of the install guide](docs/INSTALL.md#step-2--get-api-keys-for-the-labs-you-want-to-watch).
 - **Step 4 needs the [GitHub CLI](https://cli.github.com/)** signed in
@@ -93,14 +94,14 @@ nothing merges by itself unless you chose that in step 2.
 ## Versions and updates
 
 **Nothing here changes your project unless you choose it.** A release is a
-tag (`v0.3.1`) on one commit, published on the
+tag (`v0.4.0`) on one commit, published on the
 [Releases page](https://github.com/Chrisfoz/self-optimisation/releases) with
 that commit's full SHA. An installation is fixed to one release until its
 owner moves it:
 
 | Install | What your repository holds | To update |
 |---|---|---|
-| **Copied** (the Quickstart above) | its own copy of `harness/` | Clone the newer release tag, then run `node <clone>/bin/self-optimisation.mjs upgrade` in your project. It replaces `harness/`, keeps your key file and adapter, and regenerates the workflow. Review the diff and commit it. |
+| **Copied** (the Quickstart above) | its own copy of `harness/` | Clone the newer release tag, then run `node <clone>/bin/self-optimisation.mjs upgrade` in your project. It replaces `harness/`, keeps your key file and adapter, and regenerates the workflow. Review the diff and commit it. If you edited a file inside `harness/` and the new release does not contain that edit, it stops and names the file instead of overwriting it (`harness/INSTALLED.json` is the record it compares against; `doctor` shows the same list). |
 | **Shared** (`init --shared <sha> --shared-label <tag>`) | a short workflow that calls this repository's shared workflow at one **commit SHA** | Change that SHA and label to a newer release's, in a pull request. Rolling back is changing them back. |
 
 Shared installs pin a SHA, never a tag or branch, because a tag can be moved

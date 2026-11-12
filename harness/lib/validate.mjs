@@ -250,6 +250,24 @@ export function validateAdapter(adapter, { repoRoot = process.cwd(), env = proce
   for (const name of watched) {
     if (!getProvider(name)) errors.push(`providers.watched: "${name}" is not a registered provider.`);
   }
+  // An explicit list that leaves a registered lab out never hears about that
+  // lab's releases, and nothing else says so: two real installs watched two
+  // and three labs for weeks while their owner believed all nine were
+  // covered. Watching fewer is a legitimate choice for someone without the
+  // keys, so it is not flagged by default (doctor states the count). A
+  // project that means to follow every lab sets `providers.require_all:
+  // true`, and then an omission is an error — including the one an upgrade
+  // creates by registering a lab the list predates. An absent list already
+  // means "every registered lab" and always passes.
+  if (adapter.providers?.require_all === true && watchedProviders(adapter)) {
+    const missing = registeredProviders().filter((name) => !watched.includes(name));
+    if (missing.length) {
+      errors.push(`providers.watched omits ${missing.join(', ')}, and providers.require_all is set — a release from ${missing.length === 1 ? 'that lab' : 'those labs'} would never start a generation. Add ${missing.length === 1 ? 'it' : 'them'}, or delete the list to watch every registered lab.`);
+    }
+  }
+  if (adapter.providers?.require_all !== undefined && typeof adapter.providers.require_all !== 'boolean') {
+    errors.push('providers.require_all must be true or false.');
+  }
 
   // The three pinned seats must resolve to a lab this harness has a
   // provider file for, the same check init.mjs already warns about at

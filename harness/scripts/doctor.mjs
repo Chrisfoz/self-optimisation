@@ -23,12 +23,13 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { parseEnv } from 'node:util';
 import '../providers/index.mjs';
-import { getProvider, resolveProvider } from '../lib/llm-provider.mjs';
+import { getProvider, resolveProvider, registeredProviders } from '../lib/llm-provider.mjs';
 import { loadAdapter } from '../lib/adapter.mjs';
 import { ghRunner } from '../lib/github-setup.mjs';
 import { checkUpgrade } from '../lib/version.mjs';
 import { gitRunner, remoteDefaultBranch } from '../lib/git-default-branch.mjs';
 import { runChecks, report, ENV_FILE } from '../lib/doctor.mjs';
+import { localEdits } from '../lib/manifest.mjs';
 
 const repoRoot = process.cwd();
 const offline = process.argv.includes('--offline');
@@ -76,6 +77,8 @@ const checks = await runChecks({
   checkUpgrade: () => checkUpgrade(),
   providerEnvKey: (name) => getProvider(name)?.envKey ?? `${String(name).toUpperCase()}_API_KEY`,
   modelProvider: (model) => { try { return resolveProvider(model); } catch { return null; } },
+  registeredProviders,
+  localEdits: () => localEdits(path.join(path.dirname(fileURLToPath(import.meta.url)), '..')),
   offline,
   remoteDefaultBranch: offline ? null : remoteDefaultBranch(gitRunner(repoRoot)),
 });

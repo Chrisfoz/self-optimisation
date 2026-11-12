@@ -37,6 +37,9 @@ export const ENV_FILE = 'harness/.env.harness.local';
  * @param {() => Promise<{local: string, upstream: string|null, behind: boolean|null, error?: string}>} [deps.checkUpgrade]
  * @param {(model: string) => string|null} deps.modelProvider
  * @param {(name: string) => string} deps.providerEnvKey
+ * @param {() => string[]} [deps.registeredProviders]  every lab the harness can call
+ * @param {() => {version: string|null, modified: string[], added: string[], missing: string[]}|null} [deps.localEdits]
+ *   how harness/ differs from its install record (manifest.mjs); null when there is none
  * @param {boolean} [deps.offline]          skip everything that calls out
  * @param {string|null} [deps.remoteDefaultBranch]
  */
@@ -65,7 +68,16 @@ export async function runChecks(deps) {
   else add('Adapter', warnings.length ? 'warn' : 'ok', warnings.length ? `valid, ${warnings.length} warning(s): ${warnings[0]}` : 'valid',
     warnings.length ? 'node harness/scripts/validate.mjs' : null);
 
-  const answers = answersFromAdapter(deps.adapter, { providerEnvKey: deps.providerEnvKey, modelProvider: deps.modelProvider });
+  const known = deps.registeredProviders?.() ?? [];
+  const watchedNames = Array.isArray(deps.adapter.providers?.watched) ? deps.adapter.providers.watched.map((e) => (typeof e === 'string' ? e : e?.lab)) : null;
+  if (known.length) {
+    const unwatched = watchedNames ? known.filter((n) => !watchedNames.includes(n)) : [];
+    add('Labs', 'ok', unwatched.length
+      ? `watching ${known.length - unwatched.length} of ${known.length}; never polled: ${unwatched.join(', ')}`
+      : `watching all ${known.length}${watchedNames ? '' : ' (no list, so any lab a later release adds too)'}`);
+  }
+
+  const answers = answersFromAdapter(deps.adapter, { providerEnvKey: deps.providerEnvKey, modelProvider: deps.modelProvider, registeredProviders: deps.registeredProviders });
   const labs = requiredProviders(answers);
   const needed = [...labs.map((p) => p.envKey), ...(answers.notify?.envKey ? [answers.notify.envKey] : [])];
   const shared = Boolean(answers.sharedHarness);
@@ -141,11 +153,24 @@ export async function runChecks(deps) {
     add('Harness', 'ok', `shared, pinned at ${answers.sharedHarness.ref?.slice(0, 12)}`);
   } else if (deps.offline || !deps.checkUpgrade) {
     add('Harness', 'skip', 'upstream version not checked (--offline)');
+    addLocalEdits();
   } else {
     const up = await deps.checkUpgrade();
     if (up.error || up.behind === null) add('Harness', 'warn', `local ${up.local}; could not compare with upstream${up.error ? ` (${up.error})` : ''}`);
-    else if (up.behind) add('Harness', 'warn', `local ${up.local} is behind upstream ${up.upstream}`, 'Re-copy harness/ from the repository, then: node harness/cli/init.mjs --from-adapter --force');
+    else if (up.behind) add('Harness', 'warn', `local ${up.local} is behind upstream ${up.upstream}`, 'Check out the newer release tag, then: node <checkout>/bin/self-optimisation.mjs upgrade');
     else add('Harness', 'ok', `${up.local}, current`);
+    addLocalEdits();
+  }
+
+  // A copied install only. An edit inside harness/ is not wrong, but it is
+  // invisible until an upgrade refuses over it, so say so here first.
+  function addLocalEdits() {
+    const edits = deps.localEdits?.();
+    if (!edits) return;
+    const changed = [...edits.modified, ...edits.added, ...edits.missing];
+    if (!changed.length) add('Harness files', 'ok', `as installed${edits.version ? ` (${edits.version})` : ''}`);
+    else add('Harness files', 'warn', `${changed.length} differ from the installed release: ${changed.slice(0, 4).map((f) => `harness/${f}`).join(', ')}${changed.length > 4 ? ' …' : ''}`,
+      'An upgrade stops rather than overwrite these. Send the change upstream, or expect to re-apply it.');
   }
 
   return checks;

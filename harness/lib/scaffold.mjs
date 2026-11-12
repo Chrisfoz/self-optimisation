@@ -258,7 +258,10 @@ export function buildAdapterObject(a) {
         : {}),
     },
     providers: {
-      watched: a.providers.map((p) => p.name),
+      // Omitted when the adapter it was read from had no list: absence means
+      // "every registered lab", and writing today's nine back would freeze it.
+      ...(a.watchAll ? {} : { watched: a.providers.map((p) => p.name) }),
+      ...(a.requireAllProviders ? { require_all: true } : {}),
       snapshot_path: a.snapshotPath || '.agent/model-snapshot.json',
       max_fanout: Number.isFinite(a.maxFanout) ? a.maxFanout : 8,
     },
@@ -423,9 +426,12 @@ export function buildAdapterObject(a) {
  * @param {object} deps
  * @param {(name: string) => string} deps.providerEnvKey    Lab name → its API-key variable.
  * @param {(model: string) => string|null} deps.modelProvider  Model id → lab name, or null if unknown.
+ * @param {() => string[]} [deps.registeredProviders]  Every lab the harness can call. An adapter
+ *   with no `providers.watched` watches all of them, so the regenerated workflow must hold all
+ *   their secrets; without this it held none.
  * @returns {object} answers, in the shape init.mjs builds
  */
-export function answersFromAdapter(adapter, { providerEnvKey, modelProvider }) {
+export function answersFromAdapter(adapter, { providerEnvKey, modelProvider, registeredProviders = () => [] }) {
   const a = adapter ?? {};
   const project = a.project ?? {};
   const constitution = a.constitution ?? {};
@@ -448,7 +454,9 @@ export function answersFromAdapter(adapter, { providerEnvKey, modelProvider }) {
     goalStatement: project.goal?.statement,
     goalHolds: project.goal?.holds,
     goalAwayFrom: project.goal?.away_from,
-    providers: (a.providers?.watched ?? []).map(lab),
+    providers: (a.providers?.watched?.map((entry) => (typeof entry === 'string' ? entry : entry.lab)) ?? registeredProviders()).map(lab),
+    watchAll: !a.providers?.watched,
+    requireAllProviders: a.providers?.require_all === true ? true : undefined,
     roleProviders,
     snapshotPath: a.providers?.snapshot_path,
     maxFanout: num(a.providers?.max_fanout),

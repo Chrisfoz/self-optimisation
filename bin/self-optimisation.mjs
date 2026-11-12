@@ -9,7 +9,9 @@
  *       copy harness/ in (unless it is already there), then run init
  *   npx self-optimisation-harness upgrade
  *       replace harness/ with this version — keeping harness/.env.harness.local —
- *       then regenerate the workflow from project-adapter.yml
+ *       then regenerate the workflow from project-adapter.yml. Refuses when
+ *       harness/ holds local edits the replacement would lose, unless
+ *       --discard-local-edits is given.
  *   npx self-optimisation-harness doctor [--offline]
  *   npx self-optimisation-harness --version
  *
@@ -21,6 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { editsLostBy, writeManifest, MANIFEST_FILE } from '../harness/lib/manifest.mjs';
 
 const packaged = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'harness');
 const project = process.cwd();
@@ -30,15 +33,20 @@ const version = (dir) => {
   try { return fs.readFileSync(path.join(dir, 'VERSION'), 'utf8').trim(); } catch { return null; }
 };
 
-/** Copy the packaged harness/ into the project, never carrying a key file or installed packages. */
+/**
+ * Copy the packaged harness/ into the project, never carrying a key file or
+ * installed packages, then record what was copied (harness/lib/manifest.mjs)
+ * so a later upgrade can tell a local edit from a file this release shipped.
+ */
 function copyHarness() {
   fs.cpSync(packaged, target, {
     recursive: true,
     filter: (src) => {
       const name = path.basename(src);
-      return name !== ENV_FILE && name !== 'node_modules';
+      return name !== ENV_FILE && name !== 'node_modules' && name !== MANIFEST_FILE;
     },
   });
+  writeManifest(target, version(packaged));
 }
 
 /** Run one of the copied harness's own scripts in the project, and exit with its status. */
@@ -68,6 +76,20 @@ if (command === 'init') {
     console.error('No harness/ here to upgrade. Run `init` first.');
     process.exit(1);
   }
+  // Replacing the folder is the upgrade, and it cannot tell a deliberate
+  // local edit from a stale file. The install record can: stop before
+  // anything is removed when an edit would be lost. Git would show the loss
+  // in the diff, but only to someone who reads a few-thousand-line diff.
+  const DISCARD = '--discard-local-edits';
+  const lost = editsLostBy(target, packaged);
+  if (lost?.length && !args.includes(DISCARD)) {
+    console.error(`harness/ has ${lost.length} local edit(s) that ${version(packaged)} does not contain:\n`);
+    for (const file of lost) console.error(`   harness/${file}`);
+    console.error(`\nNothing was changed. Send the edit upstream, or keep a copy, then re-run with ${DISCARD}.`);
+    process.exit(1);
+  }
+  if (lost === null) console.log(`No ${MANIFEST_FILE} in harness/ (installed by hand, or before 0.4.0), so local edits could not be checked. Review the diff before committing.\n`);
+  const forwarded = args.filter((a) => a !== DISCARD);
   const envPath = path.join(target, ENV_FILE);
   const keys = fs.existsSync(envPath) ? fs.readFileSync(envPath) : null;
   const from = version(target);
@@ -75,7 +97,7 @@ if (command === 'init') {
   copyHarness();
   if (keys) fs.writeFileSync(envPath, keys);
   console.log(`Replaced harness/ ${from ?? '(unknown)'} with ${version(packaged)}${keys ? `, keeping ${ENV_FILE}` : ''}. Local edits inside harness/ are not kept — the upgrade is the package.\n`);
-  run('cli/init.mjs', ['--from-adapter', '--force', ...args]);
+  run('cli/init.mjs', ['--from-adapter', '--force', ...forwarded]);
 } else if (command === 'doctor') {
   if (!fs.existsSync(target)) {
     console.error('No harness/ here. Run `init` first.');
@@ -86,8 +108,9 @@ if (command === 'init') {
   console.log(`Usage: npx self-optimisation-harness <command>
 
   init [--quick | --detector-only | ...]   copy harness/ into this project, then set it up
-  upgrade                                  replace harness/ with this version, keep your keys,
-                                           and regenerate the workflow from project-adapter.yml
+  upgrade [--discard-local-edits]          replace harness/ with this version, keep your keys,
+                                           and regenerate the workflow from project-adapter.yml;
+                                           stops if harness/ holds local edits it would lose
   doctor [--offline]                       check the installation end to end
   --version                                this package's harness version`);
   process.exit(command ? 1 : 0);

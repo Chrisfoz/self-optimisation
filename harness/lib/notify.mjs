@@ -99,8 +99,15 @@ export function parseEmailResponse(text) {
     throw new Error('Empty response — nothing to parse.');
   }
 
-  const subject = text.match(/^SUBJECT:\s*(.+)$/m)?.[1]?.trim();
-  const body = text.match(/^BODY:\s*\n([\s\S]*)$/m)?.[1]?.trim();
+  // The format asks for `SUBJECT: …` then `BODY:` on a line of its own, and
+  // models mostly comply. The ones that do not differ only in decoration: the
+  // labels in bold or as headings, the body starting on the BODY: line, the
+  // whole answer in a code fence. Each of those used to throw "No BODY:
+  // section" and send the terse fallback instead of a perfectly good email.
+  const cleaned = text.replace(/^\s*```[a-z]*\n([\s\S]*?)\n```\s*$/i, '$1');
+  const label = (name) => `^[ \\t]*(?:#{1,6}[ \\t]*)?(?:\\*\\*|__)?${name}(?:\\*\\*|__)?[ \\t]*:(?:\\*\\*|__)?`;
+  const subject = cleaned.match(new RegExp(`${label('SUBJECT')}[ \\t]*(.+)$`, 'im'))?.[1]?.replace(/(?:\*\*|__)\s*$/, '').trim();
+  const body = cleaned.match(new RegExp(`${label('BODY')}[ \\t]*\\n?([\\s\\S]*)$`, 'im'))?.[1]?.trim();
 
   if (!subject) throw new Error('No SUBJECT: line found in the response.');
   if (!body) throw new Error('No BODY: section found in the response.');
@@ -175,8 +182,9 @@ export function blockedByLine({ merged, gates, pullRequestUrl }) {
  * `buildGenerationDigestEmail()` and `buildEscalationNoticeEmail()` share.
  */
 async function composeWithFallback({ systemPrompt, userPrompt, buildFallback, digestModel = 'claude-opus-5', maxTokens = 2000, call = callModelWithHeadroom, log = () => {} }) {
+  let result;
   try {
-    const result = await call({ model: digestModel, system: systemPrompt, user: userPrompt, maxTokens });
+    result = await call({ model: digestModel, system: systemPrompt, user: userPrompt, maxTokens });
     if (result.truncated) {
       throw new Error(`Response was truncated (stop reason: ${result.stopReason}) even after a headroom retry.`);
     }
@@ -185,6 +193,11 @@ async function composeWithFallback({ systemPrompt, userPrompt, buildFallback, di
     return { ...parsed, plainLanguage: true };
   } catch (err) {
     log(`⚠️  Plain-language email failed (${err.message}); sending the terse fallback instead.`);
+    // Kept in the run log so a failure that does not reproduce locally can
+    // still be explained from the run that had it.
+    if (typeof result?.text === 'string' && result.text.trim()) {
+      log(`   What the model returned (first 1500 characters):\n${result.text.slice(0, 1500)}`);
+    }
     return { ...buildFallback(), plainLanguage: false };
   }
 }

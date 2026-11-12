@@ -144,7 +144,7 @@ if (process.argv.includes('--check-upgrade')) {
   }
   console.log(
     result.behind
-      ? `Local harness ${result.local} is behind upstream ${result.upstream}. Re-copy harness/ from the repository, then regenerate the workflow with: node harness/cli/init.mjs --from-adapter --force`
+      ? `Local harness ${result.local} is behind upstream ${result.upstream}. Check out the newer release tag, then from this project run: node <checkout>/bin/self-optimisation.mjs upgrade`
       : `Local harness ${result.local} is current (upstream ${result.upstream}).`
   );
   process.exit(result.behind ? 1 : 0);
@@ -582,6 +582,7 @@ async function fromAdapter() {
   const answers = answersFromAdapter(adapter, {
     providerEnvKey: (name) => getProvider(name)?.envKey ?? `${String(name).toUpperCase()}_API_KEY`,
     modelProvider: (model) => { try { return resolveProvider(model); } catch { return null; } },
+    registeredProviders,
   });
   const recorded = answers.sharedHarness?.ref;
   if (SHARED) answers.sharedHarness = SHARED;
@@ -615,6 +616,7 @@ async function configureGithub() {
   const answers = answersFromAdapter(adapter, {
     providerEnvKey: (name) => getProvider(name)?.envKey ?? `${String(name).toUpperCase()}_API_KEY`,
     modelProvider: (model) => { try { return resolveProvider(model); } catch { return null; } },
+    registeredProviders,
   });
   const names = [...requiredProviders(answers).map((p) => p.envKey), ...(answers.notify?.envKey ? [answers.notify.envKey] : [])];
   const pullRequests = normalizeApprovalClass(answers.approvalClass) !== 'autonomous-merge';

@@ -18,6 +18,8 @@
  */
 
 import { approvalClass, constitutionAllowlist, evaluationConfig, snapshotPath, watchedProviders } from './adapter.mjs';
+import '../providers/index.mjs';
+import { registeredProviders } from './llm-provider.mjs';
 
 const BRANCH = /^[A-Za-z0-9._/-]+$/;
 const PROVIDER = /^[a-z0-9-]+$/;
@@ -49,7 +51,10 @@ export function workflowConfig(adapter) {
     throw new Error(`project.default_branch "${defaultBranch}" is not a usable branch name.`);
   }
 
-  const providers = watchedProviders(adapter) ?? [];
+  // No list means every registered lab, the same reading
+  // check-model-releases.mjs gives it. This used to be an empty list, so a
+  // shared install with no `watched` polled nobody.
+  const providers = watchedProviders(adapter) ?? registeredProviders();
   for (const name of providers) {
     if (typeof name !== 'string' || !PROVIDER.test(name)) throw new Error(`providers.watched: "${name}" is not a provider name.`);
   }

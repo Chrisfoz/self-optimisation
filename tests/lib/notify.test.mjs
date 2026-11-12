@@ -37,6 +37,20 @@ test('parseEmailResponse: parses a well-formed response', () => {
   assert.match(parsed.body, /long enough email body/);
 });
 
+test('parseEmailResponse: accepts the decorations models add to the two labels', () => {
+  const body = 'A long enough email body to pass the length check.';
+  const variants = [
+    `**SUBJECT:** A good subject\n\n**BODY:**\n${body}`,
+    `**SUBJECT: A good subject**\n**BODY**:\n${body}`,
+    `## SUBJECT: A good subject\n## BODY:\n${body}`,
+    `Subject: A good subject\nBody: ${body}`,
+    `SUBJECT: A good subject\nBODY: ${body}`,
+    `Here is the email.\n\nSUBJECT: A good subject\n\nBODY:\n\n${body}`,
+    '```\nSUBJECT: A good subject\nBODY:\n' + body + '\n```',
+  ];
+  for (const text of variants) assert.deepEqual(parseEmailResponse(text), { subject: 'A good subject', body }, text);
+});
+
 test('parseEmailResponse: rejects empty, missing SUBJECT, missing BODY, or a too-short body', () => {
   assert.throws(() => parseEmailResponse(''), /Empty response/);
   assert.throws(() => parseEmailResponse('BODY:\nsomething long enough here for the check'), /No SUBJECT/);
@@ -128,6 +142,18 @@ test('buildGenerationDigestEmail: an approved change with an open pull request i
   // The whole point: the decision is one click from the email.
   assert.match(email.body, /Review it:      https:\/\/github\.com\/o\/r\/pull\/7/);
   assert.match(email.body, /Workflow run:   https:\/\/github\.com\/o\/r\/actions\/runs\/9/);
+});
+
+// WORKPLAN I13: a compose that failed on GitHub and not locally left nothing
+// to explain it. The response that could not be parsed now goes to the log.
+test('buildGenerationDigestEmail: an unparseable response is logged before the fallback is sent', async () => {
+  const lines = [];
+  const email = await buildGenerationDigestEmail(
+    { ...BASE, genLabel: 'generation 006', scope: 'focused', merged: true, summary: 'x', gates: [{ name: 'test', result: 'success' }] },
+    { call: async () => ({ text: 'Sure! Here is what happened this run, as prose with no labels at all.' }), log: (l) => lines.push(l) }
+  );
+  assert.equal(email.plainLanguage, false);
+  assert.match(lines.join('\n'), /No SUBJECT: line[\s\S]*What the model returned[\s\S]*as prose with no labels at all/);
 });
 
 test('buildGenerationDigestEmail: the terse fallback also names the pull request as waiting', async () => {
