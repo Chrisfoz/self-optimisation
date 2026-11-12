@@ -44,6 +44,10 @@ providers:
   # (harness/.env.harness.local locally, GitHub Secrets in CI). A bare name is enough; the env
   # var name shown here is only for a human reading the file — the harness
   # already knows each provider's real env var from harness/providers/*.mjs.
+  #
+  # Delete the whole `watched:` list to watch EVERY lab the harness knows,
+  # including ones a later harness release adds. A lab left out of an
+  # explicit list is never polled, so its releases never start a generation.
   watched:
     - anthropic
     # - openai
@@ -54,6 +58,11 @@ providers:
     # - xai
     # - meta
     # - zai
+
+  # For a project that means to follow every lab: `validate` then fails when
+  # `watched` omits a registered one, so upgrading to a harness that knows a
+  # new lab cannot quietly leave it unwatched.
+  # require_all: true
 
   # Where "which models have I already seen" is remembered between runs.
   snapshot_path: .agent/model-snapshot.json

@@ -25,7 +25,7 @@ test('the package version is the harness version, and the bin is an executable E
 test('npm pack ships the harness and its entry point, and nothing that is not an install', () => {
   const [{ files }] = JSON.parse(npm(['pack', '--dry-run', '--json', '--ignore-scripts']));
   const paths = files.map((f) => f.path);
-  for (const needed of ['bin/self-optimisation.mjs', 'harness/cli/init.mjs', 'harness/vendor/js-yaml.mjs', 'harness/templates/workflow.yml.tmpl', 'harness/VERSION', 'LICENSE']) {
+  for (const needed of ['bin/self-optimisation.mjs', 'harness/lib/manifest.mjs', 'harness/cli/init.mjs', 'harness/vendor/js-yaml.mjs', 'harness/templates/workflow.yml.tmpl', 'harness/VERSION', 'LICENSE']) {
     assert.ok(paths.includes(needed), `missing ${needed}`);
   }
   const stray = paths.filter((p) => /^(tests|console|docs|learning|examples|\.github)\//.test(p) || /(^|\/)\.env(?!\.harness\.example$)/.test(p));
@@ -53,14 +53,48 @@ test('the packed tarball installs into an empty project, upgrades it keeping the
   assert.ok(fs.existsSync(path.join(project, 'project-adapter.yml')));
   assert.ok(fs.existsSync(path.join(project, '.github/workflows/self-improve.yml')));
 
-  // A real key, and a stale file an older harness had: upgrade keeps the one
-  // and drops the other.
+  // The copy is recorded, so a later upgrade can tell an edit from the release.
+  const recordPath = path.join(project, 'harness/INSTALLED.json');
+  const record = JSON.parse(fs.readFileSync(recordPath, 'utf8'));
+  assert.equal(record.version, pkg.version);
+  assert.ok(record.files['cli/init.mjs'] && record.files['VERSION']);
+  assert.equal(record.files['INSTALLED.json'], undefined);
+
+  // A real key, and a stale file an older harness had (so it is in that
+  // install's record): upgrade keeps the one and drops the other.
   fs.writeFileSync(path.join(project, 'harness/.env.harness.local'), 'ANTHROPIC_API_KEY=sk-ant-kept\n');
   fs.writeFileSync(path.join(project, 'harness/lib/removed-in-this-version.mjs'), '');
+  record.files['lib/removed-in-this-version.mjs'] = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+  fs.writeFileSync(recordPath, JSON.stringify(record));
   const upgrade = cli('upgrade');
   assert.equal(upgrade.status, 0, upgrade.stdout + upgrade.stderr);
   assert.equal(fs.readFileSync(path.join(project, 'harness/.env.harness.local'), 'utf8'), 'ANTHROPIC_API_KEY=sk-ant-kept\n');
   assert.equal(fs.existsSync(path.join(project, 'harness/lib/removed-in-this-version.mjs')), false);
+
+  // A local edit the package does not contain stops the upgrade before
+  // anything is replaced, and names the file.
+  const edited = path.join(project, 'harness/lib/validate.mjs');
+  fs.appendFileSync(edited, '\n// a local patch\n');
+  fs.writeFileSync(path.join(project, 'harness/lib/mine.mjs'), 'export {};\n');
+  const refused = cli('upgrade');
+  assert.equal(refused.status, 1, refused.stdout + refused.stderr);
+  assert.match(refused.stderr, /2 local edit\(s\)[\s\S]*harness\/lib\/mine\.mjs[\s\S]*harness\/lib\/validate\.mjs[\s\S]*Nothing was changed/);
+  assert.match(fs.readFileSync(edited, 'utf8'), /a local patch/);
+  assert.ok(fs.existsSync(path.join(project, 'harness/.env.harness.local')));
+
+  // Said out loud, it goes ahead, and the flag is not passed on to init.
+  const discarded = cli('upgrade', '--discard-local-edits');
+  assert.equal(discarded.status, 0, discarded.stdout + discarded.stderr);
+  assert.doesNotMatch(fs.readFileSync(edited, 'utf8'), /a local patch/);
+  assert.equal(fs.existsSync(path.join(project, 'harness/lib/mine.mjs')), false);
+
+  // An install with no record (copied by hand, or before 0.4.0) upgrades as it always did, and says why it could not check.
+  fs.rmSync(recordPath);
+  fs.appendFileSync(edited, '\n// unrecorded\n');
+  const unrecorded = cli('upgrade');
+  assert.equal(unrecorded.status, 0, unrecorded.stdout + unrecorded.stderr);
+  assert.match(unrecorded.stdout, /local edits could not be checked/);
+  assert.ok(fs.existsSync(recordPath));
 
   const doctor = cli('doctor', '--offline');
   assert.match(doctor.stdout, /installation check/);

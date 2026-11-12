@@ -31,7 +31,11 @@ It copies `harness/` in (never a key file), then runs `init` there. Later,
 `node /tmp/self-optimisation/bin/self-optimisation.mjs upgrade` replace
 `harness/` with the new version, keep `harness/.env.harness.local`, and
 regenerate the workflow from your adapter. Local edits inside `harness/` are
-not kept: the upgrade is the new version, whole.
+not kept: the upgrade is the new version, whole. Because of that, an install
+made this way records what it copied (`harness/INSTALLED.json`; commit it),
+and `upgrade` stops, naming the files, when you have edited something the
+new version does not contain. `--discard-local-edits` goes ahead anyway. A
+folder copied by hand has no record and is replaced without that check.
 
 Copying the folder is the whole install: there is no `npm install` step.
 Everything in `harness/` uses only Node's own built-ins, apart from one YAML
